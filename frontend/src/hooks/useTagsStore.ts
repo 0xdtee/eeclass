@@ -7,8 +7,8 @@ export interface Tag {
   color: string;
 }
 
-// v2:换键作废旧浏览器缓存的示例标签,所有人从空标签开始
-const STORAGE_KEY = 'app_tags_store_v2';
+// v3:换键让浏览器重新拿到「全国版课程大纲」默认标签(旧缓存作废)
+const STORAGE_KEY = 'app_tags_store_v3';
 
 function loadTags(): Tag[] {
   try {
