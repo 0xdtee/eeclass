@@ -10,6 +10,23 @@ all run **locally on CPU**; your audio never leaves the device. Only optional te
 Built for Chinese university classrooms, but the recognizer is multilingual
 (zh / en / ja / ko / yue).
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="900" alt="Dashboard — semester overview, class calendar and quick actions">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/live.png" alt="Live transcription"><br><sub><b>Live transcription</b> — speaker labels, inline English→Chinese subtitles, notes side by side; everything runs on-device.</sub></td>
+    <td width="50%"><img src="docs/screenshots/summary.png" alt="AI summary"><br><sub><b>AI summary</b> — per-class summary, key points, and one-tap homophone fixes.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/schedule.png" alt="Weekly schedule"><br><sub><b>Weekly schedule</b> — timetable import with per-course color coding.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings.png" alt="Settings"><br><sub><b>Settings</b> — toggle real-time correction, smart segmentation and translation.</sub></td>
+  </tr>
+</table>
+
 ---
 
 ## Features

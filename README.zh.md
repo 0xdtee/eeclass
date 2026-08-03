@@ -8,6 +8,23 @@
 
 面向中文大学课堂设计,但识别本身支持多语种(中/英/日/韩/粤)。
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="900" alt="控制台 —— 学期总览、课程日历与快捷入口">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/live.png" alt="实时转写"><br><sub><b>实时转写</b> —— 说话人区分、英文行下自动挂中文字幕、笔记并排;全程本机运行。</sub></td>
+    <td width="50%"><img src="docs/screenshots/summary.png" alt="AI 摘要"><br><sub><b>AI 摘要</b> —— 每节课摘要、重点知识点、一键纠正同音听错。</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/schedule.png" alt="课程日历"><br><sub><b>课程日历</b> —— 课表导入,按课程配色。</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings.png" alt="设置"><br><sub><b>设置</b> —— 实时纠错、智能分句、自动翻译一键开关。</sub></td>
+  </tr>
+</table>
+
 ---
 
 ## 功能
