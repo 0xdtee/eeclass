@@ -1,0 +1,11 @@
+# 机密与隐私(相对本目录)——顶层 .gitignore 已覆盖,这里再兜一层。
+# 注意:此文件必须是无 BOM 的 UTF-8,否则第一条规则会失效。
+service/config.json
+service/token.txt
+service/certs/
+service/models/
+service/__pycache__/
+__pycache__/
+.venv/
+records/
+*.log

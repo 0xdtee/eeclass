@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>课堂实时字幕 · 控制台</title>
+  <link rel="stylesheet" href="taskpane.css"/>
+</head>
+<body>
+  <div id="app">
+
+    <header>
+      <div class="row">
+        <span id="dot" class="dot off"></span>
+        <span id="conn">正在连接本地服务…</span>
+      </div>
+      <div class="meter"><div id="level"></div></div>
+    </header>
+
+    <!-- 开始前的设置 -->
+    <section id="setup">
+      <label>课程名称
+        <input id="title" type="text" placeholder="例如：高等数学 第12讲" autocomplete="off"/>
+      </label>
+
+      <label>声音来源
+        <select id="device"></select>
+      </label>
+      <div class="hint" id="devhint">线下课选麦克风；网课选「系统声音」类设备。</div>
+
+      <label>识别引擎
+        <select id="backend">
+          <option value="sensevoice">SenseVoice — 最快最准（推荐）</option>
+          <option value="zipformer-stream">流式 Zipformer — 边说边出字</option>
+          <option value="zipformer">Zipformer — 整句识别</option>
+          <option value="funasr">FunASR — 同 SenseVoice，走官方运行时</option>
+          <option value="whisper">Whisper — 旧方案，慢 10 倍</option>
+        </select>
+      </label>
+      <div class="hint" id="bkhint"></div>
+
+      <label id="modelrow" hidden>Whisper 模型
+        <select id="model">
+          <option value="small">small — 快，准确度一般</option>
+          <option value="large-v3-turbo">large-v3-turbo — 慢一些，明显更准</option>
+          <option value="medium">medium — 最慢，仅在机器空闲时用</option>
+        </select>
+      </label>
+
+      <label>拾音灵敏度
+        <select id="sens">
+          <option value="std">标准 — 老师声音大、坐得近</option>
+          <option value="high" selected>灵敏 — 推荐（默认）</option>
+          <option value="max">最灵敏 — 教室大、坐得远</option>
+        </select>
+      </label>
+      <div class="hint" id="senshint"></div>
+
+      <label>写进哪个 Word 文档
+        <select id="worddoc">
+          <option value="active">当前打开的文档（没开就自动新建）</option>
+          <option value="new">每次新建一篇</option>
+        </select>
+      </label>
+
+      <label>停顿多久换新段落：<b id="gapval">1.5</b> 秒
+        <input id="gap" type="range" min="0.6" max="4" step="0.1" value="1.5"/>
+      </label>
+    </section>
+
+    <div class="btns">
+      <button id="start" class="primary">开始听课</button>
+      <button id="stop" class="danger" hidden>停止并保存</button>
+    </div>
+    <div class="btns sub" hidden id="subbtns">
+      <button id="pause">暂停</button>
+      <button id="mark">标记下一句为重点</button>
+    </div>
+
+    <section id="opts">
+      <label class="ck"><input type="checkbox" id="toWord" checked/> 写入 Word 文档</label>
+      <label class="ck"><input type="checkbox" id="onlyKey"/> 只写重点句（省版面）</label>
+      <div class="hint" id="wordstat">开始听课后这里会显示写入状态。</div>
+    </section>
+
+    <section id="speakers" hidden>
+      <h3>说话人 <span class="tip">点名字可改，改完会同步替换文档里已写的</span></h3>
+      <div id="spklist"></div>
+    </section>
+
+    <section id="statbar" hidden>
+      <span id="stat-time">00:00</span>
+      <span id="stat-lines">0 句</span>
+      <span id="stat-lag" title="识别积压。持续 >3 说明 CPU 跟不上，换 small 模型">积压 0</span>
+      <span id="stat-rtf" title="实时率，需要小于 1">RTF -</span>
+    </section>
+
+    <section id="live">
+      <h3>实时字幕</h3>
+      <div id="lines"></div>
+    </section>
+
+    <footer>
+      <div id="recdir"></div>
+      <div id="notice"></div>
+    </footer>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+           xsi:type="TaskPaneApp">
+
+  <Id>8f3c9d2a-6b41-4e7f-9a15-2c8e5d1b7f30</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>本地课堂工具</ProviderName>
+  <DefaultLocale>zh-CN</DefaultLocale>
+  <DisplayName DefaultValue="课堂实时字幕"/>
+  <Description DefaultValue="上课时自动开麦，在 Word 里实时生成带说话人区分和重点高亮的课堂记录。全部在本机运行。"/>
+  <IconUrl DefaultValue="https://localhost:5901/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:5901/assets/icon-80.png"/>
+  <!-- SupportUrl 是必填项。缺了它 manifest 整体判定为 invalid，
+       Word 会静默不加载（既不显示按钮，也不报任何错）。 -->
+  <SupportUrl DefaultValue="https://localhost:5901/taskpane.html"/>
+
+  <Hosts>
+    <Host Name="Document"/>
+  </Hosts>
+
+  <Requirements>
+    <Sets DefaultMinVersion="1.3">
+      <Set Name="WordApi" MinVersion="1.3"/>
+    </Sets>
+  </Requirements>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:5901/taskpane.html"/>
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Desc"/>
+            <LearnMoreUrl resid="Url.Readme"/>
+          </GetStarted>
+
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="LiveCaptionGroup">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="OpenPaneButton">
+                  <Label resid="Button.Label"/>
+                  <Supertip>
+                    <Title resid="Button.Label"/>
+                    <Description resid="Button.Tip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>ButtonId1</TaskpaneId>
+                    <SourceLocation resid="Url.Taskpane"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://localhost:5901/assets/icon-16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="https://localhost:5901/assets/icon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://localhost:5901/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Url.Taskpane" DefaultValue="https://localhost:5901/taskpane.html"/>
+        <bt:Url id="Url.Readme" DefaultValue="https://localhost:5901/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Group.Label" DefaultValue="课堂字幕"/>
+        <bt:String id="Button.Label" DefaultValue="开始听课"/>
+        <bt:String id="GetStarted.Title" DefaultValue="课堂实时字幕已就绪"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="Button.Tip" DefaultValue="打开侧边栏，开麦并把课堂内容实时写进这篇文档。"/>
+        <bt:String id="GetStarted.Desc" DefaultValue="先运行 start.ps1 启动本地服务，再点这里的「开始听课」。"/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
