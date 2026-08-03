@@ -150,9 +150,18 @@ export default function HomePage() {
     }, 800);
   }, [noteSid, records]);
 
-  // 学科标签:用我收集的课程大纲名(高数/线代/大学物理…)当可勾选标签
+  // 学科标签:默认带上「全国版课程大纲(教育部·教指委 全国基本要求)」里的课程,始终可勾选;
+  // 再并上本机已下载的其它大纲,去重后供选择(给 AI 纠错/翻译当学科上下文)。
   useEffect(() => {
-    void records.listSyllabus().then((r) => setSubjectTags((r.courses || []).map((c) => c.name))).catch(() => {});
+    const NATIONAL_SYLLABUS_TAGS = [
+      '大学物理', '大学物理实验', '大学计算机基础',
+      '马克思主义基本原理', '毛泽东思想和中国特色社会主义理论体系概论',
+      '习近平新时代中国特色社会主义思想概论', '思想道德与法治',
+      '中国近现代史纲要', '军事理论', '大学生心理健康教育',
+    ];
+    void records.listSyllabus()
+      .then((r) => setSubjectTags([...new Set([...NATIONAL_SYLLABUS_TAGS, ...(r.courses || []).map((c) => c.name)])]))
+      .catch(() => setSubjectTags(NATIONAL_SYLLABUS_TAGS));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
