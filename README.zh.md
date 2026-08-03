@@ -25,6 +25,11 @@
   </tr>
 </table>
 
+<p align="center">
+  <img src="docs/screenshots/syllabus.png" width="900" alt="官方教学大纲库"><br>
+  <sub><b>官方教学大纲库</b> —— 在应用内直接浏览教育部与各高校发布的课程大纲(PDF)。</sub>
+</p>
+
 ---
 
 ## 功能

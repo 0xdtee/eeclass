@@ -27,6 +27,11 @@ Built for Chinese university classrooms, but the recognizer is multilingual
   </tr>
 </table>
 
+<p align="center">
+  <img src="docs/screenshots/syllabus.png" width="900" alt="Official syllabus library"><br>
+  <sub><b>Official syllabus library</b> — browse ministry &amp; university course outlines (PDF) right inside the app.</sub>
+</p>
+
 ---
 
 ## Features
