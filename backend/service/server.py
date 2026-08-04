@@ -2438,11 +2438,19 @@ class App:
             else:
                 resp = await handler(request)
             origin = request.headers.get("Origin", "")
-            if any(origin.startswith(p) for p in
-                   ("http://localhost", "https://localhost", "http://127.0.0.1", "https://127.0.0.1")):
+            # 放行:本机开发(localhost)、以及手机/平板 App(Readdy 托管在 *.readdy.co,跨域访问本后端)。
+            # 所有接口本身都要会话令牌,所以放行来源不等于放开数据——没登录照样什么都拿不到。
+            allowed = bool(origin) and (
+                origin.startswith(("http://localhost", "https://localhost",
+                                   "http://127.0.0.1", "https://127.0.0.1"))
+                or origin.endswith(".readdy.co")
+                or origin == "https://readdy.co")
+            if allowed:
                 resp.headers["Access-Control-Allow-Origin"] = origin
+                resp.headers["Vary"] = "Origin"
                 resp.headers["Access-Control-Allow-Headers"] = "content-type, x-token"
-                resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+                resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+                resp.headers["Access-Control-Max-Age"] = "600"
             return resp
 
         @web.middleware
