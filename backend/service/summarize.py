@@ -9,7 +9,9 @@ API key 放在服务端配置里，绝不下发给浏览器：页面只调本服
 """
 import json
 import os
+import time
 import urllib.request
+import urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -82,7 +84,26 @@ class DeepSeek:
     def ready(self):
         return bool(self.api_key)
 
-    def _chat(self, system, user, temperature=0.3):
+    def _open_retry(self, req, timeout, retries=2):
+        """发请求并读回响应体。DeepSeek 偶发 5xx/超时/网络抖动 → 退避后自动重试。
+        一次性调用(摘要/自测/追问)用 retries>=2;实时调用(纠错/分句)用 retries=0 快速失败。"""
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        delay = 1.5
+        for attempt in range(retries + 1):
+            try:
+                with opener.open(req, timeout=timeout) as resp:
+                    return resp.read()
+            except urllib.error.HTTPError as e:
+                # 429/5xx 是 DeepSeek 那边临时忙,值得重试;4xx(如鉴权)重试也没用,直接抛
+                if e.code in (429, 500, 502, 503, 504) and attempt < retries:
+                    time.sleep(delay); delay *= 2; continue
+                raise
+            except (urllib.error.URLError, TimeoutError, OSError):
+                if attempt < retries:
+                    time.sleep(delay); delay *= 2; continue
+                raise
+
+    def _chat(self, system, user, temperature=0.3, retries=2):
         payload = json.dumps({
             "model": self.model,
             "messages": [{"role": "system", "content": system},
@@ -95,9 +116,7 @@ class DeepSeek:
             self.base_url.rstrip("/") + "/chat/completions", data=payload,
             headers={"Content-Type": "application/json",
                      "Authorization": f"Bearer {self.api_key}"})
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with opener.open(req, timeout=self.timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        data = json.loads(self._open_retry(req, self.timeout, retries).decode("utf-8"))
         text = data["choices"][0]["message"]["content"]
         try:
             out = json.loads(text)
@@ -219,7 +238,7 @@ class DeepSeek:
         if topic:
             sys_prompt += f"\n本次录音主题是「{topic}」,据此判断句子是否完整。"
         try:
-            out = self._chat(sys_prompt, numbered, temperature=0.1)
+            out = self._chat(sys_prompt, numbered, temperature=0.1, retries=0)
         except Exception:
             return None
         return out if isinstance(out, dict) else None
@@ -308,11 +327,8 @@ class DeepSeek:
             data=payload,
             headers={"Content-Type": "application/json",
                      "Authorization": f"Bearer {self.api_key}"})
-        # 不走系统代理：这台机器的系统代理指向本地 Clash，走不走都行，
-        # 但显式绕开可以避免代理没开时整个请求挂住。
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with opener.open(req, timeout=self.timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        # DeepSeek 偶发 5xx/超时会自动重试(_open_retry 内部绕开系统代理)。
+        data = json.loads(self._open_retry(req, self.timeout, retries=2).decode("utf-8"))
         text = data["choices"][0]["message"]["content"]
         usage = data.get("usage", {})
         try:
