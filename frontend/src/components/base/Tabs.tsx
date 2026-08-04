@@ -14,12 +14,12 @@ interface TabsProps {
 
 export default function Tabs({ tabs, activeTab, onTabChange }: TabsProps) {
   return (
-    <div className="flex items-center gap-1 bg-background-100 rounded-full p-1 w-fit">
+    <div className="flex items-center gap-1 bg-background-100 rounded-full p-1 w-fit max-w-full overflow-x-auto no-scrollbar">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
+          className={`whitespace-nowrap px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
             activeTab === tab.id
               ? 'bg-background-50 text-foreground-900'
               : 'text-foreground-500 hover:text-foreground-700'

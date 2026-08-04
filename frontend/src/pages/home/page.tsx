@@ -532,7 +532,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background-100">
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center justify-between h-14 px-6">
+        <div className="flex items-center justify-between h-14 px-3 sm:px-6 gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => navigate('/')}
@@ -540,7 +540,7 @@ export default function HomePage() {
               title="返回主界面"
             >
               <i className="ri-arrow-left-line"></i>
-              <span className="text-xs font-medium">返回主界面</span>
+              <span className="hidden sm:inline text-xs font-medium">返回主界面</span>
             </button>
             <div className="w-8 h-8 flex items-center justify-center bg-accent-100 rounded-lg flex-shrink-0">
               <i className="ri-book-open-line text-accent-600"></i>
@@ -553,7 +553,7 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
             <SearchBox
               onSearch={lib.search}
               onJump={(hit) => {
@@ -589,7 +589,7 @@ export default function HomePage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-6 py-6">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {justEnded && !live.running && (
           <div className="mb-5 flex items-center justify-between gap-3 flex-wrap bg-green-50 border border-green-200 rounded-xl px-4 py-3">
             <div className="flex items-center gap-2 text-sm text-green-800">

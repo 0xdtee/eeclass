@@ -266,7 +266,7 @@ export default function TranscriptionTab({
       )}
 
       <div className="flex flex-col lg:flex-row gap-4 items-stretch">
-      <div className="bg-background-50 border border-background-200 rounded-xl p-6 lg:flex-1 min-w-0 w-full">
+      <div className="bg-background-50 border border-background-200 rounded-xl p-4 sm:p-6 lg:flex-1 min-w-0 w-full">
         {showPlayer && <AudioPlayer ref={playerRef} src={audioUrl(sid)} onTime={setCurTime} />}
 
         <div className="flex items-center justify-between my-4 gap-2 flex-wrap">
