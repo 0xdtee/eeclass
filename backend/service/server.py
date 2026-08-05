@@ -44,6 +44,7 @@ if sys.platform != "win32":
 from summarize import DeepSeek
 from library import Library
 from accounts import Accounts
+import recordings_db
 import netcert
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -274,6 +275,14 @@ class Session:
                 json.dump({"owner": self._owner_id()}, f)
         except Exception:
             pass
+        # 元数据同步进 PG（索引用；文件仍是真源）。失败不影响录制。
+        try:
+            recordings_db.upsert_recording(
+                os.path.basename(self.rec.dir),
+                owner=self._owner_id(),
+                created=time.strftime("%Y-%m-%d %H:%M:%S"))
+        except Exception:
+            traceback.print_exc()
         # 加载跨会话声纹库:识别到已标记的声音就自动用其身份
         try:
             import voiceprint
@@ -565,18 +574,21 @@ class Session:
             return
         # 不信 DeepSeek 报的 n(它会数错),而是把每个合成句去标点后 贪心对回开头的碎片,
         # 求出每句真正吃掉几个碎片。对不齐就整批放弃(宁可这轮不提交,也不错位/丢字/重复)。
-        norm = [self._norm_seg(f["text"]) for f in snapshot]
+        norm = [self._norm_seg(f["text"]).lower() for f in snapshot]
         groups = []
         i = 0
         for s in commit_texts:
-            target = self._norm_seg(s)
+            target = self._norm_seg(s).lower()
             if not target:
                 continue
             acc, j = "", i
             while j < len(snapshot) and len(acc) < len(target):
                 acc += norm[j]
                 j += 1
-            if abs(len(acc) - len(target)) > 2 or j == i:
+            # 内容级精确匹配:合成句去标点后必须和吃掉的碎片逐字一致(只准 DeepSeek 加标点)。
+            # 只要 DeepSeek 丢字/改字/在碎片中间断句导致对不齐,就整批放弃 →
+            # 退回逐碎片成行,宁可不合并也绝不丢内容(修「前半句被漏掉」)。
+            if j == i or acc != target:
                 return
             groups.append((i, j))
             i = j
@@ -989,6 +1001,17 @@ class App:
                 path, meta = await asyncio.get_running_loop().run_in_executor(None, sess.stop)
                 if sess.course_id:
                     self.lib.assign(os.path.basename(path), sess.course_id)
+                # meta.json 落盘后同步进 PG（title/duration_s/owner/course_id）
+                try:
+                    recordings_db.upsert_recording(
+                        os.path.basename(path),
+                        title=meta.get("title"),
+                        owner=meta.get("owner"),
+                        duration_s=meta.get("duration_s"),
+                        course_id=sess.course_id or None,
+                        meta=meta)
+                except Exception:
+                    traceback.print_exc()
                 # 会话已从表里移除，_emit_to_cid 已找不到它 → 直接发给当前这个连接
                 self._send_soon(ws, {"type": "stopped", "dir": path, "meta": meta,
                                      "sid": os.path.basename(path)})
@@ -1284,28 +1307,17 @@ class App:
         root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
         me = self._owner_id(request)
         su = self._is_super(request)         # 全局令牌拥有者看全部
+        # 列表改从 recordings 表读(索引),不再逐目录扫 meta.json;数据隔离用表里的 owner 过滤。
+        # 从存下的整份 meta 复原旧响应:entry = {"id": name, "dir": d, **meta},再叠加摘要。
         out = []
-        if os.path.isdir(root):
-            for name in sorted(os.listdir(root), reverse=True):
-                d = os.path.join(root, name)
-                meta_p = os.path.join(d, "meta.json")
-                if not os.path.isfile(meta_p):
-                    continue
-                try:
-                    with open(meta_p, encoding="utf-8") as f:
-                        meta = json.load(f)
-                except Exception:
-                    continue
-                # 数据隔离:只列自己名下的课(全局令牌除外)。老数据 owner 缺失=已回填,不会漏。
-                if not su and meta.get("owner") != me:
-                    continue
-                entry = {"id": name, "dir": d, **meta}
-                s = self._load_summary(name)
-                if s:
-                    entry["summary"] = s.get("summary", "")
-                    entry["key_points"] = s.get("key_points", [])
-                    entry["has_summary"] = bool(s.get("summary"))
-                out.append(entry)
+        for r in recordings_db.list_recordings(owner=me, superuser=su):
+            sid = r["sid"]
+            entry = {"id": sid, "dir": os.path.join(root, sid), **(r.get("meta") or {})}
+            if r.get("has_summary") or r.get("summary"):
+                entry["summary"] = r.get("summary", "")
+                entry["key_points"] = r.get("key_points", [])
+                entry["has_summary"] = bool(r.get("summary"))
+            out.append(entry)
         return web.json_response({"sessions": out})
 
     # ---------- 记录：读 / 改 / 改动历史 ----------
@@ -1646,6 +1658,15 @@ class App:
         with open(self._summary_path(sid), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.flush()
+        # 摘要同步进 PG（summary/key_points/has_summary）；文件仍是真源
+        try:
+            recordings_db.upsert_recording(
+                os.path.basename(sid),
+                summary=data["summary"],
+                key_points=data["key_points"],
+                has_summary=bool(data["summary"]))
+        except Exception:
+            traceback.print_exc()
         return web.json_response({"ok": True, **data})
 
     async def api_get_summary(self, request):
@@ -2346,6 +2367,13 @@ class App:
         if cid and not self._owns_course(request, cid):
             return web.json_response({"error": "无权使用这门课程"}, status=403)
         self.lib.assign(request.match_info["sid"], cid)
+        # 指派课程同步进 PG（course_id；解除指派写空串以清掉）
+        try:
+            recordings_db.upsert_recording(
+                os.path.basename(request.match_info["sid"]),
+                course_id=cid if cid else "")
+        except Exception:
+            traceback.print_exc()
         return web.json_response({"ok": True})
 
     # ---------- 共享：生成只读链接 ----------
@@ -2443,6 +2471,7 @@ class App:
             allowed = bool(origin) and (
                 origin.startswith(("http://localhost", "https://localhost",
                                    "http://127.0.0.1", "https://127.0.0.1"))
+                or origin.startswith(("capacitor://", "ionic://"))  # 打包进原生 App 的来源
                 or origin.endswith(".readdy.co")
                 or origin == "https://readdy.co")
             if allowed:
@@ -2560,6 +2589,22 @@ class App:
                                         headers={"Cache-Control": "no-cache"})
             app.router.add_get("/app", spa)
             app.router.add_get("/app/{tail:.*}", spa)
+
+        # 手机/平板版(Readdy 设计,含侧栏/底部导航):部署在 mobile/out,挂在 /m。
+        mobile_dir = os.path.normpath(os.path.join(HERE, "..", "..", "mobile", "out"))
+        if os.path.isdir(mobile_dir):
+            async def spa_m(request):
+                rel = request.match_info.get("tail", "")
+                p = os.path.normpath(os.path.join(mobile_dir, rel))
+                if os.path.isfile(p) and p.startswith(mobile_dir):
+                    if "/assets/" in ("/" + rel.replace(os.sep, "/")):
+                        return web.FileResponse(p, headers={
+                            "Cache-Control": "public, max-age=31536000, immutable"})
+                    return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
+                return web.FileResponse(os.path.join(mobile_dir, "index.html"),
+                                        headers={"Cache-Control": "no-cache"})
+            app.router.add_get("/m", spa_m)
+            app.router.add_get("/m/{tail:.*}", spa_m)
 
         # Word 加载项的静态文件（只有装了 Office 加载项才用）。服务器部署
         # （headless，没有 addin 目录）时跳过，不影响网页端 /app 使用。
