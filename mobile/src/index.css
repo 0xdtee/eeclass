@@ -1,0 +1,182 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background-50: 0.985 0.005 95;
+  --background-100: 0.97 0.008 95;
+  --background-200: 0.94 0.01 95;
+  --background-300: 0.9 0.012 95;
+  --background-400: 0.85 0.015 95;
+  --background-500: 0.78 0.02 95;
+  --background-600: 0.7 0.022 95;
+  --background-700: 0.6 0.025 95;
+  --background-800: 0.5 0.025 95;
+  --background-900: 0.38 0.025 95;
+  --background-950: 0.25 0.02 95;
+
+  --primary-50: 0.97 0.04 85;
+  --primary-100: 0.93 0.07 85;
+  --primary-200: 0.88 0.1 85;
+  --primary-300: 0.82 0.13 85;
+  --primary-400: 0.75 0.16 85;
+  --primary-500: 0.68 0.19 82;
+  --primary-600: 0.6 0.17 82;
+  --primary-700: 0.52 0.15 82;
+  --primary-800: 0.43 0.13 82;
+  --primary-900: 0.33 0.1 82;
+  --primary-950: 0.22 0.07 82;
+
+  --accent-50: 0.97 0.02 175;
+  --accent-100: 0.93 0.04 175;
+  --accent-200: 0.88 0.06 175;
+  --accent-300: 0.8 0.08 175;
+  --accent-400: 0.7 0.1 175;
+  --accent-500: 0.6 0.12 178;
+  --accent-600: 0.52 0.105 178;
+  --accent-700: 0.44 0.09 178;
+  --accent-800: 0.36 0.075 178;
+  --accent-900: 0.28 0.06 178;
+  --accent-950: 0.18 0.04 178;
+
+  --secondary-50: 0.97 0.01 80;
+  --secondary-100: 0.93 0.02 80;
+  --secondary-200: 0.88 0.03 80;
+  --secondary-300: 0.8 0.04 80;
+  --secondary-400: 0.7 0.05 80;
+  --secondary-500: 0.6 0.05 80;
+  --secondary-600: 0.52 0.045 80;
+  --secondary-700: 0.44 0.04 80;
+  --secondary-800: 0.36 0.035 80;
+  --secondary-900: 0.28 0.03 80;
+  --secondary-950: 0.18 0.02 80;
+
+  --foreground-50: 0.95 0.005 260;
+  --foreground-100: 0.88 0.008 260;
+  --foreground-200: 0.78 0.01 260;
+  --foreground-300: 0.68 0.012 260;
+  --foreground-400: 0.58 0.012 260;
+  --foreground-500: 0.48 0.01 260;
+  --foreground-600: 0.4 0.01 260;
+  --foreground-700: 0.32 0.01 260;
+  --foreground-800: 0.24 0.008 260;
+  --foreground-900: 0.16 0.005 260;
+  --foreground-950: 0.1 0.003 260;
+
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-label: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ===== 深色主题 =====
+   只改 CSS 变量的 L(亮度)——背景 50→950 由暗到亮(50 是最深的底),
+   前景 50→950 由暗到亮(900 接近纯白当正文),强调/主色随之提亮以保证对比。
+   页面里所有颜色都走 oklch(var(--xxx)),所以只需覆盖变量值即可整体切换。 */
+:root[data-theme="dark"] {
+  --background-50: 0.20 0.008 95;
+  --background-100: 0.24 0.009 95;
+  --background-200: 0.29 0.010 95;
+  --background-300: 0.35 0.012 95;
+  --background-400: 0.42 0.014 95;
+  --background-500: 0.50 0.016 95;
+  --background-600: 0.58 0.018 95;
+  --background-700: 0.66 0.020 95;
+  --background-800: 0.74 0.020 95;
+  --background-900: 0.83 0.018 95;
+  --background-950: 0.90 0.015 95;
+
+  --primary-50: 0.24 0.05 82;
+  --primary-100: 0.30 0.08 82;
+  --primary-200: 0.37 0.11 82;
+  --primary-300: 0.45 0.14 82;
+  --primary-400: 0.55 0.16 82;
+  --primary-500: 0.68 0.18 82;
+  --primary-600: 0.75 0.16 85;
+  --primary-700: 0.82 0.13 85;
+  --primary-800: 0.88 0.10 85;
+  --primary-900: 0.93 0.07 85;
+  --primary-950: 0.97 0.04 85;
+
+  --accent-50: 0.22 0.04 178;
+  --accent-100: 0.27 0.05 178;
+  --accent-200: 0.33 0.06 178;
+  --accent-300: 0.42 0.08 178;
+  --accent-400: 0.52 0.10 178;
+  --accent-500: 0.62 0.12 178;
+  --accent-600: 0.70 0.11 178;
+  --accent-700: 0.80 0.09 178;
+  --accent-800: 0.87 0.07 175;
+  --accent-900: 0.92 0.05 175;
+  --accent-950: 0.96 0.03 175;
+
+  --secondary-50: 0.22 0.02 80;
+  --secondary-100: 0.28 0.03 80;
+  --secondary-200: 0.34 0.04 80;
+  --secondary-300: 0.42 0.05 80;
+  --secondary-400: 0.52 0.05 80;
+  --secondary-500: 0.62 0.05 80;
+  --secondary-600: 0.70 0.045 80;
+  --secondary-700: 0.80 0.04 80;
+  --secondary-800: 0.87 0.03 80;
+  --secondary-900: 0.92 0.02 80;
+  --secondary-950: 0.96 0.01 80;
+
+  --foreground-50: 0.30 0.005 260;
+  --foreground-100: 0.38 0.006 260;
+  --foreground-200: 0.46 0.008 260;
+  --foreground-300: 0.55 0.010 260;
+  --foreground-400: 0.63 0.011 260;
+  --foreground-500: 0.71 0.010 260;
+  --foreground-600: 0.79 0.009 260;
+  --foreground-700: 0.86 0.008 260;
+  --foreground-800: 0.91 0.006 260;
+  --foreground-900: 0.96 0.004 260;
+  --foreground-950: 0.99 0.002 260;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: oklch(var(--background-50));
+  color: oklch(var(--foreground-900));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.honeypot-field {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ===== 原生 App 观感(保守版:不改 body 滚动模型,避免点击/滚动异常)===== */
+/* 网页根背景 = App 浅色,消除顶部/底部安全区露出的 WebView 黑底 */
+html {
+  background-color: oklch(var(--background-50));
+  -webkit-text-size-adjust: 100%;
+}
+/* 去点击高亮、长按放大镜;输入框仍可正常选中输入 */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* 隐藏滚动条(iOS 原生列表也无可见滚动条)*/
+::-webkit-scrollbar { width: 0; height: 0; display: none; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+/* 顶部安全区留白工具类(按需使用)*/
+.safe-top { padding-top: env(safe-area-inset-top); }
