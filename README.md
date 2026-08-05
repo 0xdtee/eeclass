@@ -2,9 +2,9 @@
 
 **English** | [中文](README.zh.md)
 
-> **Turn a live lecture into a clean, structured, searchable, review-ready notebook — in real time — while your audio never leaves your own machine.**
+> **Turn a live lecture into a clean, structured, searchable, review-ready notebook — in real time.**
 
-eeclass is a **self-hosted** classroom transcription & AI-notes system. The teacher lectures; it renders live captions, tells speakers apart, and marks key points — all on your own CPU. Afterwards it uses an LLM to generate summaries, likely exam points, and mock papers to help you revise. Speech recognition, speaker separation and voiceprints all run **locally; audio never leaves the device** — only optional plain-text calls (correction/summary) go to an external LLM.
+eeclass is a classroom transcription & AI-notes system. The teacher lectures; it renders live captions, tells speakers apart, and marks key points. Afterwards it uses an LLM to generate summaries, likely exam points, and mock papers to help you revise. Speech recognition, speaker separation and voiceprints run on CPU (sherpa-onnx / 3D-Speaker); correction, summary and other AI features optionally use DeepSeek.
 
 Built for Chinese university classrooms, but the recognizer is multilingual (zh / en / ja / ko / yue).
 
@@ -16,7 +16,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/live.png" alt="Live transcription"><br><sub><b>Live transcription</b> — speaker labels, inline English→Chinese subtitles, notes side by side; everything runs on-device.</sub></td>
+    <td width="50%"><img src="docs/screenshots/live.png" alt="Live transcription"><br><sub><b>Live transcription</b> — speaker labels, inline English→Chinese subtitles, notes side by side.</sub></td>
     <td width="50%"><img src="docs/screenshots/summary.png" alt="AI summary"><br><sub><b>AI summary</b> — per-class summary, key points, and one-tap homophone fixes.</sub></td>
   </tr>
   <tr>
@@ -37,7 +37,6 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - **University students** — who can't take notes fast enough and keep missing content; who want a complete, searchable, revisable record of every class.
 - **Teachers** — who want a verbatim record of their own lectures, plus automatic per-class and whole-course summaries.
 - **Deaf / hard-of-hearing & non-native students** — who need live captions, or a Chinese subtitle auto-added under English speech.
-- **Privacy-conscious people & institutions** — who won't upload classroom audio to a third-party cloud and want to own their data end to end.
 
 ## Problems it solves
 
@@ -45,7 +44,6 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - **Nothing to revise from after class** — one tap generates a per-class summary, a whole-course "grand summary", exam-point prediction, a mock exam, and self-test flashcards.
 - **ASR mishears homophones and leaves choppy fragments** — real-time homophone correction + smart segmentation turn broken speech into readable sentences (both are built to **never drop a word**).
 - **Content scattered across many classes, hard to find** — full-text search across every course ("which class did the teacher mention X?").
-- **Privacy concerns with cloud transcription** — audio, recognition and voiceprints all run locally on CPU; nothing is uploaded.
 
 ## Typical scenarios
 
@@ -56,12 +54,12 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 
 ## Highlights
 
-- 🔒 **Fully local, audio never leaves the device** — ASR, speaker separation and voiceprints all run on CPU (sherpa-onnx SenseVoice, RTF ≈ 0.05); only optional text correction/summary goes to an external LLM.
+- ⚡ **CPU-only, real-time** — ASR, speaker separation and voiceprints all run on CPU (sherpa-onnx SenseVoice, RTF ≈ 0.05); no GPU needed, an ordinary machine handles it.
 - 🧬 **A voiceprint library that recognizes people** — name someone once and future recordings of the same voice are recognized automatically; each person is stored once, and renaming propagates **back across all past classes**.
 - 🧠 **Course-level AI** — beyond per-class summaries, it **aggregates a whole course's classes into a grand summary**, predicts exam points (with a share pie chart), and generates a mock paper.
 - 📱 **One codebase, many devices** — web app + native iPad app (Capacitor), from the single `mobile/` source.
 - 🌏 **Multilingual + auto-translation** — zh/en/ja/ko/yue recognition; English lines get a Chinese subtitle underneath automatically.
-- 🏠 **Self-hosted, open source (MIT)** — runs on one ordinary machine + a LAN; your data stays entirely in your hands.
+- 🏠 **Open source (MIT), self-hosted** — runs on one ordinary machine + a LAN.
 - 📖 **Built-in animated manual** — every feature ships with a CSS-animated demo + step-by-step guide; zero learning curve.
 
 ## Features
@@ -71,7 +69,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - **Highlight detection** — auto-marks key points, definitions and formulas the teacher stresses.
 - **AI assist (via DeepSeek, optional)** — homophone correction, smart sentence segmentation, English→Chinese subtitles, per-class summary, whole-course grand summary, exam-point prediction, mock exam, flashcards / quiz, and "ask the lecture" Q&A.
 - **Board capture** — snap the blackboard/slide; shots are aligned to the timeline.
-- **Accounts & privacy** — real login (pbkdf2), strict per-account data isolation, admin-only voiceprint management, read-only share links.
+- **Accounts & access** — real login (pbkdf2), strict per-account data isolation, admin-only voiceprint management, read-only share links.
 - **Export** — PDF export; live write-into-Word via an Office add-in (Windows only).
 - **Timetable & syllabus**, full-text search across classes, editable transcripts, light/dark theme, mic sensitivity.
 - **Optional Aliyun OSS** offload/backup for audio and files.
@@ -153,10 +151,9 @@ cd mobile   && BASE_PATH=/     npm run build      # mobile  → out/ (serves /m 
 
 The backend then serves the desktop app at **https://localhost:5901/app/course** and the mobile app at `/m`. On the same Wi-Fi, phones/tablets can open `https://<your-LAN-ip>:5901/app/course` (self-signed cert — accept the warning). Access is gated by a token when `server.require_token` is on.
 
-## Privacy & security
+## Security
 
-- **Audio, ASR, speaker voiceprints — all local, on CPU.** Speech never leaves the machine.
-- Only optional **text** (transcript snippets for correction/summary) is sent to DeepSeek.
+- AI features (correction/summary, etc.) send transcript **text** to DeepSeek; with AI features off there are no external calls.
 - Passwords stored as pbkdf2 hashes; sessions are token-based; brute-force lockout on the token gate.
 - **Strict per-account data isolation** — each account only sees its own classes, courses, schedule and voiceprint library.
 - Secrets (`config.json`, `token.txt`, `certs/`, env vars in `start-server.sh`), all user data (`records/`) and the models are **git-ignored** and never committed. Put the DB DSN and API keys in environment variables, not in files.
