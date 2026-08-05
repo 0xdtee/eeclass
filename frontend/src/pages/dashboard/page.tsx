@@ -346,6 +346,13 @@ export default function DashboardHome() {
                 </button>
               )}
               <button
+                onClick={() => navigate('/help')}
+                className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
+                title="说明书"
+              >
+                <i className="ri-book-2-line"></i>
+              </button>
+              <button
                 onClick={() => navigate('/settings')}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
                 title="设置"

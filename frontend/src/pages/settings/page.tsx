@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import BackButton from '@/components/feature/BackButton';
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from '@/lib/settings';
 import { useAuth } from '@/hooks/useAuth';
 import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
@@ -43,7 +44,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-background-100">
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
         <div className="flex items-center gap-3 h-14 px-6 max-w-4xl mx-auto">
-          <button onClick={() => navigate(-1)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer"><i className="ri-arrow-left-line"></i></button>
+          <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer" />
           <h1 className="text-sm font-semibold text-foreground-900 flex items-center gap-2"><i className="ri-settings-3-line"></i>设置</h1>
         </div>
       </nav>

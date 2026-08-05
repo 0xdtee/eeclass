@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import BackButton from '@/components/feature/BackButton';
 import {
   DndContext,
   closestCenter,
@@ -261,7 +261,6 @@ function TagRowContent({
 
 /* ───────── Main Page ───────── */
 export default function TagsPage() {
-  const navigate = useNavigate();
   const { tags, addTag, updateTag, deleteTag, reorderTag, reorderAll } = useTagsStore();
 
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -354,10 +353,10 @@ export default function TagsPage() {
       {/* Top Nav */}
       <div className="sticky top-0 z-40 bg-background-50 border-b border-background-200">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="flex items-center gap-1.5 text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">
+          <BackButton className="flex items-center gap-1.5 text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">
             <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-left-s-line text-base"></i></div>
-            <span className="text-sm">返回控制台</span>
-          </button>
+            <span className="text-sm">返回</span>
+          </BackButton>
           <div className="w-px h-4 bg-background-200"></div>
           <div className="flex items-center gap-2 flex-1">
             <div className="w-5 h-5 flex items-center justify-center"><i className="ri-price-tag-3-line text-accent-500 text-base"></i></div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import BackButton from '@/components/feature/BackButton';
 import { useRecords, officialPdfUrl, officialPageUrl, type OfficialSchool } from '@/hooks/useRecords';
 
 const CATS: { name: string; icon: string; kws: string[] }[] = [
@@ -19,7 +19,6 @@ function catOf(course: string): string {
 type Item = OfficialSchool['items'][number];
 
 export default function ReferencePage() {
-  const navigate = useNavigate();
   const records = useRecords();
   const [schools, setSchools] = useState<OfficialSchool[]>([]);
   const [schoolId, setSchoolId] = useState('');
@@ -72,7 +71,7 @@ export default function ReferencePage() {
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
         <div className="flex items-center justify-between h-14 px-6 max-w-6xl mx-auto">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/')} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer"><i className="ri-arrow-left-line"></i></button>
+            <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer" />
             <div>
               <h1 className="text-sm font-semibold text-foreground-900">参考资料 · 官方教学大纲</h1>
               <p className="text-xs text-foreground-400">选择学校 → 查看该校教务处发布的课程教学大纲 PDF</p>

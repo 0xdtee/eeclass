@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import BackButton from '@/components/feature/BackButton';
 import Tabs from '@/components/base/Tabs';
 import TranscriptionTab from '@/pages/home/components/TranscriptionTab';
 import SummaryTab, { parseCorrection } from '@/pages/home/components/SummaryTab';
@@ -27,7 +28,6 @@ const tabs = [
 ];
 
 export default function HomePage() {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('transcription');
   const [activeSessionId, setActiveSessionId] = useState('');
   const [showSharePanel, setShowSharePanel] = useState(false);
@@ -534,14 +534,10 @@ export default function HomePage() {
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
         <div className="flex items-center justify-between h-14 px-3 sm:px-6 gap-2">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => navigate('/')}
-              className="flex items-center gap-1 h-8 px-3 rounded-lg bg-background-100 hover:bg-background-200 text-foreground-600 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap"
-              title="返回主界面"
-            >
+            <BackButton className="flex items-center gap-1 h-8 px-3 rounded-lg bg-background-100 hover:bg-background-200 text-foreground-600 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">
               <i className="ri-arrow-left-line"></i>
-              <span className="hidden sm:inline text-xs font-medium">返回主界面</span>
-            </button>
+              <span className="hidden sm:inline text-xs font-medium">返回</span>
+            </BackButton>
             <div className="w-8 h-8 flex items-center justify-center bg-accent-100 rounded-lg flex-shrink-0">
               <i className="ri-book-open-line text-accent-600"></i>
             </div>
@@ -597,12 +593,9 @@ export default function HomePage() {
               <span>这节课已保存,并生成了 AI 概要。在主界面「最近课时」能找到它。</span>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <i className="ri-home-4-line"></i>返回主界面
-              </button>
+              <BackButton className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap">
+                <i className="ri-home-4-line"></i>返回
+              </BackButton>
               <button
                 onClick={() => setJustEnded(false)}
                 className="px-3 py-2 text-sm text-foreground-500 hover:text-foreground-700 cursor-pointer whitespace-nowrap"

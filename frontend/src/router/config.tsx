@@ -10,6 +10,7 @@ import Login from "../pages/login/page";
 import Register from "../pages/register/page";
 import TagsPage from "../pages/tags/page";
 import SharedPage from "../pages/shared/page";
+import HelpPage from "../pages/help/page";
 
 const routes: RouteObject[] = [
   {
@@ -58,6 +59,14 @@ const routes: RouteObject[] = [
     element: (
       <RequireAuth>
         <SettingsPage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/help",
+    element: (
+      <RequireAuth>
+        <HelpPage />
       </RequireAuth>
     ),
   },

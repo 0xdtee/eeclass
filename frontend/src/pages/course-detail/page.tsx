@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRecords, sessionTitle, sessionDate, fmtDuration } from '@/hooks/useRecords';
 import type { CourseSummary, CourseExam, CourseMock } from '@/hooks/useRecords';
 import { audioUrl, audioDownloadUrl } from '@/hooks/useLibrary';
+import BackButton from '@/components/feature/BackButton';
 
 type TabId = 'summary' | 'audio' | 'exam' | 'mock';
 const TABS: { id: TabId; label: string; icon: string }[] = [
@@ -183,9 +184,9 @@ export default function CourseDetailPage() {
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
         <div className="flex items-center justify-between h-14 px-6 max-w-5xl mx-auto">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => navigate('/')} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer">
+            <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer">
               <i className="ri-arrow-left-line"></i>
-            </button>
+            </BackButton>
             <div className="min-w-0">
               <h1 className="text-sm font-semibold text-foreground-900 truncate">{name || '课程'}</h1>
               <p className="text-xs text-foreground-400">共 {courseSessions.length} 节录音 · AI 课程分析</p>
