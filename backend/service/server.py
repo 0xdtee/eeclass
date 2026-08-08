@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""课堂实时字幕服务。
+r"""Real-time classroom subtitle service.
 
-一个进程干三件事：
-  1. HTTPS 托管 Word 加载项的网页（任务窗格）
-  2. WebSocket 把识别结果实时推给 Word
-  3. 采集 → VAD 分句 → 说话人 → 识别 → 划重点 → 落盘
+One process does three things:
+  1. HTTPS-hosts the Word add-in web page (task pane)
+  2. WebSockets recognition results to Word in real time
+  3. Capture -> VAD segmentation -> speaker -> recognition -> highlighting -> disk
 
-即使 Word 那边没连上，录音和转写也照常进行、照常存盘 ——
-不会出现"插件挂了整节课白上"的情况。
+Even if Word isn't connected, recording and transcription keep running and
+keep saving to disk -- no more "the plugin died and the whole class was wasted".
 
-启动：  ..\scripts\start.ps1
+Start:  ..\scripts\start.ps1
 """
 import asyncio
 import json
@@ -34,11 +34,11 @@ from speaker import SpeakerID
 from highlight import Highlighter
 from recorder import Recorder
 try:
-    from word_com import WordWriter          # 只有 Windows + Word 才有
-except Exception:                             # Linux 服务器上没有，写 Word 的路直接关掉
+    from word_com import WordWriter          # only present on Windows + Word
+except Exception:                             # absent on Linux servers, so disable the write-to-Word path
     WordWriter = None
-# word_com 在 Mac/Linux 上「能 import」（Windows 专用代码只在方法里，靠 ctypes.windll），
-# 所以光靠上面的 try 关不掉。非 Windows 一律禁用，否则勾了「写入 Word」会崩线程、卡住开始。
+# word_com is importable on Mac/Linux (the Windows-only code lives inside methods, via ctypes.windll),
+# so the try above can't disable it. Always disable on non-Windows, or enabling "write to Word" crashes the thread and hangs startup.
 if sys.platform != "win32":
     WordWriter = None
 from summarize import DeepSeek
@@ -58,7 +58,7 @@ def load_config():
         return json.load(f)
 
 
-# ---------- 个性化反哺:把用户一键纠对的术语持续攒进 records/learned_terms.json ----------
+# ---------- Personalization feedback: keep accumulating user-corrected terms into records/learned_terms.json ----------
 def _learned_terms_file(cfg):
     root = os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"]))
     return os.path.join(root, "learned_terms.json")
@@ -76,7 +76,7 @@ def load_learned_terms(cfg):
 
 
 def add_learned_term(cfg, term):
-    """把一个用户纠对的术语记下来(>=2字、去重),让之后开的课自动纠这个同音错。"""
+    """Record a term the user corrected (>=2 chars, deduped) so later sessions auto-fix this homophone error."""
     term = (term or "").strip()
     if len(term) < 2:
         return False
@@ -99,7 +99,7 @@ def add_learned_term(cfg, term):
 
 
 def course_base_name(title):
-    """去掉「第N课/第N讲/第N节/(N)」编号,得到课程基名。和前端一致。"""
+    """Strip numbering like "Lesson N/Lecture N/Section N/(N)" to get the base course name. Matches the frontend."""
     t = (title or "").strip()
     t = re.sub(r"\s*第\s*\d+\s*[课讲节]\s*$", "", t)
     t = re.sub(r"\s*[（(]\s*\d+\s*[）)]\s*$", "", t)
@@ -108,7 +108,7 @@ def course_base_name(title):
 
 def speaker_name(idx):
     if idx == 0:
-        return "老师"          # 一节课里第一个开口、且说得最多的，基本必是老师
+        return "老师"          # whoever speaks first and speaks the most in a class is almost certainly the teacher
     return "同学" + "ABCDEFG"[(idx - 1) % 7]
 
 
@@ -118,48 +118,48 @@ def ts(sec):
 
 
 class Session:
-    """一节课。"""
+    """One class session."""
 
     def __init__(self, cfg, loop, emit, title=None, device=None, loopback=False,
                  to_word=False, word_doc="active", append_sid=None):
         self.cfg = cfg
         self.loop = loop
-        self.emit = emit           # 线程安全的广播函数
+        self.emit = emit           # thread-safe broadcast function
         self.title = title
         self.device = device
         self.loopback = loopback
-        # to_word: 由服务端通过 COM 直接写 Word（浏览器控制台走这条路）。
-        # Office 加载项那条路是任务窗格自己用 Office.js 写，不能同时开，否则写两遍。
+        # to_word: the server writes to Word directly via COM (the browser console uses this path).
+        # the Office add-in path has the task pane write via Office.js itself; don't enable both, or it writes twice.
         self.to_word = bool(to_word)
         self.word_doc = word_doc
-        self.only_key = False      # 只把重点句写进 Word（记录文件里始终是全量）
+        self.only_key = False      # only write key lines into Word (the record file always keeps everything)
         self.word = None
-        self.corrections = []      # 这门课的固定错字纠正，识别完立刻替换
+        self.corrections = []      # this course's fixed typo corrections, applied right after recognition
         self.course_id = None
-        self.course_name = None    # 绑定课程时的课名,给 AI 纠错当学科上下文(比手输标题靠谱)
-        self.subjects = []         # 勾选的学科标签(高等数学/大学物理…),给 AI 纠错/翻译当上下文
-        self.user_key = None       # 本次录音属于哪个账号 —— 决定用/写哪个私有声纹库
-        self.ai_correct = False    # DeepSeek 实时纠错(改同音错字),开关在前端
+        self.course_name = None    # course name when bound, used as subject context for AI correction (more reliable than a hand-typed title)
+        self.subjects = []         # selected subject tags (Advanced Mathematics/College Physics...), used as context for AI correction/translation
+        self.user_key = None       # which account this recording belongs to -- decides which private voiceprint library to use/write
+        self.ai_correct = False    # DeepSeek real-time correction (fixes homophone typos), toggled from the frontend
         self.corrector = None
         self.correct_pool = None
-        # 英文字幕:识别到英文(或英语课)时,异步翻成中文挂在该句下面
+        # English subtitles: when English is recognized (or in an English class), asynchronously translate to Chinese and attach under the line
         self.translate_en = False
-        self.translate_wu = False   # 上海话(吴语)后端:每句自动翻普通话字幕
+        self.translate_wu = False   # Shanghainese (Wu) backend: auto-translate each line to Mandarin subtitles
         self.translator = None
         self.translate_pool = None
-        # DeepSeek 智能分句:按语意把 VAD 碎片合并成完整句子(开关在前端,仅整句模式)
+        # DeepSeek smart segmentation: merge VAD fragments into complete sentences by meaning (toggled from the frontend, whole-sentence mode only)
         self.smart_seg = False
         self.segmenter_ds = None
         self.seg_pool = None
-        self._seg_frags = []       # 缓冲:还没成句的碎片 [{text,start,end,sid,gap,conf}]
+        self._seg_frags = []       # buffer: fragments not yet formed into sentences [{text,start,end,sid,gap,conf}]
         self._seg_lock = threading.Lock()
         self._seg_busy = False
-        self._seg_stopping = False   # 停止中:在飞的分句 worker 别再出行(避免结束卡住/写已关文件)
-        self._emit_lock = threading.Lock()   # 出行串行化(worker 线程 vs 停止线程)
-        self._trans_lock = threading.Lock()  # translations.json 读改写串行化(翻译池并发)
+        self._seg_stopping = False   # stopping: in-flight segmentation workers must not emit anymore (avoids hanging on stop / writing to a closed file)
+        self._emit_lock = threading.Lock()   # serialize emission (worker thread vs stop thread)
+        self._trans_lock = threading.Lock()  # serialize read-modify-write of translations.json (concurrent translation pool)
 
-        # 同音术语纠正:把「映射→影射」「值域→职域」这类同音错按术语表本地纠回。
-        # 术语来自 asr.terms + asr.hotwords,任何后端(SenseVoice/Paraformer/whisper)都生效。
+        # homophone term correction: locally fix homophone errors (a correct term transcribed as a same-sounding wrong one) using the term list.
+        # terms come from asr.terms + asr.hotwords; effective on any backend (SenseVoice/Paraformer/whisper).
         self.tfix = None
         try:
             from term_fix import TermFixer
@@ -167,17 +167,17 @@ class Session:
             terms = list(a.get("terms") or [])
             hw = a.get("hotwords")
             terms += hw.split() if isinstance(hw, str) else list(hw or [])
-            # 个性化反哺:用户以往一键纠错学到的术语,喂回来让后续识别自动纠对
+            # personalization feedback: terms learned from the user's past one-click corrections, fed back so future recognition auto-corrects them
             terms += load_learned_terms(cfg)
             if terms:
                 self.tfix = TermFixer(terms)
         except Exception as e:
             print(f"⚠️ 同音术语纠正未启用: {e}")
 
-        # 两条互斥的路：流式（模型自己边听边断句）或 VAD 切句 + 整句识别
+        # two mutually exclusive paths: streaming (the model segments as it listens) or VAD segmentation + whole-sentence recognition
         self.streaming = bool(cfg["asr"].get("streaming")) and \
             cfg["asr"].get("backend") == "zipformer"
-        # 上海话后端:识别出的是吴语用字,每句自动翻普通话挂在下面当字幕
+        # Shanghainese backend: output is in Wu characters; auto-translate each line to Mandarin and attach below as subtitles
         self.translate_wu = cfg["asr"].get("backend") == "wenet_ctc"
         self.seg = None if self.streaming else Segmenter(cfg)
         self.sasr = None
@@ -185,7 +185,7 @@ class Session:
         self.hl = Highlighter(cfg)
         self.asr = ASRWorker(cfg, self._on_text, self._on_status)
         records_root = os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"]))
-        # 续录:接着已有的这节课往下录(音频/转写接上,行号与时间戳连续)
+        # resume recording: append to an existing session (audio/transcript continue, line numbers and timestamps stay continuous)
         self.t_offset = 0.0
         existing_dir = None
         start_line_id = 0
@@ -193,29 +193,29 @@ class Session:
             d = os.path.join(records_root, os.path.basename(append_sid))
             if os.path.isdir(d):
                 existing_dir = d
-                self._rehydrate_for_append(d, records_root)   # 旧文件若已下沉 OSS,先回灌本地
+                self._rehydrate_for_append(d, records_root)   # if old files were offloaded to OSS, pull them back locally first
                 start_line_id, last_end = self._scan_transcript(d)
                 self.t_offset = self._audio_duration(d) or last_end
         self.rec = Recorder(records_root, title=title,
                             save_wav=cfg["server"]["save_wav"], existing_dir=existing_dir)
         self.cap = None
-        self.names = {}            # {speaker_id: 自定义名字}
+        self.names = {}            # {speaker_id: custom name}
         self.running = False
-        # t0 往前挪 t_offset,让 elapsed / 总时长 在续录后仍连续(板书按秒对齐也不错位)
+        # shift t0 back by t_offset so elapsed / total duration stay continuous after resuming (blackboard shots aligned by second stay in place)
         self.t0 = time.time() - self.t_offset
         self.line_id = start_line_id
         self.last_speaker = None
-        self.para_chars = 0        # 当前段落已写多少字
-        self.para_start = None     # 当前段落起始秒
-        self.pending_key = 0       # 手动标重点：给下一句/上一句打标记
-        self.last_line_id = None   # 最近出的一句 id，手动「标记重点」标它(刚说过的那句)
+        self.para_chars = 0        # how many characters the current paragraph has written
+        self.para_start = None     # start second of the current paragraph
+        self.pending_key = 0       # manual highlighting: mark the next/previous line
+        self.last_line_id = None   # id of the most recently emitted line; manual "mark key" tags it (the line just spoken)
         self.paused = False
         self.dev_info = {}
 
-    # ---------- 续录辅助 ----------
+    # ---------- resume helpers ----------
     @staticmethod
     def _rehydrate_for_append(session_dir, records_root):
-        """续录前,若旧 transcript/audio 已下沉 OSS、本地没有,先从 OSS 拉回来。"""
+        """Before resuming, if the old transcript/audio was offloaded to OSS and isn't local, pull it back from OSS first."""
         try:
             import oss_store
             if not oss_store.enabled():
@@ -234,7 +234,7 @@ class Session:
 
     @staticmethod
     def _scan_transcript(session_dir):
-        """读旧 transcript,返回(最大行号, 最后一句的结束秒),用于续录接号/接时间。"""
+        """Read the old transcript and return (max line number, last line's end second), for continuing numbering/time on resume."""
         maxid, last_end = 0, 0.0
         p = os.path.join(session_dir, "transcript.jsonl")
         if os.path.exists(p):
@@ -263,22 +263,22 @@ class Session:
         return 0.0
 
     def _owner_id(self):
-        """本次录音归属账号的稳定标识(登录用户=邮箱哈希,全局令牌=owner)。
-        用哈希而非邮箱明文,这样落进 meta/owner.json、同步到 OSS 也不泄露账号邮箱。"""
+        """Stable id of the account this recording belongs to (logged-in user = email hash, global token = owner).
+        Uses a hash rather than plaintext email, so writing to meta/owner.json and syncing to OSS doesn't leak the account email."""
         from voiceprint import _key_id
         k = self.user_key
         return "owner" if k in (None, "", "owner") else _key_id(k)
 
-    # ---------- 生命周期 ----------
+    # ---------- lifecycle ----------
     def start(self):
-        # 归属标记:录制一开始就写 owner.json —— 这节课 meta 要到停止才落盘,
-        # 期间前端会拉这节课的笔记/板书,没有归属标记就会被数据隔离误挡成 403(进而被登出)。
+        # ownership marker: write owner.json as soon as recording starts -- this session's meta isn't persisted until stop,
+        # meanwhile the frontend fetches this session's notes/blackboard shots; without the marker, data isolation would wrongly block it with 403 (and log the user out).
         try:
             with open(os.path.join(self.rec.dir, "owner.json"), "w", encoding="utf-8") as f:
                 json.dump({"owner": self._owner_id()}, f)
         except Exception:
             pass
-        # 元数据同步进 PG（索引用；文件仍是真源）。失败不影响录制。
+        # sync metadata into PG (for indexing; files remain the source of truth). Failure doesn't affect recording.
         try:
             recordings_db.upsert_recording(
                 os.path.basename(self.rec.dir),
@@ -286,7 +286,7 @@ class Session:
                 created=time.strftime("%Y-%m-%d %H:%M:%S"))
         except Exception:
             traceback.print_exc()
-        # 加载跨会话声纹库:识别到已标记的声音就自动用其身份
+        # load the cross-session voiceprint library: when a labeled voice is recognized, use its identity automatically
         try:
             import voiceprint
             root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
@@ -302,7 +302,7 @@ class Session:
             if ds.ready:
                 self.translator = ds
                 self.translate_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="translate")
-        # 智能分句只在整句(VAD)模式下开;流式已自带断句。DeepSeek 没配就自动退回逐碎片成行。
+        # smart segmentation runs only in whole-sentence (VAD) mode; streaming already segments itself. Without DeepSeek configured, it falls back to one line per fragment.
         if self.smart_seg and not self.streaming:
             ds = DeepSeek(self.cfg)
             if ds.ready:
@@ -325,7 +325,7 @@ class Session:
             if not word_info["ok"]:
                 self._on_status(word_info["error"] or "连不上 Word")
         if self.device and str(self.device).startswith("browser"):
-            # 音频由网页推过来（手机/平板麦克风,或网页采的“系统声音”），本机不开麦
+            # audio is pushed from the web page (phone/tablet mic, or the page's captured "system audio"); no local mic
             self.cap = audio_mod.BrowserCapture(self._on_status)
         else:
             self.cap = audio_mod.Capture(self.device, self.loopback,
@@ -333,7 +333,7 @@ class Session:
                                          agc=self.cfg["audio"].get("agc"))
         self.dev_info = self.cap.start()
         self.running = True
-        # 续录:t0 往前挪 t_offset,让 elapsed/总时长连续、板书按秒对齐(别用裸 time.time() 覆盖)
+        # resume: shift t0 back by t_offset so elapsed/total duration stay continuous and blackboard shots align by second (don't overwrite with a bare time.time())
         self.t0 = time.time() - self.t_offset
         threading.Thread(target=self._pump, daemon=True, name="segment").start()
         return {"model_load_s": round(load_s, 1), **self.dev_info,
@@ -341,7 +341,7 @@ class Session:
 
     def stop(self):
         self.running = False
-        self._seg_stopping = True    # 在飞的分句 worker 从此不再出行,避免结束被它拖住
+        self._seg_stopping = True    # in-flight segmentation workers stop emitting from now on, so shutdown isn't held up by them
         if self.cap:
             self.cap.stop()
         tail = (self.sasr or self.seg).flush()
@@ -349,24 +349,24 @@ class Session:
             self._dispatch(tail)
         time.sleep(0.3)
         self.asr.stop()
-        # 智能分句:不等在飞的 DeepSeek 调用(否则结束要卡十几秒);_seg_stopping 已置位,
-        # 那次 worker 回来也不会再出行。直接把缓冲里没成句的碎片逐个落盘,别丢最后半句。
+        # smart segmentation: don't wait on in-flight DeepSeek calls (or stop would hang for a dozen seconds); _seg_stopping is already set,
+        # so when that worker returns it won't emit either. Just flush the not-yet-formed fragments in the buffer one by one, don't lose the last half-sentence.
         if self.seg_pool is not None:
             self.seg_pool.shutdown(wait=False)
             self._seg_flush_all()
         if self.correct_pool is not None:
-            self.correct_pool.shutdown(wait=False)   # 未完成的纠错就算了,别拖住停止
+            self.correct_pool.shutdown(wait=False)   # drop unfinished corrections; don't hold up stopping
         if self.translate_pool is not None:
-            self.translate_pool.shutdown(wait=False)  # 未完成的翻译就算了
+            self.translate_pool.shutdown(wait=False)  # drop unfinished translations
         if self.word is not None:
             self.word.close()
         meta = {
             "title": self.title,
-            "owner": self._owner_id(),       # 这节课归属账号(哈希,不含邮箱明文)—— 数据隔离按它过滤
-            # 勾选的学科标签(高等数学/大学物理…)持久化,供按标签汇总用;停止时 meta 一并写 meta.json+PG
+            "owner": self._owner_id(),       # this session's owning account (a hash, no plaintext email) -- data isolation filters by it
+            # persist the selected subject tags (Advanced Mathematics/College Physics...), used for tag-based aggregation; on stop, meta is written to both meta.json and PG
             "tags": [t for t in (self.subjects or []) if isinstance(t, str) and t.strip()],
             "duration_s": round(time.time() - self.t0, 1),
-            "lines": self.line_id,   # 续录后是累计总行数
+            "lines": self.line_id,   # after resuming, this is the cumulative total line count
             "device": self.dev_info,
             "backend": self.cfg["asr"].get("backend", "whisper"),
             "streaming": self.streaming,
@@ -374,7 +374,7 @@ class Session:
             "rtf": round((self.sasr.rtf if self.streaming else self.asr.rtf), 2),
             "speakers": [{**s, "name": self.name_of(s["id"])} for s in self.spk.stats()],
         }
-        # 这次采到的每个说话人声纹,登记进全局去重库:同一个人(不管哪节课/哪个账号)只存一份。
+        # register each speaker voiceprint captured this time into the global dedup library: the same person (regardless of session/account) is stored only once.
         try:
             import voiceprint
             root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
@@ -388,7 +388,7 @@ class Session:
             traceback.print_exc()
         return self.rec.finish(meta), meta
 
-    # ---------- 采集 → 分句 ----------
+    # ---------- capture -> segmentation ----------
     def _pump(self):
         while self.running:
             try:
@@ -411,19 +411,19 @@ class Session:
         self._apply_merges()
         meta = {"speaker_id": sid, "speaker_conf": round(conf, 3)}
         if self.streaming:
-            # 流式路径识别已经在 push 里做完了，直接进出文逻辑
+            # the streaming path already finished recognition inside push, so go straight to the emit logic
             self._on_text(utt, meta, utt.text, utt.proc_s)
         else:
             self.asr.submit(utt, meta)
 
-    # ---------- 识别结果 → Word ----------
+    # ---------- recognition result -> Word ----------
     def _on_text(self, utt, meta, text, proc_s):
-        # 先做同音术语纠正(映射/值域/导数…),再做本课固定纠错。
-        # 两条路(整句 ASRWorker 回调、流式直接调)都经过这里,一处生效全覆盖。
+        # first apply homophone term correction (mapping/range/derivative...), then this course's fixed corrections.
+        # both paths (the whole-sentence ASRWorker callback and the direct streaming call) go through here, so one place covers all.
         if self.tfix is not None:
             text, _ = self.tfix.fix(text)
-        # 「格林公式」老被听成「格林公司」这类固定错误，在这里一次性纠掉，
-        # 后面写文档、落盘、划重点看到的都是纠正后的文本。
+        # fixed errors like "Green's formula" being misheard as "Green Company" are corrected here in one pass,
+        # so what's written to the doc, saved to disk, and highlighted afterward is all the corrected text.
         if self.corrections:
             text = Library.apply_corrections(text, self.corrections)
         text = (text or "").strip()
@@ -431,18 +431,18 @@ class Session:
             return
         sid = meta["speaker_id"]
         conf = round(meta.get("speaker_conf", 0), 3)
-        # 智能分句开着(且录制中)→ 先缓冲、让 DeepSeek 按语意合并成整句再出行;
-        # 否则每个 VAD 碎片直接成一行(老行为)。
+        # smart segmentation on (and recording) -> buffer first, let DeepSeek merge into whole sentences by meaning before emitting;
+        # otherwise each VAD fragment becomes a line directly (the old behavior).
         if self.smart_seg and self.seg_pool and self.segmenter_ds and self.running:
             self._seg_feed(text, utt.start, utt.end, sid, utt.gap_before, conf)
         else:
             self._emit_line(text, utt.start, utt.end, sid, utt.gap_before, conf, proc_s)
 
     def _emit_line(self, text, start, end, sid, gap, conf, proc_s=0.0):
-        """把一句(可能由多个碎片合成)写盘并推给前端。line_id/段落状态在这里维护。
-        用锁串行化:智能分句的 worker 线程和停止收尾线程可能同时调它。
-        一段里若含多句(已带句末标点 。/!/?),按句末标点逐句拆成多行——内容一字不改。
-        (只按 。！？ 全角和半角 !? 拆,不按半角句点 . 拆,免得把 3.14 之类拆断。)"""
+        """Write a line (possibly merged from multiple fragments) to disk and push it to the frontend. line_id/paragraph state are maintained here.
+        Serialized with a lock: the smart-segmentation worker thread and the stop wrap-up thread may call it concurrently.
+        If a paragraph contains multiple sentences (already carrying sentence-ending punctuation), split it line by line at each sentence end -- the content is unchanged.
+        (Split only on full-width sentence-ending marks and half-width !?, not on the half-width period ., to avoid breaking things like 3.14.)"""
         sents = [s.strip() for s in re.findall(r"[^。！？!?]*[。！？!?]|[^。！？!?]+", text or "")]
         sents = [s for s in sents if s]
         with self._emit_lock:
@@ -457,8 +457,8 @@ class Session:
     def _emit_line_locked(self, text, start, end, sid, gap, conf, proc_s=0.0):
         p = self.cfg["paragraph"]
         speaker_changed = (self.last_speaker is not None and sid != self.last_speaker)
-        # 有的老师能连讲十几分钟不停顿，光靠停顿判断会写成一个巨型段落，
-        # 所以再加两道闸：段落字数上限、段落时长上限。
+        # some teachers talk for over ten minutes without pausing, and relying on pauses alone would produce one giant paragraph,
+        # so add two more gates: a max character count and a max duration per paragraph.
         too_long = (self.para_chars >= p["max_para_chars"]
                     or (self.para_start is not None
                         and end - self.para_start >= p["max_para_seconds"]))
@@ -480,7 +480,7 @@ class Session:
             reasons = reasons + ["手动标记"]
 
         self.line_id += 1
-        off = self.t_offset          # 续录:接着旧时间轴往后排(新一节从 0 开始时 off=0)
+        off = self.t_offset          # resume: append to the old timeline (off=0 when a new session starts from 0)
         rec = {
             "id": self.line_id,
             "start": round(start + off, 2),
@@ -506,14 +506,14 @@ class Session:
         if self.word is not None and not (self.only_key and not kind):
             self.word.push(rec)
         self.emit({"type": "line", **rec})
-        # AI 实时纠错:先秒出原文,再异步让 DeepSeek 改同音错字,改好了推 line_update
+        # AI real-time correction: emit the original instantly, then asynchronously let DeepSeek fix homophone typos and push line_update when done
         if self.ai_correct and self.correct_pool and self.corrector and self.corrector.ready:
             self.correct_pool.submit(self._ai_correct, rec["id"], rec["ts"], text)
-        # 上海话(吴语)→ 每句都异步翻普通话,挂在这句下面当字幕(不走英文检测的 _should_translate)
+        # Shanghainese (Wu) -> asynchronously translate each line to Mandarin, attached below as subtitles (bypasses the English-detection _should_translate)
         if self.translate_wu:
             if self.translate_pool and text.strip():
                 self.translate_pool.submit(self._translate_line, rec["id"], text, True)
-        # 英文句 → 异步翻中文,挂在这句下面当字幕
+        # English line -> asynchronously translate to Chinese, attached below as subtitles
         elif self.translate_en:
             ok = bool(self.translate_pool) and self._should_translate(text)
             if ok:
@@ -522,9 +522,9 @@ class Session:
                 print(f"[translate] skip id={rec['id']} pool={self.translate_pool is not None} "
                       f"should={self._should_translate(text)} text={text[:24]!r}", flush=True)
 
-    # ---------- DeepSeek 智能分句 ----------
+    # ---------- DeepSeek smart segmentation ----------
     _SEG_NORM = re.compile(r"[^一-鿿A-Za-z0-9]+")
-    SEG_FORCE_FRAGS = 12       # 缓冲碎片太多还没成句 → 强制逐碎片出行(安全阀)
+    SEG_FORCE_FRAGS = 12       # too many buffered fragments and still no sentence -> force emit fragment by fragment (safety valve)
     SEG_FORCE_CHARS = 140
 
     @classmethod
@@ -533,7 +533,7 @@ class Session:
 
     def _seg_feed(self, text, start, end, sid, gap, conf):
         with self._seg_lock:
-            # 说话人换了:一定是句边界,先把已缓冲的强制成行,别把两个人的话并一句
+            # speaker changed: definitely a sentence boundary; force-emit what's buffered first, don't merge two people's words into one sentence
             force = bool(self._seg_frags and sid != self._seg_frags[-1]["sid"])
             if force:
                 pending = self._seg_frags
@@ -546,19 +546,19 @@ class Session:
         if pending:
             for f in pending:
                 self._emit_line(f["text"], f["start"], f["end"], f["sid"], f["gap"], f["conf"])
-        self.emit({"type": "partial", "text": buf})   # 实时预览这句正在攒的内容
+        self.emit({"type": "partial", "text": buf})   # live preview of the content being accumulated for this line
         self._seg_flush_maybe()
 
     def _seg_flush_maybe(self):
         if not self.running:
-            return   # 停止流程里由 _seg_flush_all 收尾,别再往(即将关闭的)线程池投任务
+            return   # during shutdown, _seg_flush_all handles the wrap-up; don't submit tasks to the (soon-to-close) thread pool
         with self._seg_lock:
             if self._seg_busy or not self._seg_frags:
                 return
             n = len(self._seg_frags)
             chars = sum(len(f["text"]) for f in self._seg_frags)
-            # 缓冲里一旦出现句末标点(。！？)→ 立刻出行(_emit_line 会按标点拆),不再等 DeepSeek 攒;
-            # 只有还没出现任何句末标点(半句)时才交给智能分句继续攒。字数/条数安全阀照旧兜底。
+            # once sentence-ending punctuation appears in the buffer -> emit immediately (_emit_line splits on punctuation), no more waiting for DeepSeek;
+            # only hand off to smart segmentation while there's no sentence-ending punctuation yet (a half-sentence). The character/count safety valves still backstop.
             buf_has_end = bool(re.search(r"[。！？!?]", "".join(f["text"] for f in self._seg_frags)))
             if buf_has_end or n >= self.SEG_FORCE_FRAGS or chars >= self.SEG_FORCE_CHARS:
                 frags = self._seg_frags
@@ -584,7 +584,7 @@ class Session:
         finally:
             with self._seg_lock:
                 self._seg_busy = False
-            self._seg_flush_maybe()   # 处理期间可能又攒了新碎片
+            self._seg_flush_maybe()   # new fragments may have accumulated during processing
 
     def _seg_apply(self, snapshot, out):
         commit_texts = []
@@ -593,8 +593,8 @@ class Session:
                             for c in out["commit"] if (c.get("text") or "").strip()]
         if not commit_texts:
             return
-        # 不信 DeepSeek 报的 n(它会数错),而是把每个合成句去标点后 贪心对回开头的碎片,
-        # 求出每句真正吃掉几个碎片。对不齐就整批放弃(宁可这轮不提交,也不错位/丢字/重复)。
+        # don't trust the n DeepSeek reports (it miscounts); instead, strip punctuation from each merged sentence and greedily match it back against the leading fragments,
+        # to determine how many fragments each sentence actually consumed. If it doesn't line up, drop the whole batch (better to skip this round than misalign/lose/duplicate text).
         norm = [self._norm_seg(f["text"]).lower() for f in snapshot]
         groups = []
         i = 0
@@ -606,9 +606,9 @@ class Session:
             while j < len(snapshot) and len(acc) < len(target):
                 acc += norm[j]
                 j += 1
-            # 内容级精确匹配:合成句去标点后必须和吃掉的碎片逐字一致(只准 DeepSeek 加标点)。
-            # 只要 DeepSeek 丢字/改字/在碎片中间断句导致对不齐,就整批放弃 →
-            # 退回逐碎片成行,宁可不合并也绝不丢内容(修「前半句被漏掉」)。
+            # exact content match: the merged sentence with punctuation stripped must be character-for-character identical to the consumed fragments (DeepSeek may only add punctuation).
+            # if DeepSeek drops/changes characters or breaks mid-fragment causing misalignment, drop the whole batch ->
+            # fall back to one line per fragment; rather not merge than lose content (fixes "the first half of the sentence was dropped").
             if j == i or acc != target:
                 return
             groups.append((i, j))
@@ -618,8 +618,8 @@ class Session:
         consumed = i
         with self._seg_lock:
             if self._seg_stopping:
-                return   # 正在结束录音,交给 _seg_flush_all 收尾,worker 别再出行
-            # 并发校验:缓冲最前面的 consumed 个碎片必须还是 snapshot 的那几个(按 start 对齐)
+                return   # recording is ending; _seg_flush_all handles the wrap-up, workers must not emit anymore
+            # concurrency check: the leading `consumed` fragments in the buffer must still be the ones from the snapshot (aligned by start)
             if len(self._seg_frags) < consumed:
                 return
             if any(self._seg_frags[k]["start"] != snapshot[k]["start"] for k in range(consumed)):
@@ -634,7 +634,7 @@ class Session:
         self.emit({"type": "partial", "text": remain})
 
     def _seg_flush_all(self):
-        """停止时把没成句的碎片逐个出行,别丢内容。"""
+        """On stop, emit the not-yet-formed fragments one by one; don't lose content."""
         with self._seg_lock:
             frags = self._seg_frags
             self._seg_frags = []
@@ -643,11 +643,11 @@ class Session:
         if frags:
             self.emit({"type": "partial", "text": ""})
 
-    # 通用默认课名形如「课程 08-01 21:30」,不含学科信息,别拿它误导纠错
+    # a generic default course name like "Class 08-01 21:30" carries no subject info; don't let it mislead correction
     _GENERIC_TITLE = re.compile(r"^课程\s*\d{1,2}-\d{1,2}\s*\d{1,2}:\d{2}$")
 
     def _correction_topic(self):
-        """给 AI 纠错/翻译的学科上下文:优先勾选的学科标签,其次绑定课程名,再其次非通用手输标题。"""
+        """Subject context for AI correction/translation: prefer the selected subject tags, then the bound course name, then a non-generic hand-typed title."""
         if self.subjects:
             return "、".join(self.subjects[:3])
         if self.course_name and self.course_name.strip():
@@ -662,7 +662,7 @@ class Session:
         return ("英语" in s) or ("english" in s) or ("英文" in s)
 
     def _should_translate(self, text):
-        """这句要不要翻中文:英语课里只要有像样的英文就翻;普通课要整句以英文为主才翻。"""
+        """Whether this line should be translated to Chinese: in an English class, translate whenever there's decent English; in a regular class, only when the whole line is mostly English."""
         en = sum(1 for c in text if "a" <= c.lower() <= "z")
         if en < 6:
             return False
@@ -687,7 +687,7 @@ class Session:
         if not zh:
             return
         self.emit({"type": "line_translation", "id": line_id, "text": zh})
-        # 落盘:{行号: 中文译文},重载转写时挂回去。翻译池并发,加锁+临时文件原子替换,防丢/损坏。
+        # persist: {line number: Chinese translation}, reattached when reloading the transcript. Concurrent translation pool, guarded with a lock + atomic temp-file replace to prevent loss/corruption.
         with self._trans_lock:
             try:
                 p = self._translations_path()
@@ -710,9 +710,9 @@ class Session:
             return
         if not fixed or fixed == text:
             return
-        # 推给前端替换那一句
+        # push to the frontend to replace that line
         self.emit({"type": "line_update", "id": line_id, "text": fixed})
-        # 落盘:记一条 edit(by=AI纠错),重载转写就是纠正后的
+        # persist: record an edit (by=AI correction) so reloading the transcript shows the corrected text
         try:
             rec = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "line_id": line_id,
                    "before": text, "after": fixed, "by": "AI纠错", "ts": ts}
@@ -725,17 +725,17 @@ class Session:
         self.emit({"type": "notice", "msg": str(msg)})
 
     def _apply_merges(self):
-        """声纹判定「这两个其实是同一个人」时，把文档里已经写过的名字也改过来。
+        """When voiceprints determine "these two are actually the same person", also update the names already written in the document.
 
-        合并会让后面的编号整体前移，所以自定义名字的映射表要跟着搬，否则改过名的
-        说话人会在合并后指向别人。
+        Merging shifts all later ids down, so the custom-name mapping must move with them, or a renamed
+        speaker would point at someone else after the merge.
         """
         for frm, to in self.spk.take_merges():
             old, new = self.name_of(frm), self.name_of(to)
             names = {}
             for k, v in self.names.items():
                 if k == frm:
-                    continue          # 被并掉的那个的自定义名字丢弃，跟随并入方
+                    continue          # the merged-away one's custom name is discarded, following the one it merged into
                 names[k - 1 if k > frm else k] = v
             self.names = names
             if self.last_speaker == frm:
@@ -748,22 +748,22 @@ class Session:
                        "msg": f"「{old}」和「{new}」声纹一致，判定为同一个人，已合并。"})
             self.emit({"type": "renamed", "id": to, "old": old, "name": new})
 
-    # ---------- 杂项 ----------
+    # ---------- miscellaneous ----------
     def name_of(self, sid):
-        # 手动改名 > 声纹库命中的身份 > 默认「老师/同学N」
+        # manual rename > identity matched from the voiceprint library > default "Teacher/Student N"
         return self.names.get(sid) or self.spk.match_name(sid) or speaker_name(sid)
 
     def rename(self, sid, name):
         old = self.name_of(sid)
         self.names[int(sid)] = name
         if self.word is not None:
-            self.word.rename(old, name)   # 把文档里已经写过的名字一起替换掉
-        self._persist_speaker_name(int(sid), name)   # 落盘,录制结束后回看也是新名字
-        self._remember_voice(int(sid), name)   # 存进本账号声纹库,之后录到同一个人自动认
+            self.word.rename(old, name)   # also replace the names already written in the document
+        self._persist_speaker_name(int(sid), name)   # persist, so reviewing after recording ends also shows the new name
+        self._remember_voice(int(sid), name)   # save into this account's voiceprint library so the same person is recognized automatically next time
         return old
 
     def _persist_speaker_name(self, sid, name):
-        """把录制中改的名字写进 speaker_names.json,让停止后按 speaker_id 统一生效(和 REST 改名同一份文件)。"""
+        """Write names changed during recording into speaker_names.json so they take effect uniformly by speaker_id after stop (the same file as REST rename)."""
         try:
             p = os.path.join(self.rec.dir, "speaker_names.json")
             names = {}
@@ -783,8 +783,8 @@ class Session:
             traceback.print_exc()
 
     def _remember_voice(self, sid, name):
-        """录音中给某说话人改了名 → 把他这次的声纹中心 + 名字写进本账号私有声纹库,
-        以后这个账号再录到同声纹的人,会自动用这个名字。默认名(老师/同学N)不入库。"""
+        """When a speaker is renamed during recording -> write their voiceprint center + name for this session into this account's private voiceprint library,
+        so this account auto-uses this name next time it records the same voiceprint. Default names (Teacher/Student N) aren't stored."""
         name = (name or "").strip()
         if not name or name == speaker_name(sid):
             return
@@ -795,7 +795,7 @@ class Session:
             import voiceprint
             root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
             voiceprint.upsert_voice(root, name, emb, key=self.user_key)
-            # 刷新到本会话的匹配库,后面新出现的同声纹说话人也能立刻自动认
+            # refresh this session's matching library so newly appearing speakers with the same voiceprint are recognized instantly too
             self.spk.set_library(voiceprint.load_library(root, self.user_key), self.spk.vp_threshold)
         except Exception:
             traceback.print_exc()
@@ -826,11 +826,11 @@ class Session:
 class App:
     def __init__(self):
         self.cfg = load_config()
-        # 每个客户端(cid)一路独立会话，互不干扰。按 cid 存(而不是 ws)是为了
-        # 断线重连能恢复：WS 断了先不结束，进宽限期；同 cid 重连就接着录，不丢转写。
-        #   self.sessions[cid] = {"s": Session, "ws": ws 或 None, "detached_at": float 或 None}
+        # each client (cid) gets its own independent session, isolated from others. Keyed by cid (not ws) so that
+        # reconnection can recover: when the WS drops, don't end immediately, enter a grace period; a reconnect with the same cid keeps recording, losing no transcript.
+        #   self.sessions[cid] = {"s": Session, "ws": ws or None, "detached_at": float or None}
         self.sessions = {}
-        self.cid_user = {}        # {cid: 声纹库账号标识} —— 连接时按令牌算好,开录/改名时用
+        self.cid_user = {}        # {cid: voiceprint-library account id} -- computed from the token at connect time, used when recording starts / renaming
         self.max_sessions = int(self.cfg["server"].get("max_sessions", 8))
         self.detach_grace = int(self.cfg["server"].get("detach_grace_s", 90))
         self.loop = None
@@ -839,16 +839,16 @@ class App:
             os.path.join(HERE, self.cfg["server"]["records_dir"]))
         self.lib = Library(records_dir)
         self.accounts = Accounts(records_dir)
-        self._fails = {}          # {来源IP: {n, until, first}} 令牌爆破防护
-        self._reg_codes = {}      # {email: {code, exp, tries, sent}} 注册邮箱验证码
+        self._fails = {}          # {source IP: {n, until, first}} token brute-force protection
+        self._reg_codes = {}      # {email: {code, exp, tries, sent}} registration email verification codes
         self.access_log_path = os.path.join(
             os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"])), "access.log")
-        # 放到公网时把所有东西都关在令牌后面（连页面本身都不给），
-        # 扫描器扫过来只会看到 401，看不出这里跑着什么
+        # when exposed to the public internet, keep everything behind the token (not even the page itself is served),
+        # a scanner only sees 401 and can't tell what's running here
         self.public_mode = bool(self.cfg["server"].get("public", False))
 
     def _load_token(self):
-        """服务要监听在局域网上，必须有个门禁。第一次启动自动生成，之后固定。"""
+        """The service listens on the LAN, so it needs a gatekeeper. Auto-generated on first startup, fixed thereafter."""
         if not self.cfg["server"].get("require_token", True):
             return ""
         if os.path.exists(TOKEN_FILE):
@@ -869,7 +869,7 @@ class App:
             pass
 
     def _send_soon(self, ws, msg):
-        """从任意线程给某个连接发消息（线程安全）。识别在工作线程里跑，靠这个回主循环。"""
+        """Send a message to a connection from any thread (thread-safe). Recognition runs in worker threads and uses this to get back to the main loop."""
         if self.loop is None or ws is None or ws.closed:
             return
         data = json.dumps(msg, ensure_ascii=False)
@@ -877,8 +877,8 @@ class App:
             lambda: asyncio.ensure_future(self._safe_send(ws, data)))
 
     def _emit_to_cid(self, cid):
-        """按 cid 生成 emit —— 动态取该会话当前绑定的 ws（重连后会换成新 ws）。
-        断线宽限期内 ws 为 None，消息直接丢弃（转写照常落盘，重连后接着来）。"""
+        """Build an emit for a cid -- dynamically fetch the ws currently bound to that session (swapped to a new ws after reconnect).
+        During the disconnect grace period ws is None and messages are dropped (the transcript still persists, resuming on reconnect)."""
         def emit(msg):
             ent = self.sessions.get(cid)
             if ent and ent.get("ws") is not None:
@@ -889,14 +889,14 @@ class App:
     async def ws_handler(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
-        # cid：客户端标识（前端存 localStorage）。用来断线重连时找回自己那路会话。
+        # cid: client id (the frontend stores it in localStorage). Used to recover one's own session on reconnect.
         cid = request.query.get("cid") or secrets.token_urlsafe(6)
-        # 这条连接是哪个账号 → 决定用/写哪个私有声纹库(开录、录音中改名都要)
+        # which account this connection belongs to -> decides which private voiceprint library to use/write (needed for starting recording and renaming mid-recording)
         self.cid_user[cid] = self._user_key_for_token(self._req_token(request))
         ws = web.WebSocketResponse(heartbeat=20, max_msg_size=8 * 1024 * 1024)
         await ws.prepare(request)
 
-        # 同 cid 还有一路在录（宽限期内断线的）→ 恢复：把会话接到这个新连接上
+        # another connection with the same cid is still recording (dropped within the grace period) -> recover: attach the session to this new connection
         resumed = False
         ent = self.sessions.get(cid)
         if ent and ent["s"].running:
@@ -917,7 +917,7 @@ class App:
         try:
             async for msg in ws:
                 if msg.type == WSMsgType.BINARY:
-                    # 网页推来的麦克风音频（16k 单声道 Int16）→ 送进这个 cid 的会话
+                    # mic audio pushed from the web page (16k mono Int16) -> fed into this cid's session
                     ent = self.sessions.get(cid)
                     cap = getattr(ent["s"], "cap", None) if ent else None
                     if isinstance(cap, audio_mod.BrowserCapture):
@@ -932,8 +932,8 @@ class App:
                     await ws.send_str(json.dumps(
                         {"type": "error", "msg": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
         finally:
-            # 连接断开：**不立即结束**。在录的话进宽限期（detach），同 cid 重连就恢复；
-            # 宽限期到了由 ticker 收尾落盘。没在录的直接清掉。
+            # connection dropped: **don't end immediately**. If recording, enter a grace period (detach); a reconnect with the same cid recovers it;
+            # when the grace period expires, the ticker wraps up and persists. If not recording, just clean it up.
             ent = self.sessions.get(cid)
             if ent and ent["ws"] is ws:
                 if ent["s"].running:
@@ -945,9 +945,9 @@ class App:
 
     async def handle_cmd(self, m, ws, cid):
         cmd = m.get("cmd")
-        emit = self._emit_to_cid(cid)            # 只发给这个 cid 当前的连接
+        emit = self._emit_to_cid(cid)            # send only to this cid's current connection
         ent = self.sessions.get(cid)
-        sess = ent["s"] if ent else None         # 这个客户端自己的会话
+        sess = ent["s"] if ent else None         # this client's own session
 
         if cmd == "devices":
             await ws.send_str(json.dumps(
@@ -956,26 +956,31 @@ class App:
         elif cmd == "start":
             if sess and sess.running:
                 return
-            # 保护服务器：同时进行的会话数封顶（每路会话占一份识别模型内存 + CPU）
+            # protect the server: cap concurrent sessions (each session holds a copy of the recognition model's memory + CPU)
             running = sum(1 for e in self.sessions.values() if e["s"].running)
             if running >= self.max_sessions:
                 emit({"type": "error",
                       "msg": f"服务器繁忙（已有 {running} 路转写在跑），稍后再试"})
                 return
-            # 每路会话读一份独立配置，避免并发开课时互相覆盖参数
+            # each session reads its own config copy, avoiding parameter clobbering when classes start concurrently
             cfg = load_config()
             for k in ("backend", "streaming", "model", "cpu_threads", "beam_size"):
                 if m.get(k) is not None:
                     cfg["asr"][k] = m[k]
+            # Regular users may only use the cloud models; force any local backend to cloud Mandarin.
+            # Admins keep full choice. This is the server-side guard behind the UI restriction.
+            if not self.is_admin(request) and cfg["asr"].get("backend") not in ("aliyun_paraformer", "aliyun_funasr"):
+                cfg["asr"]["backend"] = "aliyun_paraformer"
+                cfg["asr"]["streaming"] = False
             if m.get("new_para_gap_ms") is not None:
                 cfg["paragraph"]["new_para_gap_ms"] = int(m["new_para_gap_ms"])
-            # 拾音灵敏度：环境、坐得远近不同，这个值得现场调
+            # pickup sensitivity: varies with environment and distance, so tune this on site
             for k in ("threshold", "exit_threshold", "min_speech_ms"):
                 if (m.get("vad") or {}).get(k) is not None:
                     cfg["vad"][k] = m["vad"][k]
 
             emit({"type": "notice", "msg": "正在加载识别模型…"})
-            # 续录只能接自己名下的课:别人的 append_sid 一律无视,退回新建一节。
+            # resume can only append to your own sessions: someone else's append_sid is ignored, falling back to a new session.
             user_key = self.cid_user.get(cid)
             append_sid = m.get("append_sid")
             if append_sid:
@@ -989,20 +994,20 @@ class App:
                         to_word=bool(m.get("to_word")),
                         word_doc=m.get("word_doc") or "active",
                         append_sid=append_sid)
-            s.user_key = user_key                       # 本次录音归属账号 → 私有声纹库 + 数据隔离
+            s.user_key = user_key                       # this recording's owning account -> private voiceprint library + data isolation
             s.only_key = bool(m.get("only_key"))
-            s.ai_correct = bool(m.get("ai_correct"))    # AI 实时纠错开关
-            s.smart_seg = bool(m.get("smart_seg"))      # AI 智能分句开关
-            s.translate_en = bool(m.get("translate_en"))  # 英文自动翻中文字幕
+            s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
+            s.smart_seg = bool(m.get("smart_seg"))      # AI smart segmentation toggle
+            s.translate_en = bool(m.get("translate_en"))  # auto-translate English to Chinese subtitles
             s.subjects = [x.strip() for x in (m.get("subjects") or [])
-                          if isinstance(x, str) and x.strip()]   # 勾选的学科标签
+                          if isinstance(x, str) and x.strip()]   # selected subject tags
             print(f"[start] ai_correct={s.ai_correct} smart_seg={s.smart_seg} "
                   f"translate_en={s.translate_en}(raw={m.get('translate_en')!r})", flush=True)
-            # 选了课程就用这门课的术语表和纠错表
+            # if a course is selected, use that course's term list and correction list
             course_id = m.get("course_id")
             if course_id:
                 course = next((c for c in self.lib.courses() if c["id"] == course_id), None)
-                # 只认自己名下的课程(别人的 course_id 无视);owner 存的是哈希 id
+                # only recognize your own courses (someone else's course_id is ignored); owner stores a hash id
                 if course and user_key != "owner" and course.get("owner") not in (None, s._owner_id()):
                     course = None
                 if course:
@@ -1016,7 +1021,7 @@ class App:
                         s.cfg["asr"]["hotwords"] = (base + " " + hw).strip()
             info = await asyncio.get_running_loop().run_in_executor(None, s.start)
             self.sessions[cid] = {"s": s, "ws": ws, "detached_at": None}
-            # sid 要在开始时就给出去：录制过程中拍板书需要它来定位存哪
+            # hand out the sid at start: capturing blackboard shots during recording needs it to know where to store them
             emit({"type": "started", **info, "dir": s.rec.dir,
                   "sid": os.path.basename(s.rec.dir)})
 
@@ -1026,7 +1031,7 @@ class App:
                 path, meta = await asyncio.get_running_loop().run_in_executor(None, sess.stop)
                 if sess.course_id:
                     self.lib.assign(os.path.basename(path), sess.course_id)
-                # meta.json 落盘后同步进 PG（title/duration_s/owner/course_id）
+                # after meta.json is persisted, sync into PG (title/duration_s/owner/course_id)
                 try:
                     recordings_db.upsert_recording(
                         os.path.basename(path),
@@ -1037,7 +1042,7 @@ class App:
                         meta=meta)
                 except Exception:
                     traceback.print_exc()
-                # 会话已从表里移除，_emit_to_cid 已找不到它 → 直接发给当前这个连接
+                # the session is already removed from the table and _emit_to_cid can't find it -> send directly to this connection
                 self._send_soon(ws, {"type": "stopped", "dir": path, "meta": meta,
                                      "sid": os.path.basename(path)})
 
@@ -1053,7 +1058,7 @@ class App:
                 name = m["name"]
                 old = sess.rename(sidx, name)
                 emit({"type": "renamed", "id": sidx, "old": old, "name": name})
-                # 回溯:把这个名字也贴到过去所有课里声纹一致的同一个人身上(后台跑,不卡录制)
+                # backfill: apply this name to the same person (matched by voiceprint) across all past sessions too (runs in the background, doesn't block recording)
                 try:
                     emb = sess.spk.centroid_of(sidx)
                     owner_id = self._to_owner_id(sess.user_key)
@@ -1070,13 +1075,13 @@ class App:
         elif cmd == "mark":
             if sess:
                 if sess.last_line_id is not None:
-                    # 标"刚说过的那句"(更符合直觉),落盘 marks.json 并让前端把它变黄
+                    # mark "the line just spoken" (more intuitive), persist to marks.json and have the frontend turn it yellow
                     sid = os.path.basename(sess.rec.dir)
                     self._save_mark(sid, sess.last_line_id, "key")
                     emit({"type": "line_update", "id": sess.last_line_id, "kind": "key"})
                     emit({"type": "notice", "msg": "已把刚才那句标为重点"})
                 else:
-                    sess.pending_key = 1        # 还没出字 → 退回标下一句
+                    sess.pending_key = 1        # nothing emitted yet -> fall back to marking the next line
                     emit({"type": "notice", "msg": "下一句标为重点"})
 
         elif cmd == "status":
@@ -1084,7 +1089,7 @@ class App:
                 sess.status() if sess else {"type": "status", "running": False},
                 ensure_ascii=False))
 
-    # ---------- 心跳 ----------
+    # ---------- heartbeat ----------
     async def ticker(self):
         while True:
             await asyncio.sleep(1.0)
@@ -1092,26 +1097,26 @@ class App:
             for cid, ent in list(self.sessions.items()):
                 s = ent["s"]
                 if ent["ws"] is not None and s.running:
-                    self._send_soon(ent["ws"], s.status())   # 有连接:推状态
+                    self._send_soon(ent["ws"], s.status())   # has a connection: push status
                 elif ent["detached_at"] and now - ent["detached_at"] > self.detach_grace:
-                    # 断线超过宽限期还没重连 → 收尾落盘、释放资源
+                    # disconnected past the grace period with no reconnect -> wrap up, persist, and free resources
                     self.sessions.pop(cid, None)
                     try:
                         await asyncio.get_running_loop().run_in_executor(None, s.stop)
                     except Exception:
                         traceback.print_exc()
 
-    # ---------- 令牌 ----------
+    # ---------- tokens ----------
     def check_token(self, request):
-        """服务监听在局域网（甚至公网）上，任何能连到的设备都能发请求。
-        不加这道令牌，别人就能用你的电脑开麦录音、翻你所有的课堂记录。"""
+        """The service listens on the LAN (or even the public internet), and any device that can reach it can send requests.
+        Without this token, anyone could use your computer to record from the mic and browse all your class records."""
         if not self.token:
             return True
         got = (request.query.get("token")
                or request.headers.get("X-Token")
                or "")
         ok = secrets.compare_digest(got, self.token) if got else False
-        # 登录用户的会话令牌也放行——注册登录即鉴权，不用再抄全局令牌
+        # also accept logged-in users' session tokens -- registering/logging in is authentication, no need to copy the global token
         if not ok and got and self.accounts.session_user(got):
             ok = True
         if not ok:
@@ -1119,7 +1124,7 @@ class App:
         return ok
 
     def is_admin(self, request):
-        """管理员鉴权:全局令牌(拥有者)或 role=admin 的登录用户。声纹库管理仅管理员可用。"""
+        """Admin authorization: the global token (owner) or a logged-in user with role=admin. Voiceprint-library management is admin-only."""
         got = self._req_token(request)
         if not got:
             return False
@@ -1132,8 +1137,8 @@ class App:
         return request.query.get("token") or request.headers.get("X-Token") or ""
 
     def _user_key_for_token(self, token):
-        """令牌 -> 该账号的声纹库标识。全局令牌(拥有者)=owner(沿用老的全局库);
-        登录用户=各自邮箱(每个账号一个私有库);其它情况 None。"""
+        """Token -> that account's voiceprint-library id. Global token (owner) = owner (reusing the old global library);
+        logged-in user = their own email (one private library per account); otherwise None."""
         if not token:
             return None
         if self.token and secrets.compare_digest(token, self.token):
@@ -1144,14 +1149,14 @@ class App:
     def _req_user_key(self, request):
         return self._user_key_for_token(self._req_token(request))
 
-    # ---------- 数据隔离:一个账号只能看/改自己的课、课程、课表 ----------
+    # ---------- data isolation: an account can only view/edit its own sessions, courses, and timetable ----------
     def _owner_key(self, request):
-        """请求归属哪个账号:登录用户=邮箱,全局令牌(拥有者)=owner。数据归属/隔离都以此为准。"""
+        """Which account a request belongs to: logged-in user = email, global token (owner) = owner. Data ownership/isolation is based on this."""
         return self._req_user_key(request)
 
     @staticmethod
     def _to_owner_id(key):
-        """账号标识 -> 落盘用的稳定归属 id(邮箱哈希,不泄露明文)。全局令牌=owner。"""
+        """Account id -> the stable ownership id used on disk (email hash, no plaintext leak). Global token = owner."""
         from voiceprint import _key_id
         return "owner" if key in (None, "", "owner") else _key_id(key)
 
@@ -1159,11 +1164,11 @@ class App:
         return self._to_owner_id(self._owner_key(request))
 
     def _is_super(self, request):
-        """全局令牌拥有者:机器主人,可跨账号访问全部数据(普通登录用户拿不到这个令牌)。"""
+        """Global-token owner: the machine's owner, who can access all data across accounts (ordinary logged-in users don't get this token)."""
         return self._owner_key(request) == "owner"
 
     def _token_ok(self, request):
-        """无副作用地判断令牌是否有效(中间件里用,别触发爆破计数)。"""
+        """Check whether a token is valid without side effects (used in middleware, so it doesn't trigger the brute-force counter)."""
         got = self._req_token(request)
         if not got:
             return False
@@ -1172,8 +1177,8 @@ class App:
         return bool(self.accounts.session_user(got))
 
     def _session_owner(self, sid):
-        """读某节课归属账号 id:先看 meta.json(停止后落盘),没有再看 owner.json
-        (录制一开始就写)。都没有(老数据)返回 None。"""
+        """Read a session's owning account id: check meta.json first (persisted after stop), then owner.json
+        (written at the start of recording). If neither exists (old data), return None."""
         d = self._session_dir(sid)
         try:
             with open(os.path.join(d, "meta.json"), encoding="utf-8") as f:
@@ -1189,29 +1194,29 @@ class App:
             return None
 
     def _owns_session(self, request, sid):
-        """能否访问这节课:全局令牌看全部;登录用户只能看自己名下的课。"""
+        """Whether a session can be accessed: the global token sees everything; a logged-in user only sees their own sessions."""
         if self._is_super(request):
             return True
         if not sid or not os.path.isdir(self._session_dir(sid)):
             return False
         return self._session_owner(sid) == self._owner_id(request)
 
-    # ---------- 暴露到公网之后必须有的三件事 ----------
+    # ---------- three things required once exposed to the public internet ----------
     def _client_ip(self, request):
-        # 经端口转发进来时 remote 就是真实来源；套了反代才需要看 X-Forwarded-For
+        # with port forwarding, remote is the real source; only behind a reverse proxy do you need X-Forwarded-For
         fwd = request.headers.get("X-Forwarded-For", "")
         return (fwd.split(",")[0].strip() if fwd else None) or (request.remote or "?")
 
     def _note_fail(self, request):
-        """记一次令牌错误。暴力猜令牌的会被锁出去。"""
+        """Record a token error. Anyone brute-forcing tokens gets locked out."""
         ip = self._client_ip(request)
         now = time.time()
         rec = self._fails.get(ip, {"n": 0, "until": 0.0, "first": now})
-        if now - rec["first"] > 600:            # 10 分钟没错过就重新计数
+        if now - rec["first"] > 600:            # reset the count after 10 minutes with no errors
             rec = {"n": 0, "until": 0.0, "first": now}
         rec["n"] += 1
         if rec["n"] >= 8:
-            # 连错 8 次锁 15 分钟，之后每多错一次翻倍，最多锁 6 小时
+            # 8 wrong tries in a row locks for 15 minutes, doubling with each further error, up to 6 hours
             lock = min(900 * (2 ** (rec["n"] - 8)), 6 * 3600)
             rec["until"] = now + lock
             print(f"[安全] {ip} 令牌连错 {rec['n']} 次，锁定 {int(lock/60)} 分钟")
@@ -1222,21 +1227,21 @@ class App:
         return bool(rec and rec["until"] > time.time())
 
     def _access_log(self, request, status):
-        """留一份访问日志。放到公网之后，谁在什么时候敲过你的服务，得有据可查。"""
+        """Keep an access log. Once exposed to the public internet, there must be a record of who hit your service and when."""
         try:
             line = (f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{self._client_ip(request)}\t"
                     f"{request.method}\t{request.path}\t{status}\n")
             with open(self.access_log_path, "a", encoding="utf-8") as f:
                 f.write(line)
         except Exception:
-            pass    # 日志写不了也不能影响服务
+            pass    # a failed log write must not affect the service
 
-    # ---------- 账号 ----------
+    # ---------- accounts ----------
     def _bearer(self, request):
         return (request.query.get("token") or request.headers.get("X-Token") or "")
 
     async def api_register_code(self, request):
-        """注册第一步:给填写的邮箱发 6 位验证码。已注册的邮箱直接拦。"""
+        """Registration step one: send a 6-digit code to the given email. Already-registered emails are blocked outright."""
         import mailer
         try:
             m = await request.json()
@@ -1265,7 +1270,7 @@ class App:
         return web.json_response({"ok": True})
 
     async def api_register(self, request):
-        """注册第二步:校验邮箱验证码后建号。角色一律强制 user,绝不让注册者自封管理员。"""
+        """Registration step two: create the account after verifying the email code. The role is always forced to user, never letting a registrant self-declare as admin."""
         try:
             m = await request.json()
             email = (m.get("email") or "").strip().lower()
@@ -1279,10 +1284,10 @@ class App:
             if not code or code != rec.get("code"):
                 rec["tries"] = rec.get("tries", 0) + 1
                 return web.json_response({"error": "验证码不对"}, status=400)
-            # 角色一律强制 user——管理员只能由拥有者手动在库里设。
+            # force role to user -- admins can only be set manually in the database by the owner.
             token, user = self.accounts.register(
                 m.get("email"), m.get("name"), m.get("password"))
-            self._reg_codes.pop(email, None)   # 用过即焚
+            self._reg_codes.pop(email, None)   # burn after use
             return web.json_response({"token": token, "user": user})
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
@@ -1297,7 +1302,7 @@ class App:
             token, user = self.accounts.login(m.get("email"), m.get("password"))
             return web.json_response({"token": token, "user": user})
         except ValueError as e:
-            self._note_fail(request)          # 密码猜错也算一次失败，防爆破
+            self._note_fail(request)          # a wrong password also counts as a failure, to prevent brute-forcing
             return web.json_response({"error": str(e)}, status=401)
         except Exception:
             return web.json_response({"error": "登录失败"}, status=500)
@@ -1312,7 +1317,7 @@ class App:
         self.accounts.logout(self._bearer(request))
         return web.json_response({"ok": True})
 
-    # ---------- HTTP 接口 ----------
+    # ---------- HTTP endpoints ----------
     async def api_summarize(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -1321,13 +1326,13 @@ class App:
         except Exception:
             return web.json_response({"error": "请求不是合法 JSON"}, status=400)
 
-        # 从服务端按 sid/dir 读别人的课属越权 —— 隔离。前端自带 lines 的情形不受影响。
+        # reading someone else's session from the server by sid/dir would be a privilege escalation -- isolate it. The case where the frontend supplies its own lines is unaffected.
         ref_sid = body.get("sid") or (os.path.basename(body["dir"]) if body.get("dir") else None)
         if ref_sid and not self._owns_session(request, ref_sid):
             return web.json_response({"error": "无权访问这节课"}, status=403)
         lines = body.get("lines") or []
         if not lines:
-            # 没给转写内容就读服务端存的那份
+            # if no transcript is provided, read the one stored on the server
             d = body.get("dir")
             if d and os.path.isdir(d):
                 p = os.path.join(d, "transcript.jsonl")
@@ -1343,7 +1348,7 @@ class App:
                 {"error": "还没配 DeepSeek API key。填到 service/config.json 的 "
                           "deepseek.api_key，或设环境变量 DEEPSEEK_API_KEY，然后重启服务。"},
                 status=503)
-        # 识别这节课的板书,一并纳入总结
+        # recognize this session's blackboard shots and fold them into the summary
         board = ""
         sid = body.get("sid")
         sdir = self._session_dir(sid) if sid else body.get("dir")
@@ -1362,14 +1367,14 @@ class App:
         return web.json_response(out)
 
     async def api_sessions(self, request):
-        """列出本机存过的课堂记录，供网页的历史页用。"""
+        """List the class records stored on this machine, for the web history page."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
         me = self._owner_id(request)
-        su = self._is_super(request)         # 全局令牌拥有者看全部
-        # 列表改从 recordings 表读(索引),不再逐目录扫 meta.json;数据隔离用表里的 owner 过滤。
-        # 从存下的整份 meta 复原旧响应:entry = {"id": name, "dir": d, **meta},再叠加摘要。
+        su = self._is_super(request)         # the global-token owner sees everything
+        # the list now reads from the recordings table (index) instead of scanning meta.json per directory; data isolation filters by the table's owner.
+        # reconstruct the old response from the stored full meta: entry = {"id": name, "dir": d, **meta}, then layer the summary on top.
         out = []
         for r in recordings_db.list_recordings(owner=me, superuser=su):
             sid = r["sid"]
@@ -1381,7 +1386,7 @@ class App:
             out.append(entry)
         return web.json_response({"sessions": out})
 
-    # ---------- 记录：读 / 改 / 改动历史 ----------
+    # ---------- records: read / edit / edit history ----------
     def _records_root(self):
         return os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
 
@@ -1389,8 +1394,8 @@ class App:
         return os.path.join(self._records_root(), os.path.basename(sid))
 
     def _oss_url(self, local_path, disposition=None, inline=False, content_type=None):
-        """本地文件在 OSS 上有对应对象则返回其签名直链(用于 302 跳转),否则 None。
-        inline=True + content_type 用于 PDF 预览:强制内嵌显示、别让浏览器当附件下载。"""
+        """If a local file has a matching object on OSS, return its signed direct link (for a 302 redirect), else None.
+        inline=True + content_type is for PDF preview: force inline display so the browser doesn't download it as an attachment."""
         try:
             import oss_store
             if not oss_store.enabled():
@@ -1403,7 +1408,7 @@ class App:
             return None
 
     def _read_bytes(self, local_path):
-        """读 records 下的文件:本地有读本地;本地没有(内容已下沉到 OSS、本地删了)就从 OSS 取。"""
+        """Read a file under records: read local if present; if not (content offloaded to OSS and deleted locally), fetch from OSS."""
         try:
             if os.path.exists(local_path):
                 with open(local_path, "rb") as f:
@@ -1420,7 +1425,7 @@ class App:
             return None
 
     def _load_lines(self, sid):
-        """读转写，并把历次编辑覆盖上去（原始文件不动，改动单独存）。"""
+        """Read the transcript and layer all past edits over it (the original file stays untouched, edits stored separately)."""
         d = self._session_dir(sid)
         p = os.path.join(d, "transcript.jsonl")
         raw = self._read_bytes(p)
@@ -1436,21 +1441,21 @@ class App:
             if e:
                 l["text"] = e["after"]
                 l["edited"] = True
-        # 手动标记(重点/定义/取消)覆盖 kind——存 marks.json,原始转写不动
+        # manual marks (key/define/clear) override kind -- stored in marks.json, the original transcript untouched
         marks = self._load_marks(sid)
         for l in lines:
             key = str(l.get("id"))
             if key in marks:
-                l["kind"] = marks[key]      # 可能是 "key"/"define"/None
-        # 说话人改名(按 speaker_id 覆盖名字)——存 speaker_names.json,原始转写不动。
-        # 录制中改、录制后改都写这里,这样这个说话人的每一句都统一改过来。
+                l["kind"] = marks[key]      # may be "key"/"define"/None
+        # speaker rename (override the name by speaker_id) -- stored in speaker_names.json, the original transcript untouched.
+        # renames during and after recording both write here, so every line from this speaker is changed consistently.
         names = self._load_speaker_names(sid)
         if names:
             for l in lines:
                 nm = names.get(str(l.get("speaker_id")))
                 if nm:
                     l["speaker"] = nm
-        # 英文字幕:把 translations.json 里的中文译文挂回对应行
+        # English subtitles: reattach the Chinese translations from translations.json to their lines
         try:
             tp = os.path.join(d, "translations.json")
             if os.path.exists(tp):
@@ -1464,7 +1469,7 @@ class App:
             pass
         return d, lines
 
-    # ---------- 手动标记重点/定义(marks.json,直播和历史都能标) ----------
+    # ---------- manual key/define marks (marks.json, works live and in history) ----------
     def _marks_path(self, sid):
         return os.path.join(self._session_dir(sid), "marks.json")
 
@@ -1479,14 +1484,14 @@ class App:
             return {}
 
     def _save_mark(self, sid, line_id, kind):
-        """kind ∈ {'key','define',None}。None 表示取消标记(强制无高亮)。"""
+        """kind in {'key','define',None}. None means clearing the mark (force no highlight)."""
         p = self._marks_path(sid)
         marks = self._load_marks(sid)
         marks[str(line_id)] = kind
         with open(p, "w", encoding="utf-8") as f:
             json.dump(marks, f, ensure_ascii=False, indent=2)
 
-    # ---------- 说话人改名(speaker_names.json,录制中/录制后都能改) ----------
+    # ---------- speaker rename (speaker_names.json, editable during and after recording) ----------
     def _speaker_names_path(self, sid):
         return os.path.join(self._session_dir(sid), "speaker_names.json")
 
@@ -1508,15 +1513,15 @@ class App:
         if name:
             names[str(speaker_id)] = name
         else:
-            names.pop(str(speaker_id), None)   # 传空=清掉自定义名,恢复默认
+            names.pop(str(speaker_id), None)   # empty value = clear the custom name and restore the default
         tmp = p + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(names, f, ensure_ascii=False, indent=2)
         os.replace(tmp, p)
 
     def _propagate_name(self, owner_id, name, embedding, exclude_sid=None):
-        """改名回溯:把 name 贴到该账号**过去所有课**里声纹匹配到这个人的说话人身上,
-        这样"改了一个名字、过去同一个人也跟着改"。用各课缓存的 speakers.json 现比,返回改了几节课。"""
+        """Rename backfill: apply name to speakers matching this person's voiceprint across **all past sessions** of the account,
+        so that "renaming once also renames the same person in the past". Compares on the fly using each session's cached speakers.json, and returns how many sessions were changed."""
         import numpy as np
         import voiceprint
         if not name:
@@ -1530,15 +1535,15 @@ class App:
         th = self.cfg["speaker"].get("voiceprint_threshold", self.cfg["speaker"]["threshold"])
         spk = self._voice_embedder()
         skip = {os.path.basename(ent["s"].rec.dir) for ent in self.sessions.values()
-                if ent.get("s") is not None}       # 正在录的那节跳过(由实时改名负责)
+                if ent.get("s") is not None}       # skip the session currently recording (handled by live rename)
         if exclude_sid:
-            skip.add(os.path.basename(exclude_sid))   # 本次改名的那节不算进"回溯"计数
+            skip.add(os.path.basename(exclude_sid))   # the session being renamed here isn't counted in the "backfill" total
         changed = 0
         for sname in os.listdir(root):
             d = os.path.join(root, sname)
             if not os.path.isdir(d) or sname in skip:
                 continue
-            if self._session_owner(sname) != owner_id:    # 只回溯自己名下的课
+            if self._session_owner(sname) != owner_id:    # only backfill your own sessions
                 continue
             data = voiceprint.extract_session_voices(d, spk.embed)
             if not data:
@@ -1556,8 +1561,8 @@ class App:
         return changed
 
     async def api_rename_speaker(self, request):
-        """改某节课里某个说话人的名字(录制后用;录制中走 WS 的 rename)。按 speaker_id 覆盖,
-        这个人的每一句都统一改过来;把声纹+名字记进本账号声纹库;并**回溯过去所有课**里同一个人。"""
+        """Rename a speaker in a session (used after recording; during recording use the WS rename). Overrides by speaker_id,
+        so every line from this person is changed consistently; records the voiceprint+name into this account's voiceprint library; and **backfills the same person across all past sessions**."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
@@ -1570,7 +1575,7 @@ class App:
         except Exception:
             return web.json_response({"error": "参数不对,需要 speaker_id 和 name"}, status=400)
         self._save_speaker_name(sid, speaker_id, name)
-        # 学声纹 + 回溯历史(都在线程池里跑,别卡住请求)
+        # learn the voiceprint + backfill history (both run in the thread pool, so the request isn't blocked)
         learned, propagated = False, 0
         if name:
             def work():
@@ -1583,7 +1588,7 @@ class App:
                     return False, 0
                 voiceprint.upsert_voice(self._records_root(), name, sp["embedding"],
                                         key=self._owner_key(request))
-                # 回溯范围 = 这节课的归属账号(通常就是请求者;全局令牌代管时也回溯到该账号名下)
+                # backfill scope = this session's owning account (usually the requester; when the global token acts on their behalf, it still backfills under that account)
                 n = self._propagate_name(self._session_owner(sid), name, sp["embedding"],
                                          exclude_sid=sid)
                 return True, n
@@ -1594,7 +1599,7 @@ class App:
         return web.json_response({"ok": True, "speaker_id": speaker_id, "name": name,
                                   "learned_voiceprint": learned, "propagated_sessions": propagated})
 
-    # ---------- 课堂笔记(每节课一份 note.txt) ----------
+    # ---------- class notes (one note.txt per session) ----------
     async def api_get_note(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -1659,8 +1664,8 @@ class App:
         return web.json_response({"dir": d, "lines": lines})
 
     async def api_edit_line(self, request):
-        """改一句转写。原文件永远不动，改动只往 edits.jsonl 追加——
-        这样「编辑历史」是真实的、可回溯的，而不是一个假面板。"""
+        """Edit one transcript line. The original file is never touched; edits are only appended to edits.jsonl --
+        so the "edit history" is real and traceable, not a fake panel."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
@@ -1697,7 +1702,7 @@ class App:
             return web.json_response({"error": "无权访问这节课"}, status=403)
         return web.json_response({"edits": list(reversed(self._load_edits(request.match_info["sid"])))})
 
-    # ---------- AI 摘要:保存 / 读取(落盘 summary.json，刷新/列表都能看到) ----------
+    # ---------- AI summary: save / read (persisted to summary.json, visible on refresh and in the list) ----------
     def _summary_path(self, sid):
         return os.path.join(self._session_dir(sid), "summary.json")
 
@@ -1728,13 +1733,13 @@ class App:
             "summary": str(m.get("summary") or ""),
             "key_points": list(m.get("key_points") or []),
             "corrections": list(m.get("corrections") or []),
-            "applied": list(m.get("applied") or []),   # 已一键替换掉的错误,前端据此隐藏该条
+            "applied": list(m.get("applied") or []),   # errors already fixed with one click; the frontend uses this to hide the entry
             "at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         with open(self._summary_path(sid), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.flush()
-        # 摘要同步进 PG（summary/key_points/has_summary）；文件仍是真源
+        # sync the summary into PG (summary/key_points/has_summary); files remain the source of truth
         try:
             recordings_db.upsert_recording(
                 os.path.basename(sid),
@@ -1753,8 +1758,8 @@ class App:
         return web.json_response(self._load_summary(request.match_info["sid"]) or {})
 
     async def api_learn_term(self, request):
-        """个性化反哺:用户一键把某个同音错纠对后,把「正确术语」学下来,
-        之后开的课 term_fix 会自动纠这个错。返回是否新学到 + 当前已学词数。"""
+        """Personalization feedback: after the user one-click-fixes a homophone error, learn the "correct term",
+        so later sessions' term_fix auto-corrects this error. Returns whether something new was learned + the current learned-term count."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         try:
@@ -1766,7 +1771,7 @@ class App:
                                   "count": len(load_learned_terms(self.cfg))})
 
     async def api_import_timetable(self, request):
-        """课表截图 → 本地 OCR → DeepSeek 结构化成课程列表。图片不出服务器。"""
+        """Timetable screenshot -> local OCR -> DeepSeek structures it into a course list. The image never leaves the server."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         ds = DeepSeek(self.cfg)
@@ -1789,7 +1794,7 @@ class App:
             return web.json_response({"error": f"识别失败: {e}"}, status=500)
         return web.json_response(result)
 
-    # ---------- 参考资料:课程教学大纲 ----------
+    # ---------- reference material: course syllabus ----------
     async def api_syllabus_list(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -1816,7 +1821,7 @@ class App:
         return web.json_response(data)
 
     async def api_syllabus_schools(self, request):
-        """按学校返回官方大纲目录(只给课名/标题,PDF 走代理接口)。"""
+        """Return the official syllabus catalog for a school (course names/titles only; PDFs go through the proxy endpoint)."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         from syllabus_official import load_catalog
@@ -1841,7 +1846,7 @@ class App:
         return web.json_response({"schools": schools})
 
     async def api_syllabus_official_pdf(self, request):
-        """把某校某课的官方 PDF 拉取缓存后内联回传。"""
+        """Fetch and cache a school-course's official PDF, then return it inline."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         from syllabus_official import cache_pdf
@@ -1851,14 +1856,14 @@ class App:
             None, cache_pdf, self._records_root(), school, course)
         if not local or not os.path.exists(local):
             return web.json_response({"error": "拿不到这门课的官方 PDF"}, status=404)
-        # 大纲 PDF 直接从本地内嵌回传(体积小、是参考资料、永不下沉 OSS)。
-        # 不走 OSS:该桶对私有对象强制 Content-Disposition: attachment、且忽略 inline 覆盖,
-        # 会导致浏览器把预览变成下载。本地 FileResponse 能完全控制 inline 头。
+        # syllabus PDFs are served inline straight from local (small, reference material, never offloaded to OSS).
+        # not via OSS: the bucket forces Content-Disposition: attachment on private objects and ignores inline overrides,
+        # which turns the browser preview into a download. A local FileResponse fully controls the inline header.
         return web.FileResponse(local, headers={"Content-Type": "application/pdf",
                                                  "Content-Disposition": "inline"})
 
     async def api_syllabus_official_page(self, request):
-        """网页版官方大纲:抓远端 HTML、注入 <base> 后内联回传(供 iframe 预览)。"""
+        """Web official syllabus: fetch the remote HTML, inject <base>, and return it inline (for iframe preview)."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         from syllabus_official import cache_page
@@ -1870,19 +1875,19 @@ class App:
             return web.json_response({"error": "拿不到这门课的网页大纲"}, status=404)
         with open(local, "rb") as f:
             data = f.read()
-        # 不带 charset,让页面自身的 <meta charset> 决定编码(有些是 GBK)
+        # no charset, so the page's own <meta charset> decides the encoding (some are GBK)
         return web.Response(body=data, content_type="text/html")
 
-    # ---------- 声纹:过去的声音 / 声纹库 ----------
+    # ---------- voiceprints: past voices / voiceprint library ----------
     def _voice_embedder(self):
-        """给声纹提取用的 SpeakerID(懒加载复用,不参与实时会话)。"""
+        """A SpeakerID for voiceprint extraction (lazily loaded and reused, not part of live sessions)."""
         if getattr(self, "_vp_spk", None) is None:
             from speaker import SpeakerID
             self._vp_spk = SpeakerID(self.cfg)
         return self._vp_spk
 
     async def api_voices(self, request):
-        """列出过去录音里的声音:能判定是同一个人的**聚成一条**(不逐节列)。会现算并缓存 speakers.json。"""
+        """List voices from past recordings: those judged to be the same person are **grouped into one entry** (not listed per session). Computed on the fly and cached to speakers.json."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         if not self.is_admin(request):
@@ -1903,7 +1908,7 @@ class App:
                 data = voiceprint.extract_session_voices(d, spk.embed)
                 for sp in (data or {}).get("speakers", []):
                     matched, _ = voiceprint.best_match(sp.get("embedding") or [], lib, spk.vp_threshold)
-                    if matched:   # 已在库里 → 归到"已识别",不再列进待标记
+                    if matched:   # already in the library -> put under "recognized", no longer listed as pending labeling
                         recognized[matched["name"]] = recognized.get(matched["name"], 0) + 1
                     else:
                         raw.append({"sid": name, "idx": sp["idx"], "seconds": sp.get("seconds", 0),
@@ -1911,7 +1916,7 @@ class App:
                                     "embedding": sp.get("embedding") or []})
             clusters = []
             for cl in voiceprint.cluster_voices(raw, cluster_th):
-                rep = max(cl["members"], key=lambda m: m.get("seconds", 0))   # 最长的那段当代表(试听/名字)
+                rep = max(cl["members"], key=lambda m: m.get("seconds", 0))   # use the longest segment as the representative (for preview/name)
                 clusters.append({
                     "sid": rep["sid"], "idx": rep["idx"], "sample_start": rep.get("sample_start", 0),
                     "name": rep.get("name", ""), "seconds": cl["seconds"],
@@ -1938,7 +1943,7 @@ class App:
         return web.json_response({"voiceprints": [{"id": v["id"], "name": v["name"]} for v in lib]})
 
     async def api_voiceprint_add(self, request):
-        """把一个声音存进库并命名。body: {name, embedding}(聚类合并后的中心,优先) 或 {name, sid, idx}。"""
+        """Save a voice into the library and name it. body: {name, embedding} (the merged cluster center, preferred) or {name, sid, idx}."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         if not self.is_admin(request):
@@ -1957,7 +1962,7 @@ class App:
         if isinstance(emb, list) and len(emb) >= 8:
             vid = voiceprint.upsert_voice(root, name, emb, key=key)
             return web.json_response({"ok": True, "id": vid, "name": name})
-        # 退路:按 sid/idx 现取
+        # fallback: fetch on the fly by sid/idx
         try:
             sid = os.path.basename(str(m["sid"])); idx = int(m["idx"])
         except Exception:
@@ -1980,7 +1985,7 @@ class App:
         return web.json_response({"ok": True})
 
     async def api_import_shu(self, request):
-        """上大教务系统自动登录 + 抓课表(Playwright)。密码只用于登录、不落盘。"""
+        """Auto-login to SHU's academic system + scrape the timetable (Playwright). The password is only used to log in and never persisted."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         try:
@@ -2000,16 +2005,16 @@ class App:
             return web.json_response({"error": f"抓取失败: {e}"}, status=500)
         return web.json_response(result)
 
-    # ---------- 课表(周重复课程,存 schedule.json,导入日历用) ----------
+    # ---------- timetable (weekly recurring classes, stored in schedule.json, for calendar import) ----------
     def _schedule_file(self, request):
-        """课表按账号隔离:各账号一份 schedule_<账号>.json;全局令牌沿用老的 schedule.json。"""
+        """Timetables are isolated per account: one schedule_<account>.json per account; the global token reuses the old schedule.json."""
         key = self._owner_key(request)
         if key in (None, "", "owner"):
             return os.path.join(self._records_root(), "schedule.json")
         import voiceprint
         return os.path.join(self._records_root(), f"schedule_{voiceprint._key_id(key)}.json")
 
-    # ---------- 按账号隔离的小存储:标签、设置(都跟着账号走,存服务器)----------
+    # ---------- per-account small storage: tags, settings (all follow the account, stored on the server) ----------
     def _account_file(self, request, base):
         key = self._owner_key(request)
         if key in (None, "", "owner"):
@@ -2075,8 +2080,8 @@ class App:
             return web.json_response({"events": []})
 
     async def api_save_schedule(self, request):
-        """存带具体日期的课程事件(不按周重复)。前端已把这一周的课算好日期传来,
-        整表覆盖保存——累加/去重由前端合并后一次性传全量。"""
+        """Store dated course events (not weekly-recurring). The frontend has already computed this week's dates and sends them,
+        saving by overwriting the whole table -- accumulation/dedup is merged by the frontend and sent as one full payload."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         try:
@@ -2089,7 +2094,7 @@ class App:
                       f, ensure_ascii=False, indent=2)
         return web.json_response({"ok": True, "count": len(events)})
 
-    # ---------- 课程(同名多节课合集)AI 分析:总结 / 考点 / 模拟卷 ----------
+    # ---------- course (a collection of same-named sessions) AI analysis: summary / exam points / mock paper ----------
     def _course_session_ids(self, name, request=None):
         root = self._records_root()
         me = self._owner_id(request) if request is not None else None
@@ -2105,7 +2110,7 @@ class App:
                 meta = json.load(open(mp, encoding="utf-8"))
             except Exception:
                 continue
-            if not su and meta.get("owner") != me:   # 隔离:课程分析只汇总自己名下的课
+            if not su and meta.get("owner") != me:   # isolation: course analysis only aggregates your own sessions
                 continue
             title = meta.get("title")
             if not title:
@@ -2116,7 +2121,7 @@ class App:
         return out
 
     def _session_ids_by_tag(self, tag, request=None):
-        """按学科标签汇总:选出 meta.tags(列表)里含该标签的课;隔离同 _course_session_ids。"""
+        """Aggregate by subject tag: select sessions whose meta.tags (a list) contain the tag; isolation same as _course_session_ids."""
         root = self._records_root()
         me = self._owner_id(request) if request is not None else None
         su = self._is_super(request) if request is not None else True
@@ -2131,7 +2136,7 @@ class App:
                 meta = json.load(open(mp, encoding="utf-8"))
             except Exception:
                 continue
-            if not su and meta.get("owner") != me:   # 隔离:只汇总自己名下的课
+            if not su and meta.get("owner") != me:   # isolation: only aggregate your own sessions
                 continue
             tags = meta.get("tags")
             if isinstance(tags, list) and tag in tags:
@@ -2160,8 +2165,8 @@ class App:
         return text, len(sids)
 
     def _attach_exam_refs(self, name, result, request=None, tag=None):
-        """给每个考点找出这门课录音里相关的句子(哪节课/时间戳/秒),供前端点击跳播。
-        tag 模式下取标签下的课,否则取同名课。"""
+        """For each exam point, find related sentences in this course's recordings (which session/timestamp/second), so the frontend can click to jump-play.
+        In tag mode, take sessions under the tag; otherwise take same-named sessions."""
         stop = set("的与和及或了是在也就这那个之其所对把被让从向到")
         def cands(pt):
             s = "".join(c for c in (pt or "") if "一" <= c <= "鿿")
@@ -2172,7 +2177,7 @@ class App:
                     if not (set(g) & stop):
                         gs.add(g)
             return gs
-        # 按节收集有序句子(要向后拼句)
+        # collect ordered sentences per session (for forward-joining sentences)
         sess = {}
         sids = (self._session_ids_by_tag(tag, request) if tag
                 else self._course_session_ids(name, request))
@@ -2188,13 +2193,13 @@ class App:
                     txt = l.get("text", "")
                     sc = sum(len(g) for g in cs if g in txt)
                     if sc > 0:
-                        sc += min(len(txt), 40) * 0.05   # 略偏好信息量大的句子,别老挑碎片
+                        sc += min(len(txt), 40) * 0.05   # slightly prefer information-rich sentences, don't always pick fragments
                         scored.append((sc, sid, idx))
             scored.sort(key=lambda x: -x[0])
             refs, seen = [], set()
             for sc, sid, idx in scored:
                 ls = sess[sid]
-                # 从命中句向后拼,直到句末标点 / 4 句 / 70 字
+                # join forward from the matched sentence until sentence-ending punctuation / 4 sentences / 70 characters
                 parts, j = [], idx
                 while j < len(ls) and j < idx + 4:
                     t = ls[j].get("text", "")
@@ -2217,17 +2222,17 @@ class App:
     def _course_cache_path(self, name, kind, request=None, tag=None):
         d = os.path.join(self._records_root(), "course_cache")
         os.makedirs(d, exist_ok=True)
-        # 按标签汇总另起缓存键(tag_ 前缀),别和同名课程缓存撞车
+        # tag-based aggregation uses a separate cache key (tag_ prefix) to avoid colliding with the same-named course cache
         base = f"tag_{tag}" if tag else name
         safe = re.sub(r"[\\/:*?\"<>|]", "_", base)
-        # 缓存也按账号分,别让一个账号的课程分析结果被另一个账号读到
+        # the cache is also partitioned by account, so one account's course-analysis results aren't read by another
         key = self._owner_key(request) if request is not None else "owner"
         import voiceprint
         who = "owner" if key in (None, "", "owner") else voiceprint._key_id(key)
         return os.path.join(d, f"{who}__{safe}.{kind}.json")
 
     async def _course_ai(self, request, kind, fn):
-        """kind: summary/exam/mock;fn: course.py 里对应的生成函数。带文件缓存。"""
+        """kind: summary/exam/mock; fn: the corresponding generator function in course.py. With file caching."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         ds = DeepSeek(self.cfg)
@@ -2236,14 +2241,14 @@ class App:
         try:
             m = await request.json()
             name = (m.get("name") or "").strip()
-            tag = (m.get("tag") or "").strip()   # 传了 tag 就按学科标签汇总,否则按同名课程
+            tag = (m.get("tag") or "").strip()   # if tag is given, aggregate by subject tag; otherwise by same-named course
             refresh = bool(m.get("refresh"))
-            ai_only = bool(m.get("ai_only"))   # 没录音时,仅凭课名/标签让 AI 生成
+            ai_only = bool(m.get("ai_only"))   # with no recordings, let the AI generate from just the course name/tag
         except Exception:
             return web.json_response({"error": "参数不对"}, status=400)
         if not name and not tag:
             return web.json_response({"error": "缺少课程名或标签"}, status=400)
-        label = tag or name   # 给 AI 当科目名 / 缓存与提示里用的标题
+        label = tag or name   # used as the subject name for the AI / the title in the cache and prompt
         cache = self._course_cache_path(name, kind, request, tag=tag or None)
         if not refresh and os.path.exists(cache):
             try:
@@ -2254,7 +2259,7 @@ class App:
             None, self._course_text, name, request, 45000, tag or None)
         if not text.strip():
             if not ai_only:
-                # 没转写内容:告诉前端可以走"纯AI一键生成",而不是直接报错
+                # no transcript: tell the frontend it can use "pure-AI one-click generation" instead of just erroring
                 return web.json_response({"no_transcript": True})
             if tag:
                 content = (f"《{tag}》这个标签下暂无课堂录音。请仅根据你对该学科"
@@ -2292,11 +2297,11 @@ class App:
         from course import mock_exam
         return await self._course_ai(request, "mock", mock_exam)
 
-    # ---------- 音频回放 ----------
+    # ---------- audio playback ----------
     @staticmethod
     def _ensure_wav_seekable(p):
-        """流式写入/异常中断的 WAV,头里 data 大小常为 0,浏览器读不到时长、进度条拖不动。
-        按实际文件大小回填标准 44 字节头里的 RIFF 和 data 两个 size 字段(仅在明显不符时改)。"""
+        """For streamed/abnormally-interrupted WAVs, the header's data size is often 0, so the browser can't read the duration and the seek bar won't move.
+        Backfill the RIFF and data size fields in the standard 44-byte header from the actual file size (only when they clearly don't match)."""
         try:
             import struct
             size = os.path.getsize(p)
@@ -2305,40 +2310,40 @@ class App:
             with open(p, "r+b") as f:
                 h = f.read(44)
                 if h[:4] != b"RIFF" or h[8:12] != b"WAVE" or h[36:40] != b"data":
-                    return  # 非标准 44 字节头,不乱改
+                    return  # non-standard 44-byte header, leave it alone
                 riff = struct.unpack("<I", h[4:8])[0]
                 data = struct.unpack("<I", h[40:44])[0]
                 real_riff, real_data = size - 8, size - 44
                 if data == real_data and riff == real_riff:
-                    return  # 头是对的
+                    return  # the header is fine
                 f.seek(4);  f.write(struct.pack("<I", real_riff))
                 f.seek(40); f.write(struct.pack("<I", real_data))
         except Exception:
             pass
 
     async def api_audio(self, request):
-        """按 Range 分段返回 audio.wav——不支持 Range 的话进度条拖不动、
-        手机上还会把整个几十兆先下完才开始播。"""
+        """Serve audio.wav in Range segments -- without Range support the seek bar won't move,
+        and on phones the whole tens of megabytes downloads before playback even starts."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         if not self._owns_session(request, request.match_info["sid"]):
             return web.json_response({"error": "无权访问这节课"}, status=403)
         p = os.path.join(self._session_dir(request.match_info["sid"]), "audio.wav")
         dl = request.query.get("download")
-        # 优先让浏览器直接从 OSS 拉(OSS 支持 Range,音频多半已下沉到 OSS、本地已删);
-        # OSS 没有再回退本地;都没有才 404。
+        # prefer letting the browser pull directly from OSS (OSS supports Range, and audio is usually offloaded to OSS with the local copy deleted);
+        # fall back to local if not on OSS; only 404 if neither has it.
         url = self._oss_url(p, disposition=(dl or None))
         if url:
             return web.HTTPFound(url)
         if not os.path.exists(p):
             return web.json_response({"error": "这节课没有录音文件"}, status=404)
-        self._ensure_wav_seekable(p)   # 头坏的(data size=0)先修好,否则浏览器读不到时长
+        self._ensure_wav_seekable(p)   # fix a broken header (data size=0) first, or the browser can't read the duration
         headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
         if dl:
             headers["Content-Disposition"] = "attachment"
         return web.FileResponse(p, headers=headers)
 
-    # ---------- 全文搜索 ----------
+    # ---------- full-text search ----------
     def _reindex_all(self):
         root = self._records_root()
         if not os.path.isdir(root):
@@ -2348,7 +2353,7 @@ class App:
                 p = os.path.join(root, name, "transcript.jsonl")
                 if not os.path.isfile(p):
                     continue
-                # 编辑过的句子也要能搜到，所以索引的是叠加编辑后的结果
+                # edited lines must be searchable too, so the index holds the result after edits are applied
                 d, lines = self._load_lines(name)
                 if not lines:
                     continue
@@ -2365,12 +2370,12 @@ class App:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._reindex_all)
         results, total = await loop.run_in_executor(None, self.lib.search, q, limit)
-        # 数据隔离:只留自己名下课的命中(索引是全局的,查询后按归属过滤)
+        # data isolation: keep only hits from your own sessions (the index is global, filtered by ownership after querying)
         if not self._is_super(request):
             me = self._owner_id(request)
             results = [r for r in results if self._session_owner(r["sid"]) == me]
             total = len(results)
-        # 补上课程名和日期，前端要按课分组
+        # fill in the course name and date; the frontend groups by session
         meta_cache = {}
         for r in results:
             if r["sid"] not in meta_cache:
@@ -2388,7 +2393,7 @@ class App:
             r["date"] = r["sid"][:10]
         return web.json_response({"results": results, "total": total, "q": q})
 
-    # ---------- 复习：闪卡 / 自测 / 追问 ----------
+    # ---------- review: flashcards / self-quiz / follow-up questions ----------
     async def _lines_for(self, body):
         lines = body.get("lines")
         if lines:
@@ -2449,7 +2454,7 @@ class App:
             return web.json_response({"error": f"DeepSeek 调用失败：{e}"}, status=502)
         return web.json_response(out)
 
-    # ---------- 板书截图 ----------
+    # ---------- blackboard screenshots ----------
     async def api_shot_add(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -2485,7 +2490,7 @@ class App:
         return web.json_response({"shots": shots})
 
     async def api_shot_file(self, request):
-        # 图片本身不校验令牌：<img src> 带不了自定义头，而路径本身不可猜
+        # the image itself isn't token-checked: <img src> can't carry custom headers, and the path itself is unguessable
         sid = os.path.basename(request.match_info["sid"])
         name = os.path.basename(request.match_info["file"])
         p = os.path.join(self.lib.shots_dir(sid), name)
@@ -2494,8 +2499,8 @@ class App:
         url = self._oss_url(p)
         if url:
             return web.HTTPFound(url)
-        # 板书图片内容不变(文件名即内容),用强缓存 + immutable:
-        # 重新挂载(比如结束录制切回转写页)时浏览器直接用缓存,不再重下 → 不闪。
+        # blackboard image content never changes (the filename is the content), so use strong caching + immutable:
+        # on remount (e.g. ending recording and switching back to the transcript page) the browser uses the cache instead of re-downloading -> no flicker.
         return web.FileResponse(p, headers={
             "Cache-Control": "public, max-age=31536000, immutable"})
 
@@ -2513,7 +2518,7 @@ class App:
                                  body.get("note", ""))
         return web.json_response(s or {"error": "没有这张图"}, status=200 if s else 404)
 
-    # ---------- 课程分组 / 术语表 / 纠错表 ----------
+    # ---------- course grouping / term list / correction list ----------
     async def api_courses(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -2554,13 +2559,13 @@ class App:
     async def api_assign_course(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
-        # 只能把自己的课归到自己的课程下(sid 归属由 isolate 中间件已挡,这里再挡 course_id)
+        # you can only assign your own sessions to your own courses (sid ownership is already blocked by the isolate middleware; this also blocks course_id)
         body = await request.json()
         cid = body.get("course_id")
         if cid and not self._owns_course(request, cid):
             return web.json_response({"error": "无权使用这门课程"}, status=403)
         self.lib.assign(request.match_info["sid"], cid)
-        # 指派课程同步进 PG（course_id；解除指派写空串以清掉）
+        # sync the course assignment into PG (course_id; unassigning writes an empty string to clear it)
         try:
             recordings_db.upsert_recording(
                 os.path.basename(request.match_info["sid"]),
@@ -2570,16 +2575,16 @@ class App:
         return web.json_response({"ok": True})
 
     async def api_set_tags(self, request):
-        """设置/替换某节课的学科标签(手动打标 + 给老录音补标)。
-        只有课主(或全局令牌)能改;标签写进 meta.json 与 PG 的 meta jsonb,
-        /api/sessions 便自动带上,按标签汇总也据此取材。"""
+        """Set/replace a session's subject tags (manual tagging + backfilling tags on old recordings).
+        Only the session owner (or the global token) can change them; tags are written into meta.json and PG's meta jsonb,
+        so /api/sessions picks them up automatically and tag-based aggregation sources from them too."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
         d = self._session_dir(sid)
         if not os.path.isdir(d):
             return web.json_response({"error": "没有这份记录"}, status=404)
-        if not self._owns_session(request, sid):        # 只能给自己的课打标
+        if not self._owns_session(request, sid):        # you can only tag your own sessions
             return web.json_response({"error": "无权修改这节课"}, status=403)
         try:
             body = await request.json()
@@ -2604,14 +2609,14 @@ class App:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         os.replace(tmp, mp)
-        # 同步进 PG:meta jsonb 是 /api/sessions 的读源,整份 meta 写回
+        # sync into PG: the meta jsonb is the read source for /api/sessions, so write back the whole meta
         try:
             recordings_db.upsert_recording(os.path.basename(sid), meta=meta)
         except Exception:
             traceback.print_exc()
         return web.json_response({"ok": True, "tags": cleaned})
 
-    # ---------- 共享：生成只读链接 ----------
+    # ---------- sharing: generate a read-only link ----------
     def _shares_path(self):
         return os.path.join(self._records_root(), "shares.json")
 
@@ -2631,8 +2636,8 @@ class App:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     async def api_share(self, request):
-        """给一节课生成只读分享链接。拿到链接的人不需要令牌，
-        但**只能看这一节课的文字**，不能录音、不能看别的课、不能改。"""
+        """Generate a read-only share link for a session. Whoever has the link needs no token,
+        but **can only view this one session's text** -- no recording, no other sessions, no editing."""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         try:
@@ -2642,11 +2647,11 @@ class App:
         sid = body.get("sid")
         if not sid or not os.path.isdir(self._session_dir(sid)):
             return web.json_response({"error": "没有这份记录"}, status=404)
-        if not self._owns_session(request, sid):        # 只能分享自己的课
+        if not self._owns_session(request, sid):        # you can only share your own sessions
             return web.json_response({"error": "无权分享这节课"}, status=403)
 
         shares = self._load_shares()
-        # 同一节课已经分享过就复用，别每点一次生成一个新链接
+        # reuse an existing share for the same session, don't mint a new link on every click
         for k, v in shares.items():
             if v.get("sid") == sid and not v.get("revoked"):
                 return web.json_response({"id": k, **v})
@@ -2674,7 +2679,7 @@ class App:
         return web.json_response({"ok": True})
 
     async def api_shared(self, request):
-        """只读访问，不校验令牌——这就是分享链接的意义。"""
+        """Read-only access, no token check -- that's the whole point of a share link."""
         shares = self._load_shares()
         s = shares.get(request.match_info["key"])
         if not s or s.get("revoked"):
@@ -2690,23 +2695,23 @@ class App:
         return web.json_response({"sid": s["sid"], "meta": meta, "lines": lines,
                                   "allow_download": s.get("allow_download", True)})
 
-    # ---------- 启动 ----------
+    # ---------- startup ----------
     def build(self):
         @web.middleware
         async def cors(request, handler):
-            # 网页由本服务同源托管，正常不需要 CORS；留着是为了开发时
-            # 前端跑在 Vite（localhost:3000）也能连。只放行本机来源。
+            # the web page is served same-origin by this service, so CORS normally isn't needed; kept for development
+            # so the frontend running on Vite (localhost:3000) can connect too. Only local origins are allowed.
             if request.method == "OPTIONS":
                 resp = web.Response(status=204)
             else:
                 resp = await handler(request)
             origin = request.headers.get("Origin", "")
-            # 放行:本机开发(localhost)、以及手机/平板 App(Readdy 托管在 *.readdy.co,跨域访问本后端)。
-            # 所有接口本身都要会话令牌,所以放行来源不等于放开数据——没登录照样什么都拿不到。
+            # allow: local development (localhost), and the phone/tablet App (hosted by Readdy on *.readdy.co, cross-origin to this backend).
+            # every endpoint still requires a session token, so allowing an origin doesn't open up the data -- without logging in you still get nothing.
             allowed = bool(origin) and (
                 origin.startswith(("http://localhost", "https://localhost",
                                    "http://127.0.0.1", "https://127.0.0.1"))
-                or origin.startswith(("capacitor://", "ionic://"))  # 打包进原生 App 的来源
+                or origin.startswith(("capacitor://", "ionic://"))  # origins bundled into the native App
                 or origin.endswith(".readdy.co")
                 or origin == "https://readdy.co")
             if allowed:
@@ -2719,13 +2724,13 @@ class App:
 
         @web.middleware
         async def guard(request, handler):
-            # 被锁的 IP 一律挡掉，连页面都不给
+            # block locked-out IPs entirely, not even the page
             if self._locked(request):
                 self._access_log(request, 429)
                 return web.json_response({"error": "尝试次数过多，稍后再试"}, status=429)
-            # 公网模式下，静态页面也要令牌——不然扫描器一眼就知道这跑的是什么
-            # 公网模式下静态页也要令牌；但登录/注册/查身份、只读分享得留个门，
-            # 否则新用户连登录页都打不开、没法拿到会话令牌
+            # in public mode, even static pages require a token -- otherwise a scanner immediately knows what's running here
+            # in public mode static pages require a token too; but login/register/identity-check and read-only sharing must keep a door open,
+            # otherwise a new user can't even open the login page to obtain a session token
             _open = ("/api/shared/", "/api/login", "/api/register", "/api/me", "/health")
             if self.public_mode and self.token and not request.path.startswith(_open):
                 if not self.check_token(request):
@@ -2737,8 +2742,8 @@ class App:
 
         @web.middleware
         async def isolate(request, handler):
-            # 数据隔离:凡是带 {sid} 的接口(转写/音频/板书/笔记/摘要/分课程…),
-            # 登录用户只能碰自己名下的课;别人的课一律 403。令牌无效则交给下游返回 401。
+            # data isolation: for any endpoint with {sid} (transcript/audio/blackboard/notes/summary/per-course...),
+            # logged-in users can only touch their own sessions; others' sessions get 403. An invalid token is left to downstream to return 401.
             mi = request.match_info
             sid = mi.get("sid") if mi else None
             if sid and self._token_ok(request) and not self._owns_session(request, sid):
@@ -2750,11 +2755,11 @@ class App:
         app = web.Application(middlewares=[guard, cors, isolate],
                               client_max_size=32 * 1024 * 1024)
         app.router.add_get("/ws", self.ws_handler)
-        # /health 不校验令牌：设备要靠它判断服务在不在，泄露不了什么
+        # /health isn't token-checked: devices rely on it to tell whether the service is up, and it leaks nothing
         app.router.add_get("/health", lambda r: web.json_response(
             {"ok": True, "needs_token": bool(self.token),
              "deepseek": DeepSeek(self.cfg).ready}))
-        # 账号：注册/登录/查身份/登出。前三个不需要令牌就能访问
+        # accounts: register/login/identity-check/logout. The first three are accessible without a token
         app.router.add_post("/api/register/code", self.api_register_code)
         app.router.add_post("/api/register", self.api_register)
         app.router.add_post("/api/login", self.api_login)
@@ -2775,7 +2780,7 @@ class App:
         app.router.add_post("/api/import/timetable", self.api_import_timetable)
         app.router.add_post("/api/import/shu", self.api_import_shu)
         app.router.add_get("/api/syllabus", self.api_syllabus_list)
-        # 官方大纲(按学校)——静态段要在 {name} 之前注册,否则会被当成课程名
+        # official syllabus (by school) -- the static segment must be registered before {name}, or it gets treated as a course name
         app.router.add_get("/api/syllabus/schools", self.api_syllabus_schools)
         app.router.add_get("/api/syllabus/official/{school}/{course}", self.api_syllabus_official_pdf)
         app.router.add_get("/api/syllabus/page/{school}/{course}", self.api_syllabus_official_page)
@@ -2796,7 +2801,7 @@ class App:
         app.router.add_post("/api/share", self.api_share)
         app.router.add_get("/api/shares", self.api_share_list)
         app.router.add_post("/api/share/{key}/revoke", self.api_share_revoke)
-        app.router.add_get("/api/shared/{key}", self.api_shared)   # 只读，无需令牌
+        app.router.add_get("/api/shared/{key}", self.api_shared)   # read-only, no token needed
         app.router.add_get("/api/audio/{sid}", self.api_audio)
         app.router.add_get("/api/search", self.api_search)
         app.router.add_post("/api/study", self.api_study)
@@ -2813,15 +2818,15 @@ class App:
         app.router.add_post("/api/sessions/{sid}/course", self.api_assign_course)
         app.router.add_post("/api/sessions/{sid}/tags", self.api_set_tags)
 
-        # 打包好的网页（手机/平板从这里打开）。没打包过就跳过，不影响本机使用。
+        # the built web page (phones/tablets open it from here). If not built, skip it, without affecting local use.
         if os.path.isdir(WEBAPP_DIR):
             async def spa(request):
                 rel = request.match_info.get("tail", "")
                 p = os.path.normpath(os.path.join(WEBAPP_DIR, rel))
                 if os.path.isfile(p) and p.startswith(WEBAPP_DIR):
-                    # assets/* 文件名自带内容哈希,可永久强缓存;其它(尤其 index.html)必须每次
-                    # 回源校验(no-cache),否则发了新版浏览器还卡在旧 bundle —— 之前"改名回溯
-                    # 更新了但 Windows 上没生效"就是这个原因:旧 index.html 指着旧 JS。
+                    # assets/* filenames carry a content hash, so they can be strongly cached forever; everything else (especially index.html) must revalidate
+                    # against the origin every time (no-cache), or after shipping a new version the browser stays stuck on the old bundle -- the earlier "rename backfill
+                    # updated but didn't take effect on Windows" was exactly this: an old index.html pointing at old JS.
                     if "/assets/" in ("/" + rel.replace(os.sep, "/")):
                         return web.FileResponse(p, headers={
                             "Cache-Control": "public, max-age=31536000, immutable"})
@@ -2831,7 +2836,7 @@ class App:
             app.router.add_get("/app", spa)
             app.router.add_get("/app/{tail:.*}", spa)
 
-        # 手机/平板版(Readdy 设计,含侧栏/底部导航):部署在 mobile/out,挂在 /m。
+        # phone/tablet version (Readdy design, with sidebar/bottom nav): deployed under mobile/out, mounted at /m.
         mobile_dir = os.path.normpath(os.path.join(HERE, "..", "..", "mobile", "out"))
         if os.path.isdir(mobile_dir):
             async def spa_m(request):
@@ -2847,8 +2852,8 @@ class App:
             app.router.add_get("/m", spa_m)
             app.router.add_get("/m/{tail:.*}", spa_m)
 
-        # Word 加载项的静态文件（只有装了 Office 加载项才用）。服务器部署
-        # （headless，没有 addin 目录）时跳过，不影响网页端 /app 使用。
+        # the Word add-in's static files (used only when the Office add-in is installed). On server deployments
+        # (headless, with no addin directory) it's skipped, without affecting the web /app.
         if os.path.isdir(ADDIN_DIR):
             app.router.add_static("/", ADDIN_DIR, show_index=True)
         return app
@@ -2856,12 +2861,12 @@ class App:
 
 def main():
     app_obj = App()
-    # 环境变量可覆盖 host/port（放 nginx 反代后面时用 LC_HOST=127.0.0.1 LC_PORT=5900
-    # 退到内部端口，不用改 config.json，rsync 也不会冲掉）
+    # environment variables can override host/port (behind an nginx reverse proxy use LC_HOST=127.0.0.1 LC_PORT=5900
+    # to fall back to an internal port, without editing config.json, and rsync won't overwrite it)
     port = int(os.environ.get("LC_PORT") or app_obj.cfg["server"]["port"])
     host = os.environ.get("LC_HOST") or app_obj.cfg["server"].get("host", "0.0.0.0")
-    # 优先用正规证书(acme.sh 装到 certs/live.crt+live.key，公网域名用，浏览器不报警）；
-    # 没有就回落到 netcert 自签（局域网/IP 直连用）。
+    # prefer a proper certificate (acme.sh installs it to certs/live.crt+live.key, for public domains, no browser warning);
+    # otherwise fall back to a netcert self-signed one (for LAN/direct-IP access).
     real_crt = os.path.join(HERE, "certs", "live.crt")
     real_key = os.path.join(HERE, "certs", "live.key")
     if os.path.exists(real_crt) and os.path.exists(real_key):
@@ -2901,8 +2906,8 @@ def main():
         web.run_app(app, host=host, port=port, ssl_context=ctx,
                     print=None, access_log=None)
     except OSError as e:
-        # 10048 = WSAEADDRINUSE。最常见的原因是上一次的服务还开着（那个黑窗口没关，
-        # 或者之前是隐藏启动的）。别甩一屏 traceback，说人话。
+        # 10048 = WSAEADDRINUSE. The most common cause is a previous instance still running (that black window wasn't closed,
+        # or it was started hidden). Don't dump a screenful of traceback; speak plainly.
         if getattr(e, "errno", None) not in (10048, 98):
             raise
         print(f"\n端口 {port} 已经被占用了。")

@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioDevice, LiveStatus } from '@/hooks/useLiveCaption';
 import { SERVICE_ORIGIN, getToken, setToken } from '@/hooks/useLiveCaption';
 import { loadSettings } from '@/lib/settings';
+import { useAuth } from '@/hooks/useAuth';
+
+// Cloud models regular users may pick; local/technical models are admin-only.
+const CLOUD_MODELS = ['aliyun', 'aliyun_wu'] as const;
 
 function defaultCourseName(): string {
   const d = new Date();
@@ -25,9 +29,9 @@ interface RecordingControlsProps {
   sessionTitle: string;
   micActive: boolean;
   courses: { id: string; name: string }[];
-  /** 学科标签(课程大纲名),可勾选,给纠错提供学科上下文 */
+  /** Subject tags (syllabus names), checkable, providing subject context for correction */
   subjectTags?: string[];
-  /** 录制中拍板书。返回 Promise 便于显示成功/失败 */
+  /** Photograph board notes while recording. Returns a Promise for showing success/failure */
   onShoot?: (file: File) => Promise<void>;
   onStart: (opts: {
     device: string | null;
@@ -68,7 +72,6 @@ export default function RecordingControls({
   status,
   error,
   notice,
-  sessionTitle,
   micActive,
   courses,
   subjectTags,
@@ -80,38 +83,40 @@ export default function RecordingControls({
   autoStartNaming,
   initialCourseName,
 }: RecordingControlsProps) {
-  const [defaults] = useState(loadSettings);   // 设置里的默认项(本机记住)
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';   // Only admins may pick local/technical models
+  const [defaults] = useState(loadSettings);   // Defaults from settings (remembered on this device)
   const [device, setDevice] = useState<string | null>(null);
   const [sensitivity, setSensitivity] = useState<'std' | 'high' | 'max'>(defaults.sensitivity);
   const [model, setModel] = useState<'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu'>(defaults.model);
-  const [toWord] = useState(defaults.toWord);   // 不再有行内开关,取设置默认(默认关)
-  const [courseId] = useState<string>('');   // 行内课程绑定已改为学科标签,这里恒为空
+  const [toWord] = useState(defaults.toWord);   // No more inline toggle, use the settings default (off by default)
+  const [courseId] = useState<string>('');   // Inline course binding is now handled by subject tags, so this stays empty
   const [shotState, setShotState] = useState<'' | 'busy' | 'ok' | 'err'>('');
-  const [confirm, setConfirm] = useState<'' | 'pause' | 'stop'>('');   // 二次确认:暂停/结束
-  const [courseName, setCourseName] = useState(() => initialCourseName?.trim() || defaultCourseName());   // 行内课程名,预填可改
+  const [confirm, setConfirm] = useState<'' | 'pause' | 'stop'>('');   // Confirmation: pause / stop
+  const [courseName, setCourseName] = useState(() => initialCourseName?.trim() || defaultCourseName());   // Inline course name, prefilled and editable
   const nameRef = useRef<HTMLInputElement>(null);
-  const [aiCorrect, setAiCorrect] = useState(defaults.aiCorrect);  // AI 实时纠错开关(默认取自设置)
-  const [smartSeg, setSmartSeg] = useState(defaults.smartSeg);     // AI 智能分句(默认取自设置)
-  const [translateEn] = useState(defaults.translateEn);           // 英文自动翻译(默认取自设置)
-  const [subjects, setSubjects] = useState<string[]>([]);         // 勾选的学科标签
-  const [subjOpen, setSubjOpen] = useState(false);                // 学科标签下拉是否展开
+  const [aiCorrect, setAiCorrect] = useState(defaults.aiCorrect);  // AI real-time correction toggle (defaults from settings)
+  const [smartSeg, setSmartSeg] = useState(defaults.smartSeg);     // AI smart sentence splitting (defaults from settings)
+  const [translateEn] = useState(defaults.translateEn);           // Automatic English translation (defaults from settings)
+  const [subjects, setSubjects] = useState<string[]>([]);         // Checked subject tags
+  const [subjOpen, setSubjOpen] = useState(false);                // Whether the subject-tag dropdown is expanded
   const toggleSubject = (name: string) =>
     setSubjects((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
 
-  // 不是在跑服务的那台电脑上打开的（手机/平板/别的电脑），
-  // 选电脑上的声卡没意义，默认用本设备的麦克风。
+  // Opened somewhere other than the machine running the service (phone/tablet/another computer),
+  // so picking the server's sound card is pointless; default to this device's microphone.
   const isRemote =
     typeof window !== 'undefined' &&
     !['localhost', '127.0.0.1'].includes(window.location.hostname);
 
   useEffect(() => {
     if (device !== null) return;
-    // 设置里指定了默认音源就用它;否则自动(远程用浏览器麦、本机用声卡)
+    // Use the default audio source if one is set in settings; otherwise automatic (browser mic when remote, sound card when local)
     if (defaults.device !== 'auto') { setDevice(defaults.device); return; }
     setDevice(isRemote ? 'browser' : defaultDevice);
   }, [defaultDevice, device, isRemote, defaults.device]);
 
-  // 从主界面「开始录音」进来:自动聚焦课程名输入框,方便直接改名/回车开始
+  // Arriving via the main 「开始录音」: auto-focus the course-name input so you can rename directly / press Enter to start
   const didAutoName = useRef(false);
   useEffect(() => {
     if (autoStartNaming && !didAutoName.current) {
@@ -120,6 +125,11 @@ export default function RecordingControls({
       nameRef.current?.select();
     }
   }, [autoStartNaming]);
+
+  // Non-admins can only use cloud models; if a local model was remembered, snap to cloud.
+  useEffect(() => {
+    if (!isAdmin && !CLOUD_MODELS.includes(model as (typeof CLOUD_MODELS)[number])) setModel('aliyun');
+  }, [isAdmin, model]);
 
   const uiStatus: RecordingStatus = running ? (paused ? 'paused' : 'recording') : 'idle';
   useEffect(() => {
@@ -131,7 +141,7 @@ export default function RecordingControls({
 
   const [tokenInput, setTokenInput] = useState('');
 
-  // 统一风格:下拉用 appearance-none 药丸 + 自绘小箭头;开关用填充/描边药丸
+  // Consistent style: dropdowns use appearance-none pills + a hand-drawn arrow; toggles use filled/outlined pills
   const selCls = 'appearance-none text-xs pl-3 pr-8 py-2 rounded-full bg-background-100 border border-background-200 text-foreground-700 cursor-pointer hover:bg-background-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 max-w-[240px] truncate';
   const pillCls = (on: boolean) =>
     `text-xs px-3.5 py-2 rounded-full border cursor-pointer transition-colors whitespace-nowrap ${on ? 'bg-accent-500 text-background-50 border-accent-500 font-medium' : 'bg-background-100 text-foreground-500 border-background-200 hover:bg-background-200'}`;
@@ -324,18 +334,22 @@ export default function RecordingControls({
             </div>
 
             <div className="relative inline-flex">
-              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu')} className={selCls} title="SenseVoice=整句·最准(推荐);Paraformer=整句·对照;流式=边说边出字;上海话=吴语识别·自动翻普通话;阿里云=云端识别(需联网/DASHSCOPE_API_KEY)">
-                <option value="sensevoice">🎯 SenseVoice</option>
-                <option value="paraformer">🔬 Paraformer</option>
-                <option value="stream">⚡ 流式</option>
-                <option value="shanghainese">🗣️ 上海话</option>
-                <option value="aliyun">☁️ 阿里云·普通话</option>
-                <option value="aliyun_wu">☁️ 阿里云·上海话</option>
+              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu')} className={selCls} title={isAdmin ? '普通话/英语·上海话=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别' : '普通话/英语=云端普通话/英语识别;上海话=云端吴语识别,自动转普通话'}>
+                <option value="aliyun">普通话/英语</option>
+                <option value="aliyun_wu">上海话</option>
+                {isAdmin && (
+                  <>
+                    <option value="sensevoice">🎯 SenseVoice</option>
+                    <option value="paraformer">🔬 Paraformer</option>
+                    <option value="stream">⚡ 流式</option>
+                    <option value="shanghainese">🗣️ 上海话(本地)</option>
+                  </>
+                )}
               </select>
               <i className="ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm"></i>
             </div>
 
-            {/* 学科标签:勾选这节课涉及的学科(课程大纲名),给 AI 纠错/翻译当上下文,更准 */}
+            {/* Subject tags: check the subjects this session covers (syllabus names) to give AI correction/translation context, for better accuracy */}
             <div className="relative inline-flex">
               <button
                 type="button"
@@ -450,12 +464,6 @@ export default function RecordingControls({
           ))}
           {notice && <span className="text-xs text-foreground-400 ml-auto">{notice}</span>}
         </div>
-      )}
-
-      {uiStatus === 'idle' && !error && (
-        <p className="px-4 pb-3 text-xs text-foreground-400">
-          录音、识别、说话人区分都在本机运行，不上传任何音频。录制「{sessionTitle}」时可以关掉这个页面，转写照常进行。
-        </p>
       )}
     </div>
   );

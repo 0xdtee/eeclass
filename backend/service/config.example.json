@@ -7,11 +7,11 @@
       "enabled": false,
       "target_rms": 0.05,
       "max_gain": 15.0,
-      "_note": "自动增益，实测无效，默认关闭，别再打开。用用户自己的 5 段实录(407秒)对比：原样 54句/541字，开采集端AGC 43句/503字(更差，因为它改变了 VAD 看到的信号)，每句送识别前归一化 54句/544字(和原样一样)。结论：SenseVoice 对电平不敏感，声音小不是靠调增益解决的——换模型才是(同一段录音 whisper 只出1句，SenseVoice 出3句)。"
+      "_note": "Automatic gain control. Proven ineffective in testing, off by default, don't turn it back on. Comparison on the user's own 5 real recordings (407s): as-is 54 lines/541 chars; capture-side AGC on 43 lines/503 chars (worse, because it changes the signal the VAD sees); per-utterance normalization before recognition 54 lines/544 chars (same as as-is). Conclusion: SenseVoice is insensitive to level; quiet audio isn't solved by adjusting gain — switching models is (on the same recording whisper produced only 1 line, SenseVoice produced 3)."
     }
   },
   "vad": {
-    "_note": "门限从 0.5 调到 0.35 是实测结果：用户自己的两段实录里，0.5 会把小声的部分整段漏掉——189秒那段 250字→268字，109秒那段 112字→157字（+40%），捞回来的都是真话不是噪声。再往下调到 0.20 就开始出「一颗佛的城堡」这种噪声幻觉了。控制台的「拾音灵敏度」可以现场调。",
+    "_note": "Lowering the threshold from 0.5 to 0.35 is a measured result: in the user's two real recordings, 0.5 drops entire quiet sections — the 189s clip went 250 chars→268 chars, the 109s clip 112 chars→157 chars (+40%), and what's recovered is real speech, not noise. Going further down to 0.20 starts producing noise hallucinations like 'a Buddha's castle'. The console's 'pickup sensitivity' can be adjusted live.",
     "threshold": 0.35,
     "exit_threshold": 0.22,
     "min_speech_ms": 180,
@@ -27,7 +27,7 @@
   },
   "asr": {
     "backend": "sensevoice",
-    "_backend_note": "whisper | sensevoice | funasr | zipformer。本机实测 RTF：whisper-small 0.47、sensevoice 0.047、zipformer 0.144。默认 sensevoice：快 10 倍且中文错字更少。要边说边出字用 zipformer（走 stream_asr）。",
+    "_backend_note": "whisper | sensevoice | funasr | zipformer. Measured RTF on this machine: whisper-small 0.47, sensevoice 0.047, zipformer 0.144. Default is sensevoice: 10x faster with fewer Chinese character errors. For word-by-word streaming output use zipformer (via stream_asr).",
     "sensevoice": {
       "model_dir": "models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
       "int8": true,
@@ -38,7 +38,7 @@
       "model_dir": "models/sherpa-onnx-wenetspeech-wu-u2pp-conformer-ctc-zh-2026-02-03"
     },
     "aliyun": {
-      "_note": "阿里云百炼(DashScope)云端识别，两个后端：aliyun_paraformer(模型 paraformer-realtime-v2，便宜的普通话)、aliyun_funasr(模型 fun-asr-realtime，识别方言含上海话并直接输出普通话，无需再翻译)。API key 只从环境变量 DASHSCOPE_API_KEY 读，绝不写在这里/进 git。可选 model 字段覆盖默认模型。",
+      "_note": "Alibaba Cloud Bailian (DashScope) cloud recognition, two backends: aliyun_paraformer (model paraformer-realtime-v2, cheap Mandarin), aliyun_funasr (model fun-asr-realtime, recognizes dialects including Shanghainese and outputs Mandarin directly, no separate translation needed). The API key is read only from the DASHSCOPE_API_KEY environment variable, never written here or into git. The optional model field overrides the default model.",
       "model": ""
     },
     "funasr": {
@@ -57,7 +57,7 @@
         "below_seconds": 2.0,
         "below_chars": 8,
         "carry_max_seconds": 6.0,
-        "_note": "端点检测切出的碎片(如「我。」「那么。」)不单独成句，并进下一句——否则声纹会把一个人拆成好几个说话人"
+        "_note": "Fragments cut out by endpoint detection (e.g. 'I.', 'so.') don't form their own line but merge into the next one — otherwise voiceprint would split one person into several speakers"
       }
     },
     "model": "small",
@@ -65,7 +65,7 @@
     "cpu_threads": 6,
     "beam_size": 1,
     "language": "zh",
-    "_prompt_note": "提示词必须是一句带标点的课堂原话「范例」，不能写成「请用简体中文」这类指令——small 模型会把指令原样复读出来，实测丢掉 25% 内容。范例句里也不要出现学科词（比如「公式」），否则会串进转写结果；术语一律放 hotwords。",
+    "_prompt_note": "The prompt must be an actual classroom sentence with punctuation, used as an 'example' — it cannot be an instruction like 'please use Simplified Chinese'. The small model repeats instructions verbatim and, in testing, dropped 25% of the content. The example sentence should also avoid subject-specific words (e.g. 'formula'), or they leak into the transcript; put terms in hotwords instead.",
     "prompt": "嗯，好，那我们接着往下看啊。这个地方呢，是这样子的。",
     "max_tokens_per_second": 14,
     "hotwords": "极限 导数 偏导数 微分 不定积分 定积分 级数 傅里叶 泰勒 拉格朗日 洛必达 格林公式 高斯公式 斯托克斯 矩阵 行列式 特征值 二次型 动量守恒 角动量 刚体 麦克斯韦方程组 电磁感应 高斯定理 安培环路 薛定谔方程 光电效应",
@@ -157,18 +157,20 @@
   "server": {
     "port": 5901,
     "host": "0.0.0.0",
-    "_host_note": "0.0.0.0 = 同一 WiFi 下的手机/平板也能用（配合 require_token 的门禁）。只想本机用就改成 127.0.0.1。",
+    "_host_note": "0.0.0.0 = phones/tablets on the same WiFi can also use it (with require_token as the gate). To use it only on this machine, change to 127.0.0.1.",
     "require_token": true,
     "invite_code": "",
-    "_invite_note": "非空则注册必须填对这个邀请码(把码发给该来的人);留空=开放注册。改这里即时生效,不用重启。",
+    "_invite_note": "If non-empty, registration requires entering this invite code correctly (give the code to the people who should join); leave empty = open registration. Changes here take effect immediately, no restart needed.",
     "public": false,
-    "_public_note": "true = 服务暴露在公网（端口转发/穿透）。这时连页面本身都要令牌，扫描器只能看到 401；令牌连错 8 次会锁 IP，锁定时间逐次翻倍最多 6 小时；所有访问记到 records/access.log。只在局域网用就保持 false。",
+    "_public_note": "true = the service is exposed to the public internet (port forwarding/tunneling). In this case even the page itself requires a token, and scanners see only 401; 8 wrong token attempts lock the IP, with the lockout time doubling each time up to 6 hours; all access is logged to records/access.log. Keep false if only used on the LAN.",
     "records_dir": "../records",
-    "save_wav": true
+    "save_wav": true,
+    "max_sessions": 8,
+    "_max_sessions_note": "Maximum number of concurrent recording/transcription sessions. Sized for local CPU models (each session holds a recognition model in memory + CPU). When using the cloud (Aliyun) models recognition runs in the cloud, not on this machine, so you can raise this much higher; the real ceiling then becomes your DashScope concurrency quota."
   },
   "deepseek": {
     "api_key": "",
-    "_key_note": "填你的 DeepSeek API key，或设环境变量 DEEPSEEK_API_KEY（优先级更高）。key 只在服务端使用，不会下发给浏览器。DeepSeek 只有文本模型，语音识别仍是本机做的。",
+    "_key_note": "Enter your DeepSeek API key, or set the DEEPSEEK_API_KEY environment variable (higher priority). The key is used only on the server side, never sent to the browser. DeepSeek only has text models; speech recognition is still done locally.",
     "base_url": "https://api.deepseek.com",
     "model": "deepseek-chat",
     "timeout_s": 120,

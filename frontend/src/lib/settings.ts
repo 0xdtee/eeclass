@@ -1,27 +1,27 @@
 /**
- * 应用设置。现在跟账号走、存服务器(/api/settings);localStorage 只作本地缓存,
- * 保证同步读取(loadSettings)不变。录音控制栏用这里的默认值初始化。
+ * App settings. Now tied to the account and stored on the server (/api/settings); localStorage is only a local cache,
+ * ensuring synchronous reads (loadSettings) stay unchanged. The recording control bar initializes from the defaults here.
  */
 import { SERVICE_ORIGIN, getToken } from '@/hooks/useLiveCaption';
 
 export interface AppSettings {
-  aiCorrect: boolean;                                  // 默认开 AI 实时纠错
-  smartSeg: boolean;                                   // 默认开 AI 智能分句
-  translateEn: boolean;                                // 默认开 英文自动翻中文字幕
-  model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';   // 默认识别模型
-  sensitivity: 'std' | 'high' | 'max';                 // 默认拾音灵敏度
-  device: 'auto' | 'browser' | 'browser-system';       // 默认音源
-  toWord: boolean;                                     // 录制时同步写入 Word
-  autoSummary: boolean;                                // 结束录制后自动生成概要
-  importTagSimilar: boolean;                           // 导入课程时:相似的归到已有标签
-  importTagNew: boolean;                               // 导入课程时:没有相似的就新建标签
+  aiCorrect: boolean;                                  // AI real-time correction on by default
+  smartSeg: boolean;                                   // AI smart sentence segmentation on by default
+  translateEn: boolean;                                // Auto-translate English to Chinese subtitles on by default
+  model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';   // Default recognition model
+  sensitivity: 'std' | 'high' | 'max';                 // Default pickup sensitivity
+  device: 'auto' | 'browser' | 'browser-system';       // Default audio source
+  toWord: boolean;                                     // Write to Word while recording
+  autoSummary: boolean;                                // Auto-generate a summary after recording ends
+  importTagSimilar: boolean;                           // On course import: assign similar ones to existing tags
+  importTagNew: boolean;                               // On course import: create a new tag when none is similar
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   aiCorrect: false,
   smartSeg: true,
   translateEn: true,
-  model: 'sensevoice',
+  model: 'aliyun',   // Default to the cloud Mandarin/English model (regular users only get cloud models)
   sensitivity: 'high',
   device: 'auto',
   toWord: false,
@@ -48,13 +48,13 @@ export function saveSettings(patch: Partial<AppSettings>): AppSettings {
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
-    /* localStorage 满/禁用就算了 */
+    /* If localStorage is full/disabled, never mind */
   }
-  pushSettings();   // 同步到服务器(按账号)
+  pushSettings();   // Sync to the server (per account)
   return next;
 }
 
-// ── 服务器同步(按账号)──────────────────────────────────────────
+// ── Server sync (per account) ──────────────────────────────────────────
 let lastToken = '';
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -71,12 +71,12 @@ function pushSettings() {
   }, 400);
 }
 
-/** 登录/切账号时:先复位成默认,再从服务器拉这个账号的设置。 */
+/** On login/account switch: first reset to defaults, then fetch this account's settings from the server. */
 export async function hydrateSettingsFromServer() {
   const t = getToken();
   if (!t || t === lastToken) return;
   lastToken = t;
-  localStorage.setItem(KEY, JSON.stringify({ ...DEFAULT_SETTINGS }));   // 先清掉上一个账号的
+  localStorage.setItem(KEY, JSON.stringify({ ...DEFAULT_SETTINGS }));   // Clear the previous account's first
   try {
     const r = await fetch(SERVICE_ORIGIN + '/api/settings', { headers: { 'X-Token': t } });
     if (!r.ok) return;
@@ -84,14 +84,14 @@ export async function hydrateSettingsFromServer() {
     if (j.settings && typeof j.settings === 'object') {
       localStorage.setItem(KEY, JSON.stringify({ ...DEFAULT_SETTINGS, ...j.settings }));
     } else {
-      pushSettings();   // 该账号还没有 → 用默认并存下基线
+      pushSettings();   // This account has none yet → use defaults and store a baseline
     }
   } catch {
-    // 网络问题:保持默认
+    // Network issue: keep defaults
   }
 }
 
-/** 登出:清空本地设置缓存并复位。 */
+/** On logout: clear the local settings cache and reset. */
 export function clearSettingsForLogout() {
   lastToken = '';
   localStorage.setItem(KEY, JSON.stringify({ ...DEFAULT_SETTINGS }));

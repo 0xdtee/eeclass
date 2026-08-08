@@ -5,7 +5,7 @@ import { loadSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from '
 import { useAuth } from '@/hooks/useAuth';
 import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
 
-// 直接用常量数组渲染(不套内部组件),避免每次 setState 重新挂载把点击吞掉。
+// Render straight from the constant array (no inner component), so setState doesn't remount and swallow clicks each time.
 const TOGGLES: { k: 'aiCorrect' | 'smartSeg' | 'translateEn' | 'autoSummary'; label: string; hint: string }[] = [
   { k: 'aiCorrect', label: '✨ AI 实时纠错', hint: '出字后让 DeepSeek 异步改同音错字(如 影射→映射),消耗少量 API 额度。' },
   { k: 'smartSeg', label: '🧩 AI 智能分句', hint: '让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)。' },
@@ -13,15 +13,15 @@ const TOGGLES: { k: 'aiCorrect' | 'smartSeg' | 'translateEn' | 'autoSummary'; la
   { k: 'autoSummary', label: '📝 结束录制自动生成概要', hint: '停止录制后自动整理这节课的 AI 概要;关掉则需手动点生成。' },
 ];
 
-// 导入课程时自动打标签
+// Auto-tag courses on import
 const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: string; hint: string }[] = [
   { k: 'importTagSimilar', label: '相似的归到已有标签', hint: '导入的课程名和已有标签相近时,归到那个标签,不重复建。' },
   { k: 'importTagNew', label: '没有相似的就新建标签', hint: '导入的课程没有相近标签时,按课程名自动建一个新标签。' },
 ];
 
-const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string }[] }[] = [
-  { k: 'model', label: '识别模型', hint: '整句更准、流式边说边出字。',
-    options: [{ value: 'sensevoice', label: 'SenseVoice' }, { value: 'paraformer', label: 'Paraformer' }, { value: 'stream', label: '流式' }, { value: 'shanghainese', label: '上海话' }, { value: 'aliyun', label: '☁️ 阿里云·普通话' }, { value: 'aliyun_wu', label: '☁️ 阿里云·上海话' }] },
+const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
+  { k: 'model', label: '识别模型', hint: '普通话/英语与上海话为云端识别;其余为本机模型。',
+    options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '上海话' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
   { k: 'device', label: '默认音源', hint: '系统声音用于网课(仅电脑 Chrome/Edge)。',
@@ -38,6 +38,7 @@ const CATS: { id: Cat; label: string; icon: string }[] = [
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';   // Local/technical models are admin-only
   const [s, setS] = useState<AppSettings>(() => loadSettings());
   const [cat, setCat] = useState<Cat>('ai');
 
@@ -56,7 +57,7 @@ export default function SettingsPage() {
       </nav>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row gap-5 items-start">
-        {/* 左:大类 */}
+        {/* Left: top-level categories */}
         <aside className="w-full md:w-52 flex-shrink-0 flex md:flex-col gap-1.5 overflow-x-auto">
           {CATS.map((c) => (
             <button
@@ -70,7 +71,7 @@ export default function SettingsPage() {
           ))}
         </aside>
 
-        {/* 右:该大类下的小类 */}
+        {/* Right: sub-categories under this top-level category */}
         <div className="flex-1 min-w-0 w-full">
           {cat === 'ai' && (
             <section className="bg-background-50 border border-background-200 rounded-2xl overflow-hidden">
@@ -114,7 +115,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium text-foreground-800">{g.label}</p>
                     <p className="text-xs text-foreground-400 mt-1 mb-2.5 leading-relaxed">{g.hint}</p>
                     <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl">
-                      {g.options.map((o) => {
+                      {g.options.filter((o) => isAdmin || !o.admin).map((o) => {
                         const active = s[g.k] === o.value;
                         return (
                           <button
