@@ -20,7 +20,7 @@ const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: strin
 ];
 
 const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
-  { k: 'model', label: '识别模型', hint: '普通话/英语与上海话为云端识别;其余为本机模型。',
+  { k: 'model', label: '识别模型', hint: '',
     options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '上海话' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
@@ -113,7 +113,7 @@ export default function SettingsPage() {
                 {SEGS.map((g) => (
                   <div key={g.k} className="py-4">
                     <p className="text-sm font-medium text-foreground-800">{g.label}</p>
-                    <p className="text-xs text-foreground-400 mt-1 mb-2.5 leading-relaxed">{g.hint}</p>
+                    {g.hint && <p className="text-xs text-foreground-400 mt-1 mb-2.5 leading-relaxed">{g.hint}</p>}
                     <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl">
                       {g.options.filter((o) => isAdmin || !o.admin).map((o) => {
                         const active = s[g.k] === o.value;
