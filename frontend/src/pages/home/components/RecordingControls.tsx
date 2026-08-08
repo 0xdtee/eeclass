@@ -34,7 +34,7 @@ interface RecordingControlsProps {
     sensitivity: 'std' | 'high' | 'max';
     toWord: boolean;
     courseId: string | null;
-    model: 'sensevoice' | 'paraformer' | 'stream';
+    model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';
     title: string;
     aiCorrect: boolean;
     smartSeg: boolean;
@@ -83,7 +83,7 @@ export default function RecordingControls({
   const [defaults] = useState(loadSettings);   // 设置里的默认项(本机记住)
   const [device, setDevice] = useState<string | null>(null);
   const [sensitivity, setSensitivity] = useState<'std' | 'high' | 'max'>(defaults.sensitivity);
-  const [model, setModel] = useState<'sensevoice' | 'paraformer' | 'stream'>(defaults.model);
+  const [model, setModel] = useState<'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu'>(defaults.model);
   const [toWord] = useState(defaults.toWord);   // 不再有行内开关,取设置默认(默认关)
   const [courseId] = useState<string>('');   // 行内课程绑定已改为学科标签,这里恒为空
   const [shotState, setShotState] = useState<'' | 'busy' | 'ok' | 'err'>('');
@@ -190,6 +190,7 @@ export default function RecordingControls({
             <>
               <input
                 ref={nameRef}
+                data-guide="rec-name"
                 type="text"
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
@@ -203,6 +204,7 @@ export default function RecordingControls({
                 className="px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 w-[190px]"
               />
               <button
+                data-guide="rec-start"
                 onClick={() => onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateEn, subjects })}
                 disabled={!connected || starting}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
@@ -253,12 +255,14 @@ export default function RecordingControls({
                 </button>
               )}
               <button
+                data-guide="rec-stop"
                 onClick={() => setConfirm('stop')}
                 className="flex items-center gap-1.5 px-4 py-2 bg-red-100 text-red-600 rounded-full text-sm font-medium hover:bg-red-200 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <i className="ri-stop-fill text-base"></i>结束录制
               </button>
               <button
+                data-guide="rec-mark"
                 onClick={onMark}
                 className="flex items-center gap-1.5 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium hover:bg-yellow-200 transition-colors cursor-pointer whitespace-nowrap"
                 title="把刚说过的那句标为重点"
@@ -269,6 +273,7 @@ export default function RecordingControls({
 
               {onShoot && (
                 <label
+                  data-guide="rec-shoot"
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
                     shotState === 'ok'
                       ? 'bg-green-100 text-green-700'
@@ -319,10 +324,13 @@ export default function RecordingControls({
             </div>
 
             <div className="relative inline-flex">
-              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream')} className={selCls} title="SenseVoice=整句·最准(推荐);Paraformer=整句·对照;流式=边说边出字">
+              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu')} className={selCls} title="SenseVoice=整句·最准(推荐);Paraformer=整句·对照;流式=边说边出字;上海话=吴语识别·自动翻普通话;阿里云=云端识别(需联网/DASHSCOPE_API_KEY)">
                 <option value="sensevoice">🎯 SenseVoice</option>
                 <option value="paraformer">🔬 Paraformer</option>
                 <option value="stream">⚡ 流式</option>
+                <option value="shanghainese">🗣️ 上海话</option>
+                <option value="aliyun">☁️ 阿里云·普通话</option>
+                <option value="aliyun_wu">☁️ 阿里云·上海话</option>
               </select>
               <i className="ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm"></i>
             </div>
@@ -380,10 +388,10 @@ export default function RecordingControls({
               <i className="ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm"></i>
             </div>
 
-            <button type="button" onClick={() => setAiCorrect(!aiCorrect)} className={pillCls(aiCorrect)} title="出字后让 DeepSeek 异步改同音错字(如影射→映射),消耗少量 API 额度">
+            <button type="button" data-guide="ai-correct" onClick={() => setAiCorrect(!aiCorrect)} className={pillCls(aiCorrect)} title="出字后让 DeepSeek 异步改同音错字(如影射→映射),消耗少量 API 额度">
               ✨ AI 实时纠错
             </button>
-            <button type="button" onClick={() => setSmartSeg(!smartSeg)} className={pillCls(smartSeg)} title="让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)">
+            <button type="button" data-guide="ai-seg" onClick={() => setSmartSeg(!smartSeg)} className={pillCls(smartSeg)} title="让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)">
               🧩 AI 智能分句
             </button>
           </div>

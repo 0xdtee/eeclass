@@ -144,6 +144,7 @@ class Session:
         self.correct_pool = None
         # 英文字幕:识别到英文(或英语课)时,异步翻成中文挂在该句下面
         self.translate_en = False
+        self.translate_wu = False   # 上海话(吴语)后端:每句自动翻普通话字幕
         self.translator = None
         self.translate_pool = None
         # DeepSeek 智能分句:按语意把 VAD 碎片合并成完整句子(开关在前端,仅整句模式)
@@ -176,6 +177,8 @@ class Session:
         # 两条互斥的路：流式（模型自己边听边断句）或 VAD 切句 + 整句识别
         self.streaming = bool(cfg["asr"].get("streaming")) and \
             cfg["asr"].get("backend") == "zipformer"
+        # 上海话后端:识别出的是吴语用字,每句自动翻普通话挂在下面当字幕
+        self.translate_wu = cfg["asr"].get("backend") == "wenet_ctc"
         self.seg = None if self.streaming else Segmenter(cfg)
         self.sasr = None
         self.spk = SpeakerID(cfg)
@@ -293,8 +296,8 @@ class Session:
             pass
         if self.ai_correct:
             self.corrector = DeepSeek(self.cfg)
-            self.correct_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="aicorrect")
-        if self.translate_en:
+            self.correct_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="aicorrect")
+        if self.translate_en or self.translate_wu:
             ds = DeepSeek(self.cfg)
             if ds.ready:
                 self.translator = ds
@@ -360,6 +363,8 @@ class Session:
         meta = {
             "title": self.title,
             "owner": self._owner_id(),       # 这节课归属账号(哈希,不含邮箱明文)—— 数据隔离按它过滤
+            # 勾选的学科标签(高等数学/大学物理…)持久化,供按标签汇总用;停止时 meta 一并写 meta.json+PG
+            "tags": [t for t in (self.subjects or []) if isinstance(t, str) and t.strip()],
             "duration_s": round(time.time() - self.t0, 1),
             "lines": self.line_id,   # 续录后是累计总行数
             "device": self.dev_info,
@@ -435,9 +440,19 @@ class Session:
 
     def _emit_line(self, text, start, end, sid, gap, conf, proc_s=0.0):
         """把一句(可能由多个碎片合成)写盘并推给前端。line_id/段落状态在这里维护。
-        用锁串行化:智能分句的 worker 线程和停止收尾线程可能同时调它。"""
+        用锁串行化:智能分句的 worker 线程和停止收尾线程可能同时调它。
+        一段里若含多句(已带句末标点 。/!/?),按句末标点逐句拆成多行——内容一字不改。
+        (只按 。！？ 全角和半角 !? 拆,不按半角句点 . 拆,免得把 3.14 之类拆断。)"""
+        sents = [s.strip() for s in re.findall(r"[^。！？!?]*[。！？!?]|[^。！？!?]+", text or "")]
+        sents = [s for s in sents if s]
         with self._emit_lock:
-            self._emit_line_locked(text, start, end, sid, gap, conf, proc_s)
+            if len(sents) <= 1:
+                self._emit_line_locked(text, start, end, sid, gap, conf, proc_s)
+            else:
+                for i, s in enumerate(sents):
+                    self._emit_line_locked(s, start, end, sid,
+                                           gap if i == 0 else 0.0, conf,
+                                           proc_s if i == 0 else 0.0)
 
     def _emit_line_locked(self, text, start, end, sid, gap, conf, proc_s=0.0):
         p = self.cfg["paragraph"]
@@ -494,8 +509,12 @@ class Session:
         # AI 实时纠错:先秒出原文,再异步让 DeepSeek 改同音错字,改好了推 line_update
         if self.ai_correct and self.correct_pool and self.corrector and self.corrector.ready:
             self.correct_pool.submit(self._ai_correct, rec["id"], rec["ts"], text)
+        # 上海话(吴语)→ 每句都异步翻普通话,挂在这句下面当字幕(不走英文检测的 _should_translate)
+        if self.translate_wu:
+            if self.translate_pool and text.strip():
+                self.translate_pool.submit(self._translate_line, rec["id"], text, True)
         # 英文句 → 异步翻中文,挂在这句下面当字幕
-        if self.translate_en:
+        elif self.translate_en:
             ok = bool(self.translate_pool) and self._should_translate(text)
             if ok:
                 self.translate_pool.submit(self._translate_line, rec["id"], text)
@@ -538,8 +557,10 @@ class Session:
                 return
             n = len(self._seg_frags)
             chars = sum(len(f["text"]) for f in self._seg_frags)
-            # 攒太多还没成句 → 安全阀:逐碎片成行,别无限拖
-            if n >= self.SEG_FORCE_FRAGS or chars >= self.SEG_FORCE_CHARS:
+            # 缓冲里一旦出现句末标点(。！？)→ 立刻出行(_emit_line 会按标点拆),不再等 DeepSeek 攒;
+            # 只有还没出现任何句末标点(半句)时才交给智能分句继续攒。字数/条数安全阀照旧兜底。
+            buf_has_end = bool(re.search(r"[。！？!?]", "".join(f["text"] for f in self._seg_frags)))
+            if buf_has_end or n >= self.SEG_FORCE_FRAGS or chars >= self.SEG_FORCE_CHARS:
                 frags = self._seg_frags
                 self._seg_frags = []
                 snapshot = None
@@ -653,9 +674,12 @@ class Session:
     def _translations_path(self):
         return os.path.join(self.rec.dir, "translations.json")
 
-    def _translate_line(self, line_id, text):
+    def _translate_line(self, line_id, text, wu=False):
         try:
-            zh = self.translator.translate(text, topic=self._correction_topic())
+            if wu:
+                zh = self.translator.translate_wu_to_mandarin(text, topic=self._correction_topic())
+            else:
+                zh = self.translator.translate(text, topic=self._correction_topic())
         except Exception as e:
             print(f"[translate] line {line_id} 出错: {e}", flush=True)
             return
@@ -816,6 +840,7 @@ class App:
         self.lib = Library(records_dir)
         self.accounts = Accounts(records_dir)
         self._fails = {}          # {来源IP: {n, until, first}} 令牌爆破防护
+        self._reg_codes = {}      # {email: {code, exp, tries, sent}} 注册邮箱验证码
         self.access_log_path = os.path.join(
             os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"])), "access.log")
         # 放到公网时把所有东西都关在令牌后面（连页面本身都不给），
@@ -1210,18 +1235,54 @@ class App:
     def _bearer(self, request):
         return (request.query.get("token") or request.headers.get("X-Token") or "")
 
-    async def api_register(self, request):
+    async def api_register_code(self, request):
+        """注册第一步:给填写的邮箱发 6 位验证码。已注册的邮箱直接拦。"""
+        import mailer
         try:
             m = await request.json()
-            # 邀请码:config.json 里 server.invite_code 非空则注册必须带对的码
-            # (实时读,改码不用重启)。空 = 开放注册。
-            code = (load_config()["server"].get("invite_code") or "").strip()
-            if code and (m.get("invite") or "").strip() != code:
-                return web.json_response({"error": "邀请码不对，注册需要邀请码"}, status=403)
-            # 角色一律强制 user——绝不能让注册者自己指定 role,否则塞 role=admin 就自封管理员。
-            # 管理员只能由拥有者手动在 users.json 里设(见 tomtest)。
+            email = (m.get("email") or "").strip().lower()
+        except Exception:
+            return web.json_response({"error": "参数不对"}, status=400)
+        if not email or "@" not in email or "." not in email.split("@")[-1]:
+            return web.json_response({"error": "邮箱格式不对"}, status=400)
+        try:
+            if self.accounts.exists(email):
+                return web.json_response({"error": "这个邮箱已经注册过了,直接登录即可"}, status=409)
+        except Exception:
+            pass
+        if not mailer.ready():
+            return web.json_response({"error": "服务端还没配置邮件服务,暂时无法发送验证码"}, status=503)
+        now = time.time()
+        rec = self._reg_codes.get(email)
+        if rec and now - rec.get("sent", 0) < 60:
+            return web.json_response({"error": "验证码刚发过,请 1 分钟后再试"}, status=429)
+        code = f"{secrets.randbelow(1000000):06d}"
+        self._reg_codes[email] = {"code": code, "exp": now + 600, "tries": 0, "sent": now}
+        try:
+            await asyncio.get_running_loop().run_in_executor(None, mailer.send_code, email, code)
+        except Exception as e:
+            return web.json_response({"error": f"验证码发送失败:{e}"}, status=502)
+        return web.json_response({"ok": True})
+
+    async def api_register(self, request):
+        """注册第二步:校验邮箱验证码后建号。角色一律强制 user,绝不让注册者自封管理员。"""
+        try:
+            m = await request.json()
+            email = (m.get("email") or "").strip().lower()
+            code = (m.get("code") or "").strip()
+            rec = self._reg_codes.get(email)
+            now = time.time()
+            if not rec or now > rec.get("exp", 0):
+                return web.json_response({"error": "验证码已过期,请重新获取"}, status=400)
+            if rec.get("tries", 0) >= 5:
+                return web.json_response({"error": "验证码错误次数过多,请重新获取"}, status=429)
+            if not code or code != rec.get("code"):
+                rec["tries"] = rec.get("tries", 0) + 1
+                return web.json_response({"error": "验证码不对"}, status=400)
+            # 角色一律强制 user——管理员只能由拥有者手动在库里设。
             token, user = self.accounts.register(
                 m.get("email"), m.get("name"), m.get("password"))
+            self._reg_codes.pop(email, None)   # 用过即焚
             return web.json_response({"token": token, "user": user})
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
@@ -1537,6 +1598,8 @@ class App:
     async def api_get_note(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
+        if not self._owns_session(request, request.match_info["sid"]):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         p = os.path.join(self._session_dir(request.match_info["sid"]), "note.txt")
         raw = self._read_bytes(p)
         text = raw.decode("utf-8") if raw else ""
@@ -1546,6 +1609,8 @@ class App:
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         if not os.path.isdir(self._session_dir(sid)):
             return web.json_response({"error": "没有这份记录"}, status=404)
         try:
@@ -1560,6 +1625,8 @@ class App:
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         if not os.path.isdir(self._session_dir(sid)):
             return web.json_response({"error": "没有这份记录"}, status=404)
         try:
@@ -1583,7 +1650,10 @@ class App:
     async def api_transcript(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
-        d, lines = self._load_lines(request.match_info["sid"])
+        sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
+        d, lines = self._load_lines(sid)
         if lines is None:
             return web.json_response({"error": "没有这份记录"}, status=404)
         return web.json_response({"dir": d, "lines": lines})
@@ -1594,6 +1664,8 @@ class App:
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         d, lines = self._load_lines(sid)
         if lines is None:
             return web.json_response({"error": "没有这份记录"}, status=404)
@@ -1621,6 +1693,8 @@ class App:
     async def api_edits(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
+        if not self._owns_session(request, request.match_info["sid"]):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         return web.json_response({"edits": list(reversed(self._load_edits(request.match_info["sid"])))})
 
     # ---------- AI 摘要:保存 / 读取(落盘 summary.json，刷新/列表都能看到) ----------
@@ -1641,6 +1715,8 @@ class App:
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         d = self._session_dir(sid)
         if not os.path.isdir(d):
             return web.json_response({"error": "没有这份记录"}, status=404)
@@ -1672,6 +1748,8 @@ class App:
     async def api_get_summary(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
+        if not self._owns_session(request, request.match_info["sid"]):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         return web.json_response(self._load_summary(request.match_info["sid"]) or {})
 
     async def api_learn_term(self, request):
@@ -1931,6 +2009,58 @@ class App:
         import voiceprint
         return os.path.join(self._records_root(), f"schedule_{voiceprint._key_id(key)}.json")
 
+    # ---------- 按账号隔离的小存储:标签、设置(都跟着账号走,存服务器)----------
+    def _account_file(self, request, base):
+        key = self._owner_key(request)
+        if key in (None, "", "owner"):
+            return os.path.join(self._records_root(), f"{base}.json")
+        import voiceprint
+        return os.path.join(self._records_root(), f"{base}_{voiceprint._key_id(key)}.json")
+
+    def _read_account_json(self, request, base, default):
+        p = self._account_file(request, base)
+        if not os.path.exists(p):
+            return default
+        try:
+            with open(p, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return default
+
+    def _write_account_json(self, request, base, data):
+        with open(self._account_file(request, base), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    async def api_get_tags(self, request):
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        return web.json_response({"tags": self._read_account_json(request, "tags", None)})
+
+    async def api_save_tags(self, request):
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        try:
+            tags = list((await request.json()).get("tags") or [])
+        except Exception:
+            return web.json_response({"error": "参数不对"}, status=400)
+        self._write_account_json(request, "tags", tags)
+        return web.json_response({"ok": True, "count": len(tags)})
+
+    async def api_get_settings(self, request):
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        return web.json_response({"settings": self._read_account_json(request, "settings", None)})
+
+    async def api_save_settings(self, request):
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        try:
+            settings = dict((await request.json()).get("settings") or {})
+        except Exception:
+            return web.json_response({"error": "参数不对"}, status=400)
+        self._write_account_json(request, "settings", settings)
+        return web.json_response({"ok": True})
+
     async def api_get_schedule(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -1985,8 +2115,32 @@ class App:
                 out.append(d)
         return out
 
-    def _course_text(self, name, request=None, cap=45000):
-        sids = self._course_session_ids(name, request)
+    def _session_ids_by_tag(self, tag, request=None):
+        """按学科标签汇总:选出 meta.tags(列表)里含该标签的课;隔离同 _course_session_ids。"""
+        root = self._records_root()
+        me = self._owner_id(request) if request is not None else None
+        su = self._is_super(request) if request is not None else True
+        out = []
+        if not os.path.isdir(root):
+            return out
+        for d in sorted(os.listdir(root), reverse=True):
+            mp = os.path.join(root, d, "meta.json")
+            if not os.path.isfile(mp):
+                continue
+            try:
+                meta = json.load(open(mp, encoding="utf-8"))
+            except Exception:
+                continue
+            if not su and meta.get("owner") != me:   # 隔离:只汇总自己名下的课
+                continue
+            tags = meta.get("tags")
+            if isinstance(tags, list) and tag in tags:
+                out.append(d)
+        return out
+
+    def _course_text(self, name, request=None, cap=45000, tag=None):
+        sids = (self._session_ids_by_tag(tag, request) if tag
+                else self._course_session_ids(name, request))
         parts, boards = [], []
         for sid in sids:
             _, ls = self._load_lines(sid)
@@ -2005,8 +2159,9 @@ class App:
                      + "\n".join(boards)[:12000])
         return text, len(sids)
 
-    def _attach_exam_refs(self, name, result, request=None):
-        """给每个考点找出这门课录音里相关的句子(哪节课/时间戳/秒),供前端点击跳播。"""
+    def _attach_exam_refs(self, name, result, request=None, tag=None):
+        """给每个考点找出这门课录音里相关的句子(哪节课/时间戳/秒),供前端点击跳播。
+        tag 模式下取标签下的课,否则取同名课。"""
         stop = set("的与和及或了是在也就这那个之其所对把被让从向到")
         def cands(pt):
             s = "".join(c for c in (pt or "") if "一" <= c <= "鿿")
@@ -2019,7 +2174,9 @@ class App:
             return gs
         # 按节收集有序句子(要向后拼句)
         sess = {}
-        for sid in self._course_session_ids(name, request):
+        sids = (self._session_ids_by_tag(tag, request) if tag
+                else self._course_session_ids(name, request))
+        for sid in sids:
             _, ls = self._load_lines(sid)
             sess[sid] = ls or []
         ENDERS = "。！？!?…"
@@ -2057,10 +2214,12 @@ class App:
             p["refs"] = refs
         return result
 
-    def _course_cache_path(self, name, kind, request=None):
+    def _course_cache_path(self, name, kind, request=None, tag=None):
         d = os.path.join(self._records_root(), "course_cache")
         os.makedirs(d, exist_ok=True)
-        safe = re.sub(r"[\\/:*?\"<>|]", "_", name)
+        # 按标签汇总另起缓存键(tag_ 前缀),别和同名课程缓存撞车
+        base = f"tag_{tag}" if tag else name
+        safe = re.sub(r"[\\/:*?\"<>|]", "_", base)
         # 缓存也按账号分,别让一个账号的课程分析结果被另一个账号读到
         key = self._owner_key(request) if request is not None else "owner"
         import voiceprint
@@ -2077,35 +2236,41 @@ class App:
         try:
             m = await request.json()
             name = (m.get("name") or "").strip()
+            tag = (m.get("tag") or "").strip()   # 传了 tag 就按学科标签汇总,否则按同名课程
             refresh = bool(m.get("refresh"))
-            ai_only = bool(m.get("ai_only"))   # 没录音时,仅凭课名让 AI 生成
+            ai_only = bool(m.get("ai_only"))   # 没录音时,仅凭课名/标签让 AI 生成
         except Exception:
             return web.json_response({"error": "参数不对"}, status=400)
-        if not name:
-            return web.json_response({"error": "缺少课程名"}, status=400)
-        cache = self._course_cache_path(name, kind, request)
+        if not name and not tag:
+            return web.json_response({"error": "缺少课程名或标签"}, status=400)
+        label = tag or name   # 给 AI 当科目名 / 缓存与提示里用的标题
+        cache = self._course_cache_path(name, kind, request, tag=tag or None)
         if not refresh and os.path.exists(cache):
             try:
                 return web.json_response(json.load(open(cache, encoding="utf-8")))
             except Exception:
                 pass
         text, n = await asyncio.get_running_loop().run_in_executor(
-            None, self._course_text, name, request)
+            None, self._course_text, name, request, 45000, tag or None)
         if not text.strip():
             if not ai_only:
                 # 没转写内容:告诉前端可以走"纯AI一键生成",而不是直接报错
                 return web.json_response({"no_transcript": True})
-            content = (f"《{name}》这门大学课程暂无课堂录音。请仅根据你对这门课"
-                       "常见教学大纲、重点概念、典型考点与题型的了解来完成任务。")
+            if tag:
+                content = (f"《{tag}》这个标签下暂无课堂录音。请仅根据你对该学科"
+                           "常见教学大纲、重点概念、典型考点与题型的了解来完成任务。")
+            else:
+                content = (f"《{name}》这门大学课程暂无课堂录音。请仅根据你对这门课"
+                           "常见教学大纲、重点概念、典型考点与题型的了解来完成任务。")
             n = 0
         else:
             content = text
         try:
-            result = await asyncio.get_running_loop().run_in_executor(None, fn, content, name, ds)
+            result = await asyncio.get_running_loop().run_in_executor(None, fn, content, label, ds)
         except Exception as e:
             return web.json_response({"error": f"AI 生成失败: {e}"}, status=500)
         if kind == "exam" and n > 0:
-            result = self._attach_exam_refs(name, result, request)
+            result = self._attach_exam_refs(name, result, request, tag=tag or None)
         result["sessions"] = n
         result["ai_only"] = (n == 0)
         result["at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -2128,11 +2293,36 @@ class App:
         return await self._course_ai(request, "mock", mock_exam)
 
     # ---------- 音频回放 ----------
+    @staticmethod
+    def _ensure_wav_seekable(p):
+        """流式写入/异常中断的 WAV,头里 data 大小常为 0,浏览器读不到时长、进度条拖不动。
+        按实际文件大小回填标准 44 字节头里的 RIFF 和 data 两个 size 字段(仅在明显不符时改)。"""
+        try:
+            import struct
+            size = os.path.getsize(p)
+            if size < 44:
+                return
+            with open(p, "r+b") as f:
+                h = f.read(44)
+                if h[:4] != b"RIFF" or h[8:12] != b"WAVE" or h[36:40] != b"data":
+                    return  # 非标准 44 字节头,不乱改
+                riff = struct.unpack("<I", h[4:8])[0]
+                data = struct.unpack("<I", h[40:44])[0]
+                real_riff, real_data = size - 8, size - 44
+                if data == real_data and riff == real_riff:
+                    return  # 头是对的
+                f.seek(4);  f.write(struct.pack("<I", real_riff))
+                f.seek(40); f.write(struct.pack("<I", real_data))
+        except Exception:
+            pass
+
     async def api_audio(self, request):
         """按 Range 分段返回 audio.wav——不支持 Range 的话进度条拖不动、
         手机上还会把整个几十兆先下完才开始播。"""
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
+        if not self._owns_session(request, request.match_info["sid"]):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         p = os.path.join(self._session_dir(request.match_info["sid"]), "audio.wav")
         dl = request.query.get("download")
         # 优先让浏览器直接从 OSS 拉(OSS 支持 Range,音频多半已下沉到 OSS、本地已删);
@@ -2142,6 +2332,7 @@ class App:
             return web.HTTPFound(url)
         if not os.path.exists(p):
             return web.json_response({"error": "这节课没有录音文件"}, status=404)
+        self._ensure_wav_seekable(p)   # 头坏的(data size=0)先修好,否则浏览器读不到时长
         headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
         if dl:
             headers["Content-Disposition"] = "attachment"
@@ -2263,6 +2454,8 @@ class App:
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
         if not os.path.isdir(self._session_dir(sid)):
             return web.json_response({"error": "没有这份记录"}, status=404)
         try:
@@ -2375,6 +2568,48 @@ class App:
         except Exception:
             traceback.print_exc()
         return web.json_response({"ok": True})
+
+    async def api_set_tags(self, request):
+        """设置/替换某节课的学科标签(手动打标 + 给老录音补标)。
+        只有课主(或全局令牌)能改;标签写进 meta.json 与 PG 的 meta jsonb,
+        /api/sessions 便自动带上,按标签汇总也据此取材。"""
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        sid = request.match_info["sid"]
+        d = self._session_dir(sid)
+        if not os.path.isdir(d):
+            return web.json_response({"error": "没有这份记录"}, status=404)
+        if not self._owns_session(request, sid):        # 只能给自己的课打标
+            return web.json_response({"error": "无权修改这节课"}, status=403)
+        try:
+            body = await request.json()
+            raw = body.get("tags") or []
+        except Exception:
+            return web.json_response({"error": "参数不对"}, status=400)
+        cleaned, seen = [], set()
+        for t in raw:
+            if isinstance(t, str) and t.strip():
+                t = t.strip()
+                if t not in seen:
+                    seen.add(t)
+                    cleaned.append(t)
+        mp = os.path.join(d, "meta.json")
+        try:
+            with open(mp, encoding="utf-8") as f:
+                meta = json.load(f)
+        except Exception:
+            meta = {}
+        meta["tags"] = cleaned
+        tmp = mp + ".part"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, mp)
+        # 同步进 PG:meta jsonb 是 /api/sessions 的读源,整份 meta 写回
+        try:
+            recordings_db.upsert_recording(os.path.basename(sid), meta=meta)
+        except Exception:
+            traceback.print_exc()
+        return web.json_response({"ok": True, "tags": cleaned})
 
     # ---------- 共享：生成只读链接 ----------
     def _shares_path(self):
@@ -2520,6 +2755,7 @@ class App:
             {"ok": True, "needs_token": bool(self.token),
              "deepseek": DeepSeek(self.cfg).ready}))
         # 账号：注册/登录/查身份/登出。前三个不需要令牌就能访问
+        app.router.add_post("/api/register/code", self.api_register_code)
         app.router.add_post("/api/register", self.api_register)
         app.router.add_post("/api/login", self.api_login)
         app.router.add_get("/api/me", self.api_me)
@@ -2550,6 +2786,10 @@ class App:
         app.router.add_delete("/api/voiceprints/{id}", self.api_voiceprint_delete)
         app.router.add_get("/api/schedule", self.api_get_schedule)
         app.router.add_post("/api/schedule", self.api_save_schedule)
+        app.router.add_get("/api/tags", self.api_get_tags)
+        app.router.add_post("/api/tags", self.api_save_tags)
+        app.router.add_get("/api/settings", self.api_get_settings)
+        app.router.add_post("/api/settings", self.api_save_settings)
         app.router.add_post("/api/course/summary", self.api_course_summary)
         app.router.add_post("/api/course/exam", self.api_course_exam)
         app.router.add_post("/api/course/mock", self.api_course_mock)
@@ -2571,6 +2811,7 @@ class App:
         app.router.add_patch("/api/courses/{cid}", self.api_course_update)
         app.router.add_delete("/api/courses/{cid}", self.api_course_delete)
         app.router.add_post("/api/sessions/{sid}/course", self.api_assign_course)
+        app.router.add_post("/api/sessions/{sid}/tags", self.api_set_tags)
 
         # 打包好的网页（手机/平板从这里打开）。没打包过就跳过，不影响本机使用。
         if os.path.isdir(WEBAPP_DIR):

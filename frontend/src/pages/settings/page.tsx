@@ -13,9 +13,15 @@ const TOGGLES: { k: 'aiCorrect' | 'smartSeg' | 'translateEn' | 'autoSummary'; la
   { k: 'autoSummary', label: '📝 结束录制自动生成概要', hint: '停止录制后自动整理这节课的 AI 概要;关掉则需手动点生成。' },
 ];
 
+// 导入课程时自动打标签
+const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: string; hint: string }[] = [
+  { k: 'importTagSimilar', label: '相似的归到已有标签', hint: '导入的课程名和已有标签相近时,归到那个标签,不重复建。' },
+  { k: 'importTagNew', label: '没有相似的就新建标签', hint: '导入的课程没有相近标签时,按课程名自动建一个新标签。' },
+];
+
 const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string }[] }[] = [
   { k: 'model', label: '识别模型', hint: '整句更准、流式边说边出字。',
-    options: [{ value: 'sensevoice', label: 'SenseVoice' }, { value: 'paraformer', label: 'Paraformer' }, { value: 'stream', label: '流式' }] },
+    options: [{ value: 'sensevoice', label: 'SenseVoice' }, { value: 'paraformer', label: 'Paraformer' }, { value: 'stream', label: '流式' }, { value: 'shanghainese', label: '上海话' }, { value: 'aliyun', label: '☁️ 阿里云·普通话' }, { value: 'aliyun_wu', label: '☁️ 阿里云·上海话' }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
   { k: 'device', label: '默认音源', hint: '系统声音用于网课(仅电脑 Chrome/Edge)。',
@@ -55,6 +61,7 @@ export default function SettingsPage() {
           {CATS.map((c) => (
             <button
               key={c.id}
+              data-guide={`set-cat-${c.id}`}
               onClick={() => setCat(c.id)}
               className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm whitespace-nowrap cursor-pointer transition-colors flex-shrink-0 md:w-full ${cat === c.id ? 'bg-accent-500 text-background-50 font-semibold shadow-sm' : 'text-foreground-600 hover:bg-background-50'}`}
             >
@@ -71,7 +78,7 @@ export default function SettingsPage() {
                 <h2 className="text-sm font-bold text-foreground-900">AI 处理</h2>
                 <p className="text-xs text-foreground-400 mt-0.5">选择录音时默认开启哪些 AI 处理(每次开录音自动带上)。</p>
               </div>
-              <div className="px-3 pb-2 divide-y divide-background-100">
+              <div data-guide="set-ai" className="px-3 pb-2 divide-y divide-background-100">
                 {TOGGLES.map((t) => {
                   const on = !!s[t.k];
                   return (
@@ -101,7 +108,7 @@ export default function SettingsPage() {
                 <h2 className="text-sm font-bold text-foreground-900">录音</h2>
                 <p className="text-xs text-foreground-400 mt-0.5">录音的默认参数,开录音时自动套用。</p>
               </div>
-              <div className="px-5 pb-3 divide-y divide-background-100">
+              <div data-guide="set-record" className="px-5 pb-3 divide-y divide-background-100">
                 {SEGS.map((g) => (
                   <div key={g.k} className="py-4">
                     <p className="text-sm font-medium text-foreground-800">{g.label}</p>
@@ -127,6 +134,36 @@ export default function SettingsPage() {
             </section>
           )}
 
+          {cat === 'record' && (
+            <section className="bg-background-50 border border-background-200 rounded-2xl overflow-hidden mt-5">
+              <div className="px-5 pt-4 pb-1">
+                <h2 className="text-sm font-bold text-foreground-900">导入课程时自动打标签</h2>
+                <p className="text-xs text-foreground-400 mt-0.5">课表截图识别课程、加进日历后,自动给这些课打上标签。</p>
+              </div>
+              <div className="px-3 pb-2 divide-y divide-background-100">
+                {IMPORT_TAG_TOGGLES.map((t) => {
+                  const on = !!s[t.k];
+                  return (
+                    <button
+                      key={t.k}
+                      type="button"
+                      onClick={() => set(t.k, !on)}
+                      className="w-full flex items-center justify-between gap-4 py-4 px-2 text-left cursor-pointer rounded-xl hover:bg-background-100/60 transition-colors active:bg-background-100"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground-800">{t.label}</p>
+                        <p className="text-xs text-foreground-400 mt-1 leading-relaxed">{t.hint}</p>
+                      </div>
+                      <span className={`relative w-12 h-7 rounded-full flex-shrink-0 transition-colors duration-200 ${on ? 'bg-accent-500' : 'bg-background-300'}`}>
+                        <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-200 ${on ? 'translate-x-5' : ''}`}></span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {cat === 'account' && (
             <section className="bg-background-50 border border-background-200 rounded-2xl overflow-hidden">
               <div className="px-5 pt-4 pb-1">
@@ -146,6 +183,7 @@ export default function SettingsPage() {
                   服务地址:<a href={`${SERVICE_ORIGIN}/health`} target="_blank" rel="noreferrer" className="text-primary-500 hover:underline break-all">{SERVICE_ORIGIN}</a>
                 </div>
                 <button
+                  data-guide="set-logout"
                   onClick={() => { logout(); navigate('/'); }}
                   className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-full text-sm font-medium hover:bg-red-100 cursor-pointer"
                 >

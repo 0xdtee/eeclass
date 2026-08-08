@@ -278,7 +278,7 @@ export default function TranscriptionTab({
             <span className="text-xs text-foreground-400">
               {lines.length} 句
               {shots.length > 0 && ` · ${shots.length} 张板书`}
-              {isLive ? '（正在录制）' : canEdit ? ' · 点任意一句可修改' : ''}
+              {isLive ? '（正在录制）' : canEdit ? (showPlayer ? ' · 点句子跳到录音,点「修改」改文字' : ' · 点句子后的「修改」可改文字') : ''}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -302,6 +302,7 @@ export default function TranscriptionTab({
               <i className="ri-download-line text-sm"></i>导出文本
             </button>
             <button
+              data-guide="gen-summary"
               onClick={onGenerateSummary}
               disabled={isGenerating || lines.length === 0}
               className="flex items-center gap-1.5 px-4 py-2 bg-accent-500 text-background-50 rounded-full text-xs font-semibold hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
@@ -355,29 +356,47 @@ export default function TranscriptionTab({
                           </button>
                         )}
                         {editingId === l.id ? (
-                          <span className="inline-flex items-center gap-2 align-top">
+                          <span className="flex flex-wrap items-center gap-2 mt-1">
                             <textarea
                               value={draft}
+                              autoFocus
                               onChange={(e) => setDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
+                                else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void save(l.id, l.text); }
+                              }}
                               rows={2}
-                              className="text-sm px-2 py-1 rounded border border-accent-300 w-[min(560px,70vw)]"
+                              className="text-sm px-2 py-1 rounded border border-accent-300 w-full max-w-[560px] min-w-[180px]"
                             />
-                            <button onClick={() => void save(l.id, l.text)} className="text-xs px-2 py-1 rounded bg-accent-500 text-background-50 cursor-pointer">保存</button>
-                            <button onClick={() => setEditingId(null)} className="text-xs px-2 py-1 rounded bg-background-100 text-foreground-600 cursor-pointer">取消</button>
+                            <span className="flex items-center gap-2 flex-shrink-0">
+                              <button onClick={() => void save(l.id, l.text)} className="text-xs px-3 py-1.5 rounded bg-accent-500 text-background-50 cursor-pointer">保存</button>
+                              <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded bg-background-100 text-foreground-600 cursor-pointer">取消</button>
+                              <span className="text-[11px] text-foreground-300">Esc 退出</span>
+                            </span>
                           </span>
                         ) : (
-                          <span
-                            onClick={() => {
-                              if (!canEdit) return;
-                              setEditingId(l.id);
-                              setDraft(l.text);
-                            }}
-                            className={`text-sm leading-relaxed text-foreground-700 ${
-                              KIND_STYLE[l.kind ?? ''] ?? ''
-                            } ${canEdit ? 'cursor-text hover:underline decoration-dotted' : ''}`}
-                          >
-                            {l.text}
-                          </span>
+                          <>
+                            {/* 点原文 → 跳转录音到这一句 */}
+                            <span
+                              onClick={() => { if (showPlayer) playerRef.current?.seek(l.start ?? 0); }}
+                              className={`text-sm leading-relaxed text-foreground-700 ${
+                                KIND_STYLE[l.kind ?? ''] ?? ''
+                              } ${showPlayer ? 'cursor-pointer hover:text-accent-700' : ''}`}
+                              title={showPlayer ? '跳到这一句的录音' : undefined}
+                            >
+                              {l.text}
+                            </span>
+                            {/* 「修改」按钮 → 才进入逐句编辑 */}
+                            {canEdit && (
+                              <button
+                                onClick={() => { setEditingId(l.id); setDraft(l.text); }}
+                                className="ml-2 text-xs text-foreground-300 hover:text-accent-600 cursor-pointer align-middle whitespace-nowrap"
+                                title="修改这一句"
+                              >
+                                <i className="ri-edit-line"></i> 修改
+                              </button>
+                            )}
+                          </>
                         )}
                         {l.edited && <span className="text-xs text-accent-500 ml-2">已修改</span>}
                         {l.translation && (

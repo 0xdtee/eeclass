@@ -7,7 +7,6 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'teacher' | 'student'>('student');
   const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -87,31 +86,6 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="flex bg-background-100 rounded-xl p-1">
-              <button
-                type="button"
-                onClick={() => setRole('student')}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${
-                  role === 'student'
-                    ? 'bg-background-50 text-foreground-900'
-                    : 'text-foreground-400 hover:text-foreground-600'
-                }`}
-              >
-                <i className="ri-user-line mr-1.5"></i>学生
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole('teacher')}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${
-                  role === 'teacher'
-                    ? 'bg-background-50 text-foreground-900'
-                    : 'text-foreground-400 hover:text-foreground-600'
-                }`}
-              >
-                <i className="ri-user-star-line mr-1.5"></i>教师
-              </button>
-            </div>
-
             <div>
               <label className="block text-xs font-medium text-foreground-600 mb-1.5">邮箱地址</label>
               <div className="relative">

@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/base/Modal';
 import { audioUrl, audioDownloadUrl } from '@/hooks/useLibrary';
+import AudioPlayer from '@/components/feature/AudioPlayer';
 
 interface SessionItem {
   id: string;
@@ -8,6 +10,7 @@ interface SessionItem {
   date: string;
   time: string;
   duration: string;
+  durationSec?: number;
 }
 
 interface AudioListModalProps {
@@ -18,6 +21,7 @@ interface AudioListModalProps {
 
 export default function AudioListModal({ isOpen, onClose, sessions }: AudioListModalProps) {
   const [search, setSearch] = useState('');
+  const navigate = useNavigate();
   const filtered = sessions.filter(
     (s) => !search.trim() || s.title.toLowerCase().includes(search.trim().toLowerCase())
   );
@@ -87,6 +91,15 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                         </span>
                       </div>
                     </div>
+                    {/* 查看转写:跳到这节课的转写全文 */}
+                    <button
+                      onClick={() => { onClose(); navigate('/course?sid=' + encodeURIComponent(s.id)); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap flex-shrink-0"
+                      title="查看这节课的转写全文"
+                    >
+                      <i className="ri-file-text-line"></i>
+                      查看转写
+                    </button>
                     {/* 导出录音:直接下载原始 audio.wav */}
                     <a
                       href={audioDownloadUrl(s.id, `${(s.title || '录音').replace(/[\\/:*?"<>|]/g, '_')}.wav`)}
@@ -97,15 +110,8 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                       导出录音
                     </a>
                   </div>
-                  {/* 原始录音:原生播放器,preload=none 避免一次性拉全部元数据 */}
-                  <audio
-                    controls
-                    preload="none"
-                    src={audioUrl(s.id)}
-                    className="w-full h-9"
-                  >
-                    你的浏览器不支持音频播放。
-                  </audio>
+                  {/* 原始录音:自定义播放器,进度条用已知时长渲染、永远可拖,播一段自动停其他段 */}
+                  <AudioPlayer src={audioUrl(s.id)} durationHint={s.durationSec} className="w-full" />
                 </div>
               ))}
             </div>

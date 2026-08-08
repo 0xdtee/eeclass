@@ -9,6 +9,7 @@ API key 放在服务端配置里，绝不下发给浏览器：页面只调本服
 """
 import json
 import os
+import re
 import time
 import urllib.request
 import urllib.error
@@ -19,6 +20,8 @@ SYSTEM = """你是一个帮学生整理课堂笔记的助手。你会收到一�
 每行格式是 [时间 说话人] 内容。转写来自自动语音识别，**会有错别字和同音词错误**，
 请结合上下文和学科常识判断真实意思，不要把识别错误当成老师的原话引用。
 
+**极其重要：只能根据转写里真实出现的内容来总结，绝对不许编造、脑补、或添加转写中根本没提到的知识点、术语或内容。** 转写讲了什么就总结什么——哪怕不是正式上课、只是日常对话或闲聊，也要如实把说到的话题和要点概括出来（比如聊了坐地铁、逛街、几家店，就照实写成"聊了坐地铁的花费、逛街和几家咖啡店餐厅"这类）。只有当转写里几乎没有任何有意义的内容（只有极短的几个字、纯噪声、或反复的无意义口水）时，才把 summary 写成「本次录音内容过少，无法生成摘要」，并把 key_points、formulas、exam_hints、questions、corrections 全部返回空数组 `[]`。总之：有内容就如实总结，绝不凭空捏造转写里没有的东西。
+
 请输出严格的 JSON，不要有任何额外文字、不要用 markdown 代码块包裹，字段如下：
 {
   "summary": "这节课讲了什么，200字以内，说人话，别堆术语",
@@ -28,7 +31,8 @@ SYSTEM = """你是一个帮学生整理课堂笔记的助手。你会收到一�
   "questions": ["学生提问及老师的回答要点，没有就空数组"],
   "corrections": ["转写把某个词听错的地方，严格用「听成X应为Y」格式：X是转写里出现的原词(必须和原文一字不差、不带引号)，Y是纠正后的词(不带引号)。不要加任何解释、不要加书名号/引号，X和Y都尽量短(一个词或短语)。没听错、或X和Y一样的，不要输出这一条。没有就空数组"]
 }
-key_points 控制在 3~8 条，每条一句话，要具体，不要写"介绍了基本概念"这种废话。"""
+key_points 控制在 3~8 条，每条一句话，要具体，不要写"介绍了基本概念"这种废话。
+corrections **最多列 15 条最明显、最影响理解的**即可，不要逐句罗列(长录音里同类错字挑代表性的就行)，其余字段也各自精简，整份 JSON 不要过长。"""
 
 
 FLASHCARD_SYS = """你在帮学生把一节课的录音转写做成复习闪卡。转写来自自动语音识别，
@@ -70,6 +74,62 @@ ASK_SYS = """你在回答学生关于某节课的问题。你会收到这节课�
 cite_ids 是你引用的那几句的序号，最多 5 个，没有就空数组。"""
 
 
+def _close_truncated(t):
+    """把被截断的 JSON 尽量补齐:闭合未结束的字符串、去掉悬空的 key/逗号/反斜杠、按括号栈补齐闭合。"""
+    stack = []
+    in_str = False
+    esc = False
+    for ch in t:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == '{':
+                stack.append('}')
+            elif ch == '[':
+                stack.append(']')
+            elif ch in '}]' and stack:
+                stack.pop()
+    s = t
+    if esc:                                    # 末尾悬空反斜杠
+        s = s[:-1]
+    if in_str:                                 # 字符串没闭合,补个引号
+        s += '"'
+    s = re.sub(r'[,\s]*$', '', s)              # 尾逗号/空白
+    s = re.sub(r'"[^"]*"\s*:\s*$', '', s)      # 悬空的 "key":(值还没开始就断了)
+    s = re.sub(r'[,\s]*$', '', s)
+    for closer in reversed(stack):
+        s += closer
+    return s
+
+
+def _loads_forgiving(text):
+    """容错解析模型返回的 JSON:处理 ```json 包裹、LaTeX 反斜杠没转义、以及输出被截断的情况。"""
+    t = (text or "").strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t[:4].lower() == "json":
+            t = t[4:]
+
+    def fix_bs(x):
+        return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', x)   # LaTeX 反斜杠补成 \\ 保证 JSON 合法
+
+    candidates = [t, fix_bs(t), _close_truncated(t), _close_truncated(fix_bs(t))]
+    last = None
+    for c in candidates:
+        try:
+            return json.loads(c)
+        except json.JSONDecodeError as e:
+            last = e
+    raise last
+
+
 class DeepSeek:
     def __init__(self, cfg):
         d = (cfg.get("deepseek") or {})
@@ -109,6 +169,7 @@ class DeepSeek:
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
             "temperature": temperature,
+            "max_tokens": 8192,
             "response_format": {"type": "json_object"},
             "stream": False,
         }, ensure_ascii=False).encode("utf-8")
@@ -118,13 +179,7 @@ class DeepSeek:
                      "Authorization": f"Bearer {self.api_key}"})
         data = json.loads(self._open_retry(req, self.timeout, retries).decode("utf-8"))
         text = data["choices"][0]["message"]["content"]
-        try:
-            out = json.loads(text)
-        except json.JSONDecodeError:
-            t = text.strip().strip("`")
-            if t.lower().startswith("json"):
-                t = t[4:]
-            out = json.loads(t)
+        out = _loads_forgiving(text)
         out["_usage"] = data.get("usage", {})
         return out
 
@@ -210,6 +265,40 @@ class DeepSeek:
         except Exception:
             return ""
         # 译文里不该全是英文/空;简单挡一下
+        if not out or out == text:
+            return ""
+        return out
+
+    def translate_wu_to_mandarin(self, text, topic="", timeout_s=12):
+        """把上海话(吴语)的逐句转写翻成规范普通话,当原句下面的一行字幕。
+        返回普通话译文;没配 key / 失败 / 空句,返回 ""(调用方就只显示吴语原句)。"""
+        text = (text or "").strip()
+        if not self.api_key or len(text) < 2:
+            return ""
+        sys_prompt = (
+            "你在把上海话(吴语)的逐句转写翻译成规范普通话。只输出翻译后的普通话句子,"
+            "忠实原意,不要解释、不要加引号。")
+        topic = (topic or "").strip()
+        if topic:
+            sys_prompt += f"\n本次场景/学科是「{topic}」,专业术语按该领域的习惯译法翻。"
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": text}],
+            "temperature": 0.2,
+            "stream": False,
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
+        except Exception:
+            return ""
         if not out or out == text:
             return ""
         return out
@@ -318,6 +407,7 @@ class DeepSeek:
             "messages": [{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": user}],
             "temperature": 0.3,
+            "max_tokens": 8192,
             "response_format": {"type": "json_object"},
             "stream": False,
         }, ensure_ascii=False).encode("utf-8")
@@ -334,11 +424,7 @@ class DeepSeek:
         try:
             out = json.loads(text)
         except json.JSONDecodeError:
-            # 模型偶尔还是会套一层 ```json，兜一下
-            t = text.strip().strip("`")
-            if t.lower().startswith("json"):
-                t = t[4:]
-            out = json.loads(t)
+            out = _loads_forgiving(text)   # ```json 包裹 / LaTeX 反斜杠 / 输出被截断 都兜住
         out["_usage"] = usage
         out["_model"] = self.model
         return out

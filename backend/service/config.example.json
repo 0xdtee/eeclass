@@ -34,6 +34,13 @@
       "language": "zh",
       "use_itn": true
     },
+    "wenet_ctc": {
+      "model_dir": "models/sherpa-onnx-wenetspeech-wu-u2pp-conformer-ctc-zh-2026-02-03"
+    },
+    "aliyun": {
+      "_note": "阿里云百炼(DashScope)云端识别，两个后端：aliyun_paraformer(模型 paraformer-realtime-v2，便宜的普通话)、aliyun_funasr(模型 fun-asr-realtime，识别方言含上海话并直接输出普通话，无需再翻译)。API key 只从环境变量 DASHSCOPE_API_KEY 读，绝不写在这里/进 git。可选 model 字段覆盖默认模型。",
+      "model": ""
+    },
     "funasr": {
       "model": "iic/SenseVoiceSmall",
       "language": "zh",

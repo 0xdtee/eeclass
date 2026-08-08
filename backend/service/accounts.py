@@ -76,6 +76,13 @@ class Accounts:
                     (email, name, role, pw, created))
         return self._issue(email)
 
+    def exists(self, email):
+        email = self._norm(email)
+        with db.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM accounts WHERE email = %s", (email,))
+                return cur.fetchone() is not None
+
     def login(self, email, password):
         email = self._norm(email)
         with db.connection() as conn:

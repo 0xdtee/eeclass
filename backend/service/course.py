@@ -9,14 +9,25 @@ _ASR_NOTE = (
     "自动推断老师真正想表达的正确概念和术语,据此生成结果,不要被明显的错字误导、也不要照抄错字。"
 )
 
+# 数学/物理公式要能在网页正常显示——统一要求用 LaTeX,前端用 KaTeX 渲染
+_MATH_NOTE = (
+    "凡是数学/物理公式、变量、上下标,一律用 LaTeX 表示:行内公式用 $...$ 包裹,独立成行的公式用 $$...$$ 包裹。"
+    r"例如速度写成 $v=\frac{dx}{dt}=6t^2-6t$、合力大小写成 $F=m\omega^2\sqrt{A^2+B^2}$、单位写成 $\text{m/s}$,"
+    "绝不要写成 6t^2-6t、mω^2 (A^2+B^2)^{1/2} 这种纯文本上标/花括号形式。"
+    "注意输出的是 JSON,LaTeX 里的反斜杠必须转义成两个反斜杠(如 \\\\frac、\\\\omega)以保证 JSON 合法。"
+)
+
 
 def aggregate_summary(text, name, ds):
     sys = (
         f"你是《{name}》这门课的助教。下面是这门课多次课堂录音的转写合集(按时间拼接)。"
         f"{_ASR_NOTE}"
-        "请汇总成一份完整、系统的课程总结。输出 JSON:"
+        "**只能根据下面转写里真实讲到的内容来汇总,绝对不许凭课程名/标签名脑补,不许添加转写里根本没有的知识点、章节或学科内容。** "
+        "转写讲了什么就总结什么;如果转写只是闲聊、内容很少,就如实概括实际说了什么,别硬凑成一门系统课程——这种情况 summary 直接说明内容较少即可,key_points/chapters 可以给空数组。"
+        "请据实汇总成一份课程总结。输出 JSON:"
         '{"summary":"整体概述","key_points":["核心知识点..."],"chapters":[{"title":"章节/主题","points":["要点..."]}]}。'
-        "key_points 给 6-12 条贯穿全课的核心知识点;chapters 按主题把内容分块。只输出 JSON。"
+        "key_points 给 6-12 条贯穿全课的核心知识点;chapters 按主题把内容分块。"
+        f"{_MATH_NOTE}只输出 JSON。"
     )
     return ds._chat(sys, text)
 
@@ -30,7 +41,7 @@ def predict_exam(text, name, ds):
         f"{_ASR_NOTE}考点名称请用规范的学科术语(纠正录音里的错字)。输出 JSON:"
         '{"points":[{"name":"考点名","probability":整数0-100,"reason":"为什么可能考(结合录音里老师的话或学科规律)","detail":"这个考点的具体内容、核心公式/结论、复习要点"}]}。'
         "probability 是该考点在期末出现的可能性(0-100 整数),所有 points 的 probability 之和约等于 100;"
-        "按 probability 从高到低排列,给 5-8 个考点。只输出 JSON。"
+        f"按 probability 从高到低排列,给 5-8 个考点。{_MATH_NOTE}只输出 JSON。"
     )
     return ds._chat(sys, text)
 
@@ -41,6 +52,9 @@ def mock_exam(text, name, ds):
         f"{_ASR_NOTE}"
         "输出 JSON:"
         '{"questions":[{"type":"选择/填空/简答/计算/证明","question":"题干","answer":"参考答案(含关键步骤)","point":"对应考点"}]}。'
-        "出 8-12 题,题型搭配合理、覆盖这门课的主要重点,难度贴合期末。只输出 JSON。"
+        "出 8-12 题,题型搭配合理、覆盖这门课的主要重点,难度贴合期末。"
+        "选择题的每个选项(A、B、C、D)各占一行:在题干和每个选项之间用换行符分隔(JSON 里写成 \\n),"
+        "例如 question 写成 \"……则质点速度为零的时刻为(  )\\nA. 0 和 1 s\\nB. 0 和 2 s\\nC. 1 s 和 2 s\\nD. 0 和 1.5 s\",不要把选项挤在一行。"
+        f"{_MATH_NOTE}只输出 JSON。"
     )
     return ds._chat(sys, text)

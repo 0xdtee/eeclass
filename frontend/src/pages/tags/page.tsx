@@ -364,6 +364,7 @@ export default function TagsPage() {
             <span className="ml-1 px-2 py-0.5 bg-background-200 text-foreground-500 rounded-full text-xs font-medium">{tags.length} 个</span>
           </div>
           <button
+            data-guide="tags-add"
             onClick={() => { setShowAddForm(true); setEditing(null); setDeleteConfirm(null); }}
             className="flex items-center gap-1.5 px-4 py-2 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
           >

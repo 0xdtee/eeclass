@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DEMOS, DemoKey, HelpDemoStyles } from './demos';
 import BackButton from '@/components/feature/BackButton';
+import { startGuide } from '@/hooks/useGuide';
 
 type CatId = 'record' | 'ai' | 'manage' | 'account';
 
@@ -16,6 +16,8 @@ interface Feature {
   demo?: DemoKey;
   /** 操作步骤(逐条) */
   steps?: string[];
+  /** 逐步引导时,每一步用箭头指向的真实元素选择器(与 steps 对齐,没有就居中提示) */
+  targets?: string[];
 }
 
 interface Category {
@@ -42,10 +44,18 @@ const CATEGORIES: Category[] = [
         cta: '开始录制',
         demo: 'record',
         steps: [
-          '进入课程页,点红色「开始录制」按钮。',
-          '对着讲课说话,字幕会逐句实时出现并带时间戳。',
-          '需要时可切换识别模型或暂停;关掉页面转写仍在后台继续。',
-          '讲完点「停止」,这节课自动存入历史。',
+          '先在这个「课程名称」输入框里改好这节课的名字。',
+          '点「开始录音」按钮开始(启动时会显示「正在启动…」)。',
+          '录制中听到关键内容,点「标记重点」把刚说的那句标黄。',
+          '需要时点「拍板书」拍下当前黑板/PPT,自动对齐到当前时间点。',
+          '讲完点「结束录制」,再点弹出的「确认结束」,自动生成 AI 概要并存入历史。',
+        ],
+        targets: [
+          '[data-guide="rec-name"]',
+          '[data-guide="rec-start"]',
+          '[data-guide="rec-mark"]',
+          '[data-guide="rec-shoot"]',
+          '[data-guide="rec-stop"]',
         ],
       },
       {
@@ -60,6 +70,7 @@ const CATEGORIES: Category[] = [
           '改名后系统记住声纹,下次这位老师讲课自动认出。',
           '在统计里查看各说话人的发言时长占比。',
         ],
+        targets: ['[data-guide="rec-start"]', '', '', ''],
       },
       {
         icon: 'ri-mark-pen-line',
@@ -72,6 +83,7 @@ const CATEGORIES: Category[] = [
           '也可在历史转写里,点任意一句手动标黄或取消。',
           '导出 Word 时标黄配色一并保留。',
         ],
+        targets: ['[data-guide="rec-mark"]', '', ''],
       },
       {
         icon: 'ri-camera-line',
@@ -84,6 +96,7 @@ const CATEGORIES: Category[] = [
           '截图自动关联到当前转写时间点。',
           '复习时在该时间点旁即可看到对应板书截图。',
         ],
+        targets: ['[data-guide="rec-shoot"]', '', ''],
       },
     ],
   },
@@ -104,6 +117,7 @@ const CATEGORIES: Category[] = [
           '字幕先按原样快速出现,保证不卡顿。',
           'DeepSeek 在后台校对,几秒后把同音错字替换为正确写法。',
         ],
+        targets: ['[data-guide="ai-correct"]', '', ''],
       },
       {
         icon: 'ri-scissors-cut-line',
@@ -116,6 +130,7 @@ const CATEGORIES: Category[] = [
           '系统把因停顿切碎的 ASR 片段按语义聚合。',
           '合并后自动补标点、重新断句,输出通顺的完整句。',
         ],
+        targets: ['[data-guide="ai-seg"]', '', ''],
       },
       {
         icon: 'ri-translate-2',
@@ -136,10 +151,11 @@ const CATEGORIES: Category[] = [
         route: '/course',
         demo: 'summary',
         steps: [
-          '停止录制,系统自动基于转写生成本节概要。',
-          '要点会逐条列出,概览这节课讲了什么。',
-          '需要时在「摘要预览」里点重新生成。',
+          '点「确认结束」结束录制后,系统自动基于转写生成本节 AI 概要。',
+          '在「AI 摘要预览」里查看摘要与逐条要点。',
+          '想重新生成,到「实时转写」标签页点「生成AI摘要」按钮。',
         ],
+        targets: ['[data-guide="rec-stop"]', '[data-guide="tab-summary"]', '[data-guide="gen-summary"]'],
       },
       {
         icon: 'ri-book-read-line',
@@ -149,11 +165,12 @@ const CATEGORIES: Category[] = [
         cta: '前往复习',
         demo: 'flashcard',
         steps: [
-          '在课程页点「生成闪卡 / 自测」。',
+          '切到「复习」标签页,点「让 DeepSeek 把这节课做成闪卡」(自测题则点「让 DeepSeek 出一套这节课的自测题」)。',
           '点卡片翻面查看答案,按记忆情况评分。',
           '系统按艾宾浩斯曲线安排下次复习时间。',
           '有疑问可就本课内容直接追问 AI。',
         ],
+        targets: ['[data-guide="tab-review"]', '[data-guide="make-flashcard"]', '', ''],
       },
       {
         icon: 'ri-file-text-line',
@@ -163,10 +180,12 @@ const CATEGORIES: Category[] = [
         cta: '前往控制台',
         demo: 'courseSummary',
         steps: [
-          '在控制台点开某一门课程。',
-          '系统汇总该课下所有课节的要点。',
-          '生成一份贯通全课的大总结,纵览整门课。',
+          '点控制台上的「课程总数」卡片,打开课程列表。',
+          '在弹出的列表里,点你想汇总的那门课。',
+          '进入课程详情,默认就在「课程总结」页。',
+          '点右上角「重新生成」,让 AI 汇总这门课所有课节的大总结。',
         ],
+        targets: ['[data-guide="dash-courses"]', '[data-guide="course-pick"]', '[data-guide="cd-tab-summary"]', '[data-guide="cd-regen"]'],
       },
       {
         icon: 'ri-pie-chart-2-line',
@@ -176,10 +195,12 @@ const CATEGORIES: Category[] = [
         cta: '前往控制台',
         demo: 'examPie',
         steps: [
-          '在课程详情里查看「考点推测」。',
-          '饼图按占比展示各考点权重。',
-          '点某一考点,回听讲到它的录音片段。',
+          '点控制台上的「课程总数」卡片,打开课程列表。',
+          '在弹出的列表里,点你要分析的那门课。',
+          '进入课程详情后,点「考点推测」标签页。',
+          '看饼图各考点占比;点某个考点还能回听对应录音片段。',
         ],
+        targets: ['[data-guide="dash-courses"]', '[data-guide="course-pick"]', '[data-guide="cd-tab-exam"]', ''],
       },
       {
         icon: 'ri-file-list-3-line',
@@ -189,10 +210,12 @@ const CATEGORIES: Category[] = [
         cta: '前往控制台',
         demo: 'quiz',
         steps: [
-          '在课程详情里点「生成模拟试卷」。',
-          '系统按讲课内容出题。',
-          '作答后对照答案,查漏补缺。',
+          '点控制台上的「课程总数」卡片,打开课程列表。',
+          '在弹出的列表里,点那门课。',
+          '进入课程详情后,点「模拟试卷」标签页。',
+          '点右上角「重新生成」,按讲课内容出一套模拟卷,作答后对照答案。',
         ],
+        targets: ['[data-guide="dash-courses"]', '[data-guide="course-pick"]', '[data-guide="cd-tab-mock"]', '[data-guide="cd-regen"]'],
       },
     ],
   },
@@ -215,6 +238,7 @@ const CATEGORIES: Category[] = [
           '点开某节课查看完整转写与摘要。',
           '需要时导出为 Word 或 PDF。',
         ],
+        targets: ['[data-guide="tab-history"]', '', '', ''],
       },
       {
         icon: 'ri-price-tag-3-line',
@@ -229,6 +253,7 @@ const CATEGORIES: Category[] = [
           '在标签管理页集中增删、重命名。',
           '按标签筛选,快速找到同类课程。',
         ],
+        targets: ['[data-guide="tags-add"]', '', '', ''],
       },
       {
         icon: 'ri-booklet-line',
@@ -272,10 +297,10 @@ const CATEGORIES: Category[] = [
         cta: '前往设置',
         demo: 'toggle',
         steps: [
-          '进入设置页的「AI 处理」区。',
-          '逐项打开需要默认启用的处理。',
-          '此后每次开录音自动按此配置启用。',
+          '在这些开关里,逐项打开要默认启用的处理:实时纠错、智能分句、英文翻译、结束自动生成概要。',
+          '此后每次开录音都会自动按这个配置启用。',
         ],
+        targets: ['[data-guide="set-ai"]', ''],
       },
       {
         icon: 'ri-equalizer-line',
@@ -284,10 +309,11 @@ const CATEGORIES: Category[] = [
         route: '/settings',
         cta: '前往设置',
         steps: [
-          '进入设置页的「录音」区。',
-          '选择识别模型与拾音灵敏度。',
-          '按场景选默认音源:线下用麦克风,网课用系统声音。',
+          '点左侧「录音」分类。',
+          '选择「识别模型」与「拾音灵敏度」。',
+          '选「默认音源」:线下用麦克风,网课用系统声音。',
         ],
+        targets: ['[data-guide="set-cat-record"]', '[data-guide="set-record"]', '[data-guide="set-record"]'],
       },
       {
         icon: 'ri-user-line',
@@ -295,7 +321,8 @@ const CATEGORIES: Category[] = [
         desc: '查看当前账号与角色信息,并可安全退出登录。',
         route: '/settings',
         cta: '前往设置',
-        steps: ['进入设置页查看账号与角色。', '需要时点「退出登录」。'],
+        steps: ['点左侧「账户」分类,查看当前账号与角色。', '需要退出时,点「退出登录」按钮。'],
+        targets: ['[data-guide="set-cat-account"]', '[data-guide="set-logout"]'],
       },
     ],
   },
@@ -303,7 +330,11 @@ const CATEGORIES: Category[] = [
 
 export default function HelpPage() {
   const navigate = useNavigate();
-  const [active, setActive] = useState<CatId>('record');
+  // 当前分类存进 URL(?cat=),这样从功能页返回时能恢复到刚才看的分类,而不是重置成默认
+  const [sp, setSp] = useSearchParams();
+  const raw = sp.get('cat') || '';
+  const active: CatId = (['record', 'ai', 'manage', 'account'].includes(raw) ? raw : 'record') as CatId;
+  const setActive = (id: CatId) => setSp({ cat: id }, { replace: true });
   const current = CATEGORIES.find((c) => c.id === active) ?? CATEGORIES[0];
 
   return (
@@ -420,7 +451,7 @@ export default function HelpPage() {
                     {/* 前往使用 */}
                     <div className="mt-auto pt-3 border-t border-background-100">
                       <button
-                        onClick={() => navigate(f.route)}
+                        onClick={() => { startGuide(f.name, f.steps, f.targets); navigate(f.route); }}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-accent-600 hover:text-accent-700 cursor-pointer"
                       >
                         {f.cta ?? '前往使用'}

@@ -4,6 +4,8 @@ import { quickActions } from '@/mocks/dashboardData';
 import { useRecords, sessionTitle, fmtDuration } from '@/hooks/useRecords';
 import type { ScheduleCourse, ScheduleEvent } from '@/hooks/useRecords';
 import { useTagsStore } from '@/hooks/useTagsStore';
+import { loadSettings } from '@/lib/settings';
+import { findSimilarTag } from '@/lib/tagMatch';
 import AnimatedNumber from '@/components/feature/AnimatedNumber';
 import Calendar from '@/components/feature/Calendar';
 import NewSessionModal from '@/pages/dashboard/components/NewSessionModal';
@@ -11,6 +13,7 @@ import ImportModal from '@/pages/dashboard/components/ImportModal';
 import SyncShuModal from '@/pages/dashboard/components/SyncShuModal';
 import SearchBar from '@/pages/dashboard/components/SearchBar';
 import CourseTypeModal from '@/pages/dashboard/components/CourseTypeModal';
+import TagCoursesModal from '@/pages/dashboard/components/TagCoursesModal';
 import SummaryListModal from '@/pages/dashboard/components/SummaryListModal';
 import AudioListModal from '@/pages/dashboard/components/AudioListModal';
 import VoicePrintModal from '@/pages/dashboard/components/VoicePrintModal';
@@ -34,7 +37,7 @@ interface CreatedSession {
 export default function DashboardHome() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { tags } = useTagsStore();
+  const { tags, addTag } = useTagsStore();
   const [showNewSession, setShowNewSession] = useState(false);
   const [preselectedDate, setPreselectedDate] = useState('');
   const [createdSessions, setCreatedSessions] = useState<CreatedSession[]>([]);
@@ -45,6 +48,7 @@ export default function DashboardHome() {
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // 带日期的课程事件(不重复)
   const [calendarFocus, setCalendarFocus] = useState('');   // 导入后让日历跳到课程所在月
   const [showCourseTypes, setShowCourseTypes] = useState(false);
+  const [showTagCourses, setShowTagCourses] = useState(false);
   const [showSummaryList, setShowSummaryList] = useState(false);
   const [showAudioList, setShowAudioList] = useState(false);
   const [showVoices, setShowVoices] = useState(false);
@@ -58,6 +62,13 @@ export default function DashboardHome() {
   const tagColorMap = useMemo(() => {
     const map: Record<string, string> = {};
     tags.forEach((t) => { map[t.id] = t.color; });
+    return map;
+  }, [tags]);
+
+  // 课程事件里存的是标签 label,日历需要 id,这里做 label→id 映射
+  const labelToId = useMemo(() => {
+    const map: Record<string, string> = {};
+    tags.forEach((t) => { map[t.label.trim()] = t.id; });
     return map;
   }, [tags]);
 
@@ -76,6 +87,7 @@ export default function DashboardHome() {
           date: m ? m[1] : '',
           time: m ? `${m[2]}:${m[3]}` : '',
           duration: fmtDuration(s.duration_s),
+          durationSec: s.duration_s,
           tags: [] as string[],
           description: `${s.lines ?? 0} 句`,
           summary: s.summary ?? '',
@@ -108,18 +120,19 @@ export default function DashboardHome() {
     const out: Array<{ id: string; title: string; date: string; time: string; duration: string; tags: string[]; description: string; summary: string; keyPoints: string[] }> = [];
     byName.forEach((arr, name) => {
       arr.forEach((e, i) => {
+        const tagId = e.tag ? labelToId[e.tag.trim()] : undefined;
         out.push({
           id: `sched-${e.date}-${e.name}-${e.start}`,
           title: arr.length > 1 ? `${name} 第${i + 1}课` : name,   // 只出现一次就不编号
           date: e.date, time: e.start,
-          duration: '', tags: [] as string[],
+          duration: '', tags: tagId ? [tagId] : [],
           description: `${e.location} ${e.room}`.trim(),
           summary: '', keyPoints: [] as string[],
         });
       });
     });
     return out;
-  }, [scheduleEvents]);
+  }, [scheduleEvents, labelToId]);
 
   // 「课程总数」按去掉编号后的基名归类:高数第1课/第2课… 都算同一门「高数」
   const distinctCourses = useMemo(() => {
@@ -139,6 +152,31 @@ export default function DashboardHome() {
       (a, b) => (b.recordings + b.schedule) - (a.recordings + a.schedule)
     );
   }, [allSessions, scheduleEvents]);
+
+  // 「标签数量」卡片:按标签整理——既聚合导入的课表课程,也聚合真实录音。
+  const tagGroups = useMemo(() => {
+    const map = new Map<string, { courses: Set<string>; count: number }>();
+    const ensure = (tag: string) => {
+      let v = map.get(tag);
+      if (!v) { v = { courses: new Set<string>(), count: 0 }; map.set(tag, v); }
+      return v;
+    };
+    // 导入的课表课程(每门课带自己的 tag,同名去重)
+    scheduleEvents.forEach((e) => {
+      const t = (e.tag || '').trim();
+      if (t && e.name) ensure(t).courses.add(e.name);
+    });
+    // 真实录音上的标签
+    records.sessions.forEach((s) => {
+      (s.tags || []).forEach((t) => {
+        const name = (t || '').trim();
+        if (name) ensure(name).count += 1;
+      });
+    });
+    return Array.from(map.entries())
+      .map(([tag, v]) => ({ tag, courses: Array.from(v.courses), count: v.count }))
+      .sort((a, b) => (b.courses.length + b.count) - (a.courses.length + a.count));
+  }, [scheduleEvents, records.sessions]);
 
   const recentSessions = useMemo(() => allSessions.slice(0, 6), [allSessions]);
 
@@ -256,7 +294,30 @@ export default function DashboardHome() {
       monday = new Date(today);
       monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
     }
-    // 每门课只落在它真实的那一天(这一周),不重复
+    // ① 先按课名给每门课定标签:匹配到相似的已有标签就用它;没有就新建一个。
+    //    结果贴到课本身(event.tag),这样课表/日历上每门课都带着自己的标签。
+    const st = loadSettings();
+    const autoTag = st.importTagSimilar || st.importTagNew;
+    const nameToTag = new Map<string, string>();   // 课名 → 标签 label
+    const createdNames: string[] = [];
+    const groupedNames: string[] = [];
+    if (autoTag) {
+      const palette = ['accent', 'primary', 'secondary'];
+      const known = [...tags];   // 本批内新建的也累进来,避免同一次导入重复建
+      Array.from(new Set(courses.map((c) => c.name))).forEach((name) => {
+        const trimmed = (name || '').trim();
+        if (!trimmed) return;
+        const similar = st.importTagSimilar ? findSimilarTag(trimmed, known) : null;
+        if (similar) { nameToTag.set(name, similar.label); groupedNames.push(trimmed); return; }
+        if (st.importTagNew) {
+          let t = known.find((k) => k.label.trim() === trimmed);
+          if (!t) { t = addTag(trimmed, palette[known.length % palette.length]); known.push(t); createdNames.push(trimmed); }
+          nameToTag.set(name, t.label);
+        }
+      });
+    }
+
+    // ② 每门课只落在它真实的那一天(这一周),不重复;带上刚定的标签
     const newEvents: ScheduleEvent[] = courses.map((c) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + (c.day - 1));
@@ -264,6 +325,7 @@ export default function DashboardHome() {
         name: c.name,
         date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
         start: c.start, end: c.end, location: c.location, room: c.room,
+        tag: nameToTag.get(c.name) || undefined,
       };
     });
     // 和已有的合并去重(按 日期+时间+课名)——支持分多周多次导入累加
@@ -277,7 +339,10 @@ export default function DashboardHome() {
     const firstDate = newEvents.map((e) => e.date).sort()[0];
     if (firstDate) setCalendarFocus(`${firstDate}|${Date.now()}`); // 带时间戳保证每次导入都重新触发跳转
     const monthTxt = firstDate ? firstDate.slice(0, 7) : '';
-    setCreatedMessage(`已把 ${courses.length} 门课加进日历${monthTxt ? `(${monthTxt})` : ''}`);
+
+    const tagged = nameToTag.size;
+    const tagTxt = tagged ? `,已给 ${tagged} 门课打上标签(新建 ${createdNames.length} 个 / 沿用已有 ${groupedNames.length} 个)` : '';
+    setCreatedMessage(`已把 ${courses.length} 门课加进日历${monthTxt ? `(${monthTxt})` : ''}${tagTxt}`);
     setTimeout(() => setCreatedMessage(''), 4000);
   };
 
@@ -384,11 +449,12 @@ export default function DashboardHome() {
             return (
               <div
                 key={stat.label}
+                data-guide={isCoursesCard ? 'dash-courses' : isTagsCard ? 'dash-tags' : isSummaryCard ? 'dash-summaries' : undefined}
                 onClick={
                   isCoursesCard ? () => setShowCourseTypes(true)
                   : isAudioCard ? () => setShowAudioList(true)
                   : isSummaryCard ? () => setShowSummaryList(true)
-                  : isTagsCard ? () => navigate('/tags')
+                  : isTagsCard ? () => setShowTagCourses(true)
                   : undefined
                 }
                 className={`relative overflow-hidden bg-background-50 rounded-2xl p-5 border border-background-200 transition-all duration-300 ${
@@ -629,6 +695,14 @@ export default function DashboardHome() {
         onClose={() => setShowCourseTypes(false)}
         courses={distinctCourses}
         onSelect={(name) => { setShowCourseTypes(false); navigate('/course-detail?name=' + encodeURIComponent(name)); }}
+      />
+
+      <TagCoursesModal
+        isOpen={showTagCourses}
+        onClose={() => setShowTagCourses(false)}
+        groups={tagGroups}
+        onSelect={(tag) => { setShowTagCourses(false); navigate('/course-detail?tag=' + encodeURIComponent(tag)); }}
+        onManage={() => { setShowTagCourses(false); navigate('/tags'); }}
       />
 
       <SummaryListModal

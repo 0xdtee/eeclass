@@ -105,6 +105,33 @@ class SenseVoiceBackend(Backend):
         return re.sub(r"<\|[^|]*\|>", "", s.result.text).strip()
 
 
+# ------------------------------------------------------------ wenet_ctc
+class WenetCtcBackend(Backend):
+    """上海话(吴语)识别：sherpa-onnx WeNet-CTC 离线模型(WenetSpeech-Wu)。
+    走纯 ONNX(和 SenseVoice 同一条路，不碰 PyTorch)。输出的是吴语用字
+    (如 搭子/侪/辰光/侬/阿拉/拨/物事)，再由 server 侧自动翻成普通话字幕。"""
+    name = "wenet_ctc"
+
+    def load(self):
+        import sherpa_onnx
+        c = self.cfg.get("wenet_ctc") or {}
+        d = _p(c.get("model_dir", "models/sherpa-onnx-wenetspeech-wu-u2pp-conformer-ctc-zh-2026-02-03"))
+        model = os.path.join(d, "model.onnx")
+        if not os.path.exists(model):
+            raise FileNotFoundError(f"找不到 WeNet-CTC(上海话)模型：{model}")
+        t0 = time.time()
+        self.rec = sherpa_onnx.OfflineRecognizer.from_wenet_ctc(
+            model=model, tokens=os.path.join(d, "tokens.txt"),
+            num_threads=self.cfg.get("cpu_threads", 6), debug=False)
+        return time.time() - t0
+
+    def transcribe(self, audio, with_prompt=True):
+        s = self.rec.create_stream()
+        s.accept_waveform(16000, audio)
+        self.rec.decode_stream(s)
+        return (s.result.text or "").strip()
+
+
 # ---------------------------------------------------------------- funasr
 class FunASRBackend(Backend):
     """FunASR 官方运行时。比 sherpa-onnx 那条路慢、启动久（import 就要 19 秒），
@@ -197,6 +224,88 @@ class ParaformerBackend(Backend):
         return self.punct(txt) if self.punct else txt
 
 
+# ---------------------------------------------------------------- 阿里云
+class AliyunASRBackend(Backend):
+    """阿里云百炼(DashScope)实时语音识别，云端整句识别。
+
+    和本机后端一样是「离线整句」接口：VAD 切好一段音频后整段送云端。
+    DashScope 的 Recognition.call() 收的是 WAV 文件路径，所以这里把 numpy
+    音频先写成临时 16bit PCM WAV（16000Hz 单声道），调用完再删掉。
+
+    两个模型（在 BACKENDS 里注册成两个后端）：
+      · paraformer-realtime-v2 —— 便宜的普通话模型
+      · fun-asr-realtime       —— 识别方言(含上海话)并**直接输出普通话**，
+        所以上海话云端选项不需要额外翻译步骤。
+
+    API key 只从环境变量 DASHSCOPE_API_KEY 读，绝不写进配置/代码。
+    dashscope 只在 load()/transcribe() 里懒加载，py_compile / import 不需要装 SDK。
+    """
+    name = "aliyun"
+    model = "paraformer-realtime-v2"
+    _warned = False
+
+    def load(self):
+        import dashscope  # 懒加载，模块顶层不 import
+        key = os.environ.get("DASHSCOPE_API_KEY")
+        if not key:
+            raise RuntimeError("没配 DASHSCOPE_API_KEY，在 start-server.sh 里设")
+        dashscope.api_key = key
+        c = self.cfg.get("aliyun") or {}
+        # 允许用配置覆盖模型；否则用子类默认
+        self.model = c.get("model") or self.model
+        return 0.0
+
+    def transcribe(self, audio, with_prompt=True):
+        import wave
+        import tempfile
+        import numpy as np
+        from dashscope.audio.asr import Recognition
+
+        # numpy float32 [-1,1] @16k → 临时 16bit PCM WAV(单声道,16000Hz)
+        pcm = (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2")
+        fd, tmp_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        try:
+            with wave.open(tmp_path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(16000)
+                w.writeframes(pcm.tobytes())
+            res = Recognition(
+                model=self.model, format="wav",
+                sample_rate=16000, callback=None).call(tmp_path)
+            if getattr(res, "status_code", None) != 200:
+                if not AliyunASRBackend._warned:
+                    AliyunASRBackend._warned = True
+                    print(f"[aliyun] 识别失败 status={getattr(res, 'status_code', '?')} "
+                          f"msg={getattr(res, 'message', '')}")
+                return ""
+            sents = (res.output or {}).get("sentence") or []
+            return "".join(s.get("text", "") for s in sents).strip()
+        except Exception as e:  # 云端/网络异常都不该弄崩录音
+            if not AliyunASRBackend._warned:
+                AliyunASRBackend._warned = True
+                print(f"[aliyun] 识别异常：{e}")
+            return ""
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
+class AliyunParaformerBackend(AliyunASRBackend):
+    """阿里云·普通话（paraformer-realtime-v2，便宜的普通话模型）。"""
+    name = "aliyun_paraformer"
+    model = "paraformer-realtime-v2"
+
+
+class AliyunFunASRBackend(AliyunASRBackend):
+    """阿里云·上海话（fun-asr-realtime，识别方言并直接输出普通话，无需再翻译）。"""
+    name = "aliyun_funasr"
+    model = "fun-asr-realtime"
+
+
 def make_punct(asr_cfg):
     """给没有标点的后端补标点。拿不到模型就返回 None，调用方按无标点处理。"""
     c = (asr_cfg.get("zipformer") or {})
@@ -214,9 +323,12 @@ def make_punct(asr_cfg):
 BACKENDS = {
     "whisper": WhisperBackend,
     "sensevoice": SenseVoiceBackend,
+    "wenet_ctc": WenetCtcBackend,
     "paraformer": ParaformerBackend,
     "funasr": FunASRBackend,
     "zipformer": ZipformerBackend,
+    "aliyun_paraformer": AliyunParaformerBackend,
+    "aliyun_funasr": AliyunFunASRBackend,
 }
 
 

@@ -22,6 +22,8 @@ export interface SessionMeta {
   summary?: string;
   key_points?: string[];
   has_summary?: boolean;
+  /** 这节课打的标签(标签名字符串,来自后端) */
+  tags?: string[];
 }
 
 export interface ScheduleCourse {
@@ -41,6 +43,7 @@ export interface ScheduleEvent {
   end: string;
   location: string;
   room: string;
+  tag?: string;       // 这门课的标签(存 label);图片导入时按课名自动匹配已有 / 没有就新建
 }
 
 export interface CourseSummary {
@@ -342,20 +345,37 @@ export function useRecords() {
     []
   );
 
-  /** 课程级 AI 分析(同名多节课合集):总结 / 考点预测 / 模拟卷。带服务端缓存,refresh 强制重算。 */
+  /**
+   * 课程级 AI 分析。两种聚合口径:
+   *  - 按课程名(同名多节课合集):传 tag 为空,走 { name }(原有行为,保持不变)。
+   *  - 按标签(所有打了该标签的录音):传 tag,走 { tag }。
+   * 带服务端缓存,refresh 强制重算。
+   */
+  const courseBody = (name: string, refresh: boolean, aiOnly: boolean, tag?: string) =>
+    JSON.stringify(tag ? { tag, refresh, ai_only: aiOnly } : { name, refresh, ai_only: aiOnly });
   const courseSummary = useCallback(
-    (name: string, refresh = false, aiOnly = false) =>
-      api<CourseSummary>('/api/course/summary', { method: 'POST', body: JSON.stringify({ name, refresh, ai_only: aiOnly }) }),
+    (name: string, refresh = false, aiOnly = false, tag?: string) =>
+      api<CourseSummary>('/api/course/summary', { method: 'POST', body: courseBody(name, refresh, aiOnly, tag) }),
     []
   );
   const courseExam = useCallback(
-    (name: string, refresh = false, aiOnly = false) =>
-      api<CourseExam>('/api/course/exam', { method: 'POST', body: JSON.stringify({ name, refresh, ai_only: aiOnly }) }),
+    (name: string, refresh = false, aiOnly = false, tag?: string) =>
+      api<CourseExam>('/api/course/exam', { method: 'POST', body: courseBody(name, refresh, aiOnly, tag) }),
     []
   );
   const courseMock = useCallback(
-    (name: string, refresh = false, aiOnly = false) =>
-      api<CourseMock>('/api/course/mock', { method: 'POST', body: JSON.stringify({ name, refresh, ai_only: aiOnly }) }),
+    (name: string, refresh = false, aiOnly = false, tag?: string) =>
+      api<CourseMock>('/api/course/mock', { method: 'POST', body: courseBody(name, refresh, aiOnly, tag) }),
+    []
+  );
+
+  /** 给某节录音设置/替换标签(整表覆盖,传全量标签名数组) */
+  const setSessionTags = useCallback(
+    (sid: string, sessionTags: string[]) =>
+      api<{ ok: boolean; tags: string[] }>(`/api/sessions/${encodeURIComponent(sid)}/tags`, {
+        method: 'POST',
+        body: JSON.stringify({ tags: sessionTags }),
+      }),
     []
   );
 
@@ -383,7 +403,7 @@ export function useRecords() {
     []
   );
 
-  return { sessions, loading, error, reload, loadTranscript, editLine, loadEdits, loadSummary, saveSummary, loadNote, saveNote, markLine, renameSpeaker, learnTerm, importTimetable, importShu, saveSchedule, loadSchedule, listSyllabus, getSyllabus, listSchools, listVoices, addVoiceprint, deleteVoiceprint, courseSummary, courseExam, courseMock, createShare, revokeShare };
+  return { sessions, loading, error, reload, loadTranscript, editLine, loadEdits, loadSummary, saveSummary, loadNote, saveNote, markLine, renameSpeaker, learnTerm, importTimetable, importShu, saveSchedule, loadSchedule, listSyllabus, getSyllabus, listSchools, listVoices, addVoiceprint, deleteVoiceprint, courseSummary, courseExam, courseMock, setSessionTags, createShare, revokeShare };
 }
 
 /** 分享链接（给别人打开的，不需要令牌） */

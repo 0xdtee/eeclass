@@ -1,9 +1,17 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRecords, sessionTitle, sessionDate, fmtDuration } from '@/hooks/useRecords';
-import type { CourseSummary, CourseExam, CourseMock } from '@/hooks/useRecords';
+import type { CourseSummary, CourseExam, CourseMock, SessionMeta } from '@/hooks/useRecords';
+import { useTagsStore } from '@/hooks/useTagsStore';
 import { audioUrl, audioDownloadUrl } from '@/hooks/useLibrary';
 import BackButton from '@/components/feature/BackButton';
+import MathText from '@/components/base/MathText';
+import AudioPlayer from '@/components/feature/AudioPlayer';
+
+// 选择题选项 A./B./C./D. 常糊在一行,显示时在每个选项前插换行(要求后面带空格,避免误伤「A、B、ω为常量」这种)
+function splitChoices(s: string): string {
+  return (s || '').replace(/\s+(?=[A-H][.．)]\s)/g, '\n');
+}
 
 type TabId = 'summary' | 'audio' | 'exam' | 'mock';
 const TABS: { id: TabId; label: string; icon: string }[] = [
@@ -75,8 +83,31 @@ function Pie({ values, labels, selected, onSelect }: { values: number[]; labels:
 export default function CourseDetailPage() {
   const [sp] = useSearchParams();
   const name = sp.get('name') || '';
+  const tag = sp.get('tag') || '';       // 有 tag 时优先按标签聚合(否则按课程名)
+  const byTag = !!tag;
+  const displayName = tag || name;       // 页面各处展示用的名字
   const navigate = useNavigate();
   const records = useRecords();
+  const { tags: allTags } = useTagsStore();
+  // 本地标签覆盖:给录音打完标签立即生效,不必等重新拉取
+  const [localTags, setLocalTags] = useState<Record<string, string[]>>({});
+  const effTags = useCallback(
+    (s: SessionMeta) => localTags[s.id] ?? s.tags ?? [],
+    [localTags]
+  );
+  const toggleTag = useCallback(
+    async (s: SessionMeta, label: string) => {
+      const cur = localTags[s.id] ?? s.tags ?? [];
+      const next = cur.includes(label) ? cur.filter((t) => t !== label) : [...cur, label];
+      setLocalTags((prev) => ({ ...prev, [s.id]: next }));
+      try {
+        await records.setSessionTags(s.id, next);
+      } catch {
+        setLocalTags((prev) => ({ ...prev, [s.id]: cur }));   // 失败回滚
+      }
+    },
+    [localTags, records]
+  );
   const [tab, setTab] = useState<TabId>('summary');
   const [summary, setSummary] = useState<CourseSummary | null>(null);
   const [exam, setExam] = useState<CourseExam | null>(null);
@@ -89,6 +120,7 @@ export default function CourseDetailPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const handledJumpRef = useRef('');   // 已处理过的跳转目标,避免重复处理/误清高亮定时器
   const [playingKey, setPlayingKey] = useState('');
+  const [tagPickerFor, setTagPickerFor] = useState('');   // 哪段录音正在展开标签选择器
 
   const playRef = useCallback((sid: string, start: number, key: string) => {
     const a = audioRef.current;
@@ -105,8 +137,11 @@ export default function CourseDetailPage() {
   }, []);
 
   const courseSessions = useMemo(
-    () => records.sessions.filter((s) => baseName(sessionTitle(s)) === name),
-    [records.sessions, name]
+    () =>
+      byTag
+        ? records.sessions.filter((s) => effTags(s).includes(tag))
+        : records.sessions.filter((s) => baseName(sessionTitle(s)) === name),
+    [records.sessions, name, byTag, tag, effTags]
   );
 
   const loadTab = useCallback(
@@ -116,15 +151,15 @@ export default function CourseDetailPage() {
       try {
         if (t === 'summary' && (summary === null || refresh || aiOnly)) {
           setLoading(true);
-          const r = await records.courseSummary(name, refresh, aiOnly);
+          const r = await records.courseSummary(name, refresh, aiOnly, tag || undefined);
           if (r.error) setErr(r.error); else setSummary(r);
         } else if (t === 'exam' && (exam === null || refresh || aiOnly)) {
           setLoading(true);
-          const r = await records.courseExam(name, refresh, aiOnly);
+          const r = await records.courseExam(name, refresh, aiOnly, tag || undefined);
           if (r.error) setErr(r.error); else { setExam(r); setSel(0); }
         } else if (t === 'mock' && (mock === null || refresh || aiOnly)) {
           setLoading(true);
-          const r = await records.courseMock(name, refresh, aiOnly);
+          const r = await records.courseMock(name, refresh, aiOnly, tag || undefined);
           if (r.error) setErr(r.error); else setMock(r);
         }
       } catch (e) {
@@ -133,10 +168,10 @@ export default function CourseDetailPage() {
         setLoading(false);
       }
     },
-    [name, summary, exam, mock, records]
+    [name, tag, summary, exam, mock, records]
   );
 
-  useEffect(() => { void loadTab(tab); /* eslint-disable-next-line */ }, [tab, name]);
+  useEffect(() => { void loadTab(tab); /* eslint-disable-next-line */ }, [tab, name, tag]);
 
   // 从考点详情点"查看总结相关模块":切到总结页 → 加载好 → 定位并高亮最相关的章节
   useEffect(() => {
@@ -164,7 +199,7 @@ export default function CourseDetailPage() {
         <i className="ri-magic-line text-accent-600 text-2xl"></i>
       </div>
       <p className="text-sm text-foreground-600 mb-1">这门课还没有课堂录音</p>
-      <p className="text-xs text-foreground-400 mb-5 max-w-xs">可以让 AI 仅凭《{name}》这门课的通用大纲和常见{kind}先生成一份参考;之后录了课再"重新生成"会更贴合你老师讲的内容。</p>
+      <p className="text-xs text-foreground-400 mb-5 max-w-xs">可以让 AI 仅凭《{displayName}》{byTag ? '这个标签下' : '这门课'}的通用大纲和常见{kind}先生成一份参考;之后录了课再"重新生成"会更贴合你老师讲的内容。</p>
       <button onClick={onGen} className="flex items-center gap-1.5 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer">
         <i className="ri-sparkling-line"></i>AI 一键生成{kind}
       </button>
@@ -188,12 +223,19 @@ export default function CourseDetailPage() {
               <i className="ri-arrow-left-line"></i>
             </BackButton>
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold text-foreground-900 truncate">{name || '课程'}</h1>
-              <p className="text-xs text-foreground-400">共 {courseSessions.length} 节录音 · AI 课程分析</p>
+              <h1 className="text-sm font-semibold text-foreground-900 truncate">
+                {byTag ? `标签:${tag}` : (name || '课程')}
+              </h1>
+              <p className="text-xs text-foreground-400">
+                {byTag
+                  ? `汇总所有打了「${tag}」标签的录音 · 共 ${courseSessions.length} 段 · AI 聚合分析`
+                  : `共 ${courseSessions.length} 节录音 · AI 课程分析`}
+              </p>
             </div>
           </div>
           {(tab === 'summary' || tab === 'exam' || tab === 'mock') && (
             <button
+              data-guide="cd-regen"
               onClick={() => void loadTab(tab, { refresh: true })}
               disabled={loading}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer disabled:opacity-50"
@@ -210,6 +252,7 @@ export default function CourseDetailPage() {
           {TABS.map((t) => (
             <button
               key={t.id}
+              data-guide={`cd-tab-${t.id}`}
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 tab === t.id ? 'bg-accent-500 text-background-50' : 'text-foreground-500 hover:text-foreground-700'
@@ -256,7 +299,7 @@ export default function CourseDetailPage() {
                 <ul className="space-y-1.5">
                   {ch.points?.map((pt, j) => (
                     <li key={j} className="flex items-start gap-2 text-sm text-foreground-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-400 mt-2 flex-shrink-0"></span>{pt}
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-400 mt-2 flex-shrink-0"></span><MathText text={pt} />
                     </li>
                   ))}
                 </ul>
@@ -268,7 +311,7 @@ export default function CourseDetailPage() {
         {/* ===== 录音集合 ===== */}
         {tab === 'audio' && (
           courseSessions.length === 0 ? (
-            <p className="text-sm text-foreground-400 py-16 text-center">这门课还没有录音。</p>
+            <p className="text-sm text-foreground-400 py-16 text-center">{byTag ? `还没有录音打了「${tag}」标签。可到某门课的「录音集合」里给录音打上这个标签。` : '这门课还没有录音。'}</p>
           ) : (
             <div className="space-y-3">
               {courseSessions.map((s) => (
@@ -288,7 +331,60 @@ export default function CourseDetailPage() {
                       <i className="ri-download-2-line mr-1"></i>导出
                     </a>
                   </div>
-                  <audio controls preload="none" src={audioUrl(s.id)} className="w-full h-9">你的浏览器不支持音频播放。</audio>
+                  <AudioPlayer src={audioUrl(s.id)} durationHint={s.duration_s} className="w-full" />
+
+                  {/* 标签编辑:当前标签用胶囊显示,＋标签 展开可选标签列表,点选切换并即时保存 */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5 border-t border-background-100">
+                    <span className="text-xs text-foreground-400 mr-0.5"><i className="ri-price-tag-3-line mr-0.5"></i>标签</span>
+                    {effTags(s).length === 0 && (
+                      <span className="text-xs text-foreground-300">暂无</span>
+                    )}
+                    {effTags(s).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => void toggleTag(s, t)}
+                        className="px-2 py-0.5 bg-secondary-100 text-secondary-700 rounded-full text-[11px] font-medium hover:bg-secondary-200 cursor-pointer whitespace-nowrap"
+                        title="点击移除该标签"
+                      >
+                        {t}<i className="ri-close-line ml-0.5"></i>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setTagPickerFor((p) => (p === s.id ? '' : s.id))}
+                      className="px-2 py-0.5 bg-background-100 text-foreground-500 rounded-full text-[11px] font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap"
+                    >
+                      <i className="ri-add-line mr-0.5"></i>标签
+                    </button>
+                  </div>
+                  {tagPickerFor === s.id && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 p-2.5 bg-background-100 rounded-lg">
+                      {allTags.length === 0 ? (
+                        <button
+                          onClick={() => navigate('/tags')}
+                          className="text-xs text-accent-600 hover:text-accent-700 cursor-pointer"
+                        >
+                          还没有标签,去创建 →
+                        </button>
+                      ) : (
+                        allTags.map((tg) => {
+                          const active = effTags(s).includes(tg.label);
+                          return (
+                            <button
+                              key={tg.id}
+                              onClick={() => void toggleTag(s, tg.label)}
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer whitespace-nowrap ${
+                                active
+                                  ? 'bg-accent-500 text-background-50 border-accent-500'
+                                  : 'bg-background-50 text-foreground-600 border-background-200 hover:border-accent-300'
+                              }`}
+                            >
+                              {active && <i className="ri-check-line mr-0.5"></i>}{tg.label}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -321,9 +417,9 @@ export default function CourseDetailPage() {
                     <h3 className="text-base font-bold text-foreground-900">{exam.points[sel].name}</h3>
                     <span className="ml-auto px-2 py-0.5 bg-accent-100 text-accent-700 rounded-full text-xs font-bold">{exam.points[sel].probability}% 可能考</span>
                   </div>
-                  <p className="text-xs text-foreground-500 mb-3 leading-relaxed"><i className="ri-lightbulb-line mr-1 text-amber-500"></i>{exam.points[sel].reason}</p>
+                  <div className="text-xs text-foreground-500 mb-3 leading-relaxed"><i className="ri-lightbulb-line mr-1 text-amber-500"></i><MathText text={exam.points[sel].reason} /></div>
                   <div className="border-t border-background-100 pt-3">
-                    <p className="text-sm text-foreground-700 leading-relaxed whitespace-pre-wrap">{exam.points[sel].detail}</p>
+                    <div className="text-sm text-foreground-700 leading-relaxed"><MathText text={exam.points[sel].detail} /></div>
                   </div>
                   <button
                     onClick={() => { setJumpTarget(exam.points[sel].name); setTab('summary'); }}
@@ -368,7 +464,7 @@ export default function CourseDetailPage() {
           <div className="bg-background-50 border border-background-200 rounded-xl p-6 space-y-5">
             <div className="flex items-center gap-2 pb-3 border-b border-background-100">
               <i className="ri-file-list-3-line text-accent-600"></i>
-              <h3 className="text-sm font-semibold text-foreground-800">《{name}》模拟试卷</h3>
+              <h3 className="text-sm font-semibold text-foreground-800">《{displayName}》模拟试卷</h3>
               <span className="text-xs text-foreground-400">共 {mock.questions.length} 题</span>
             </div>
             {mock.questions.map((q, i) => (
@@ -376,12 +472,13 @@ export default function CourseDetailPage() {
                 <div className="flex items-start gap-2">
                   <span className="text-xs font-bold text-accent-600 mt-0.5 flex-shrink-0">{i + 1}.</span>
                   <div className="flex-1">
-                    <p className="text-sm text-foreground-800">
-                      <span className="text-[11px] text-foreground-400 mr-1.5">[{q.type}]</span>{q.question}
-                    </p>
+                    <div className="text-sm text-foreground-800 leading-relaxed">
+                      <span className="text-[11px] text-foreground-400 mr-1.5">[{q.type}]</span>
+                      <MathText text={splitChoices(q.question)} />
+                    </div>
                     <details className="mt-1.5">
                       <summary className="text-xs text-accent-600 cursor-pointer hover:text-accent-700 select-none">查看答案</summary>
-                      <p className="text-xs text-foreground-600 mt-1 p-2.5 bg-background-100 rounded-lg leading-relaxed whitespace-pre-wrap">{q.answer}</p>
+                      <div className="text-xs text-foreground-600 mt-1 p-2.5 bg-background-100 rounded-lg leading-relaxed"><MathText text={q.answer} /></div>
                     </details>
                   </div>
                 </div>

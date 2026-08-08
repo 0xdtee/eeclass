@@ -7,6 +7,8 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import { SERVICE_ORIGIN, getToken, setToken } from '@/hooks/useLiveCaption';
+import { hydrateTagsFromServer, clearTagsForLogout } from '@/hooks/useTagsStore';
+import { hydrateSettingsFromServer, clearSettingsForLogout } from '@/lib/settings';
 
 export interface AuthUser {
   email: string;
@@ -78,6 +80,9 @@ export function useAuth() {
     setToken(j.token);
     localStorage.setItem(USER_KEY, JSON.stringify(j.user));
     setUser(j.user);
+    // 登录/注册成功后,立刻按这个账号从服务器拉标签和设置(先清掉上一个账号的本地缓存)
+    void hydrateTagsFromServer();
+    void hydrateSettingsFromServer();
     return j.user;
   }, []);
 
@@ -87,9 +92,15 @@ export function useAuth() {
     [accept]
   );
 
+  // 注册第一步:给邮箱发验证码
+  const sendRegisterCode = useCallback(
+    (email: string) => post<{ ok: boolean }>('/api/register/code', { email }),
+    []
+  );
+
   const register = useCallback(
-    async (name: string, email: string, password: string, role?: string, invite?: string) =>
-      accept(await post<AuthResp>('/api/register', { name, email, password, role, invite })),
+    async (name: string, email: string, password: string, code: string) =>
+      accept(await post<AuthResp>('/api/register', { name, email, password, code })),
     [accept]
   );
 
@@ -102,7 +113,9 @@ export function useAuth() {
     setToken('');
     localStorage.removeItem(USER_KEY);
     setUser(null);
+    clearTagsForLogout();       // 清掉本地标签缓存,下个账号不会看到这个账号的
+    clearSettingsForLogout();
   }, []);
 
-  return { user, loading, login, register, logout, isAuthenticated: !!user };
+  return { user, loading, login, register, sendRegisterCode, logout, isAuthenticated: !!user };
 }

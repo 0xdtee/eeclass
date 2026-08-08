@@ -1,24 +1,50 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, sendRegisterCode } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [invite, setInvite] = useState('');
-  const [role, setRole] = useState<'teacher' | 'student'>('student');
+  const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);   // 发送验证码后的倒计时(秒)
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const handleSendCode = async () => {
+    if (sending || cooldown > 0) return;
+    if (!emailOk) { setErr('先填写正确的邮箱'); return; }
+    setErr(''); setInfo('');
+    setSending(true);
+    try {
+      await sendRegisterCode(email);
+      setInfo('验证码已发送,请查收邮箱(可能在垃圾箱)');
+      setCooldown(60);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '发送失败');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    if (!name || !email || !password) return;
+    if (!name || !email || !password || !code) return;
     if (password !== confirmPassword) {
       setErr('两次输入的密码不一致');
       return;
@@ -30,7 +56,7 @@ export default function RegisterPage() {
     setErr('');
     setBusy(true);
     try {
-      await register(name, email, password, role, invite);
+      await register(name, email, password, code);
       navigate('/');
     } catch (e) {
       setErr(e instanceof Error ? e.message : '注册失败');
@@ -50,15 +76,8 @@ export default function RegisterPage() {
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">加入课堂纪要</h1>
           <p className="text-lg opacity-90 leading-relaxed max-w-md">
-            创建你的账户，开始高效记录每一堂课的精彩内容。支持教师和学生两种角色。
+            创建你的账户，开始高效记录每一堂课的精彩内容。
           </p>
-          <div className="mt-10 p-6 bg-background-50/10 rounded-xl border border-background-50/15">
-            <p className="text-sm font-semibold mb-2">角色说明</p>
-            <div className="space-y-2 text-sm opacity-85">
-              <p><strong>教师</strong> — 创建课程、录制课堂、生成摘要并共享给学生</p>
-              <p><strong>学生</strong> — 查看共享的课程纪要、评论互动、导出学习资料</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -77,31 +96,6 @@ export default function RegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex bg-background-100 rounded-xl p-1">
-              <button
-                type="button"
-                onClick={() => setRole('student')}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${
-                  role === 'student'
-                    ? 'bg-background-50 text-foreground-900'
-                    : 'text-foreground-400 hover:text-foreground-600'
-                }`}
-              >
-                <i className="ri-user-line mr-1.5"></i>学生
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole('teacher')}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${
-                  role === 'teacher'
-                    ? 'bg-background-50 text-foreground-900'
-                    : 'text-foreground-400 hover:text-foreground-600'
-                }`}
-              >
-                <i className="ri-user-star-line mr-1.5"></i>教师
-              </button>
-            </div>
-
             <div>
               <label className="block text-xs font-medium text-foreground-600 mb-1.5">姓名</label>
               <div className="relative">
@@ -186,22 +180,39 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">邀请码</label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
-                  <i className="ri-ticket-2-line text-foreground-400 text-sm"></i>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">邮箱验证码</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
+                    <i className="ri-shield-check-line text-foreground-400 text-sm"></i>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="6 位验证码"
+                    className="w-full pl-10 pr-4 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm tracking-widest text-foreground-800 placeholder:text-foreground-300 placeholder:tracking-normal focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
+                    required
+                  />
                 </div>
-                <input
-                  type="text"
-                  value={invite}
-                  onChange={(e) => setInvite(e.target.value)}
-                  placeholder="向管理员索取邀请码"
-                  className="w-full pl-10 pr-4 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
-                  required
-                />
+                <button
+                  type="button"
+                  onClick={handleSendCode}
+                  disabled={sending || cooldown > 0 || !emailOk}
+                  className="px-3 py-2.5 bg-primary-100 text-primary-700 rounded-lg text-xs font-semibold hover:bg-primary-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  {sending ? '发送中…' : cooldown > 0 ? `${cooldown}s 后重发` : '发送验证码'}
+                </button>
               </div>
+              <p className="text-[11px] text-foreground-400 mt-1">验证码会发到上面填的邮箱,10 分钟内有效。</p>
             </div>
 
+            {info && (
+              <p className="text-sm text-primary-600 bg-primary-50 border border-primary-200 rounded-lg px-3 py-2">
+                {info}
+              </p>
+            )}
             {err && (
               <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 {err}

@@ -122,8 +122,8 @@ export interface StartOptions {
   onlyKey?: boolean;
   sensitivity?: 'std' | 'high' | 'max';
   courseId?: string | null;
-  /** 识别模型:'sensevoice'/'paraformer'=整句;'stream'=流式(zipformer,边说边出字) */
-  model?: 'sensevoice' | 'paraformer' | 'stream';
+  /** 识别模型:'sensevoice'/'paraformer'=整句;'stream'=流式(zipformer,边说边出字);'shanghainese'=上海话(wenet_ctc);'aliyun'=阿里云普通话;'aliyun_wu'=阿里云上海话 */
+  model?: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';
   /** AI 实时纠错：出字后让 DeepSeek 异步改同音错字 */
   aiCorrect?: boolean;
   /** AI 智能分句:让 DeepSeek 按语意把 VAD 碎片合并成完整句(仅整句模式) */
@@ -397,7 +397,8 @@ export function useLiveCaption() {
           setRunning(false);
           setPaused(false);
           setPartial('');
-          setLines([]);   // 清掉本次 live 行,停止后回退到该课的存档全文(纠错/编辑才看得到、音频播放器才出现)
+          // 不清空 live 行:停止后先继续显示实时行,等存档全文(histLines)加载好再无缝替换,
+          // 避免"内容先消失、过一会儿存档才出来"的空档延迟。viewLines 会在 histLines 到了自动切过去。
           stopMic();
           setLastDir((m.dir as string) || '');
           setLiveSid((m.sid as string) || '');
@@ -463,16 +464,23 @@ export function useLiveCaption() {
     };
   }, [stopMic, startMic]);
 
+  // connect 会随回调身份(startMic 等)变化;用 ref 存最新的,让下面的 WS effect 只建一次、不反复重连
+  const connectRef = useRef(connect);
+  useEffect(() => { connectRef.current = connect; }, [connect]);
+
   useEffect(() => {
     aliveRef.current = true;
-    connect();
+    connectRef.current();
     return () => {
       aliveRef.current = false;
       if (retryRef.current) clearTimeout(retryRef.current);
       stopMic();
       wsRef.current?.close();
     };
-  }, [connect, stopMic]);
+    // 只在挂载/卸载建立/断开 WS —— 不因回调身份变化就反复关开;否则续录时正好赶上重连,
+    // 会把刚点的 start 命令冲掉,导致要点两次。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 录音时保持屏幕常亮（防锁屏中断）；停止即释放
   useEffect(() => {
@@ -507,10 +515,17 @@ export function useLiveCaption() {
       }
       const dev = devices.find((d) => d.id === opts.device);
       deviceRef.current = opts.device ?? null;   // 记住音源，断线恢复时重新开麦要用
-      // 模型选择:sensevoice/paraformer=整句;stream=流式 zipformer(边说边出字)。默认 sensevoice。
+      // 模型选择:sensevoice/paraformer=整句;stream=流式 zipformer(边说边出字);
+      // shanghainese=上海话(wenet_ctc,吴语识别,后端自动翻普通话字幕);
+      // aliyun=阿里云普通话(aliyun_paraformer);aliyun_wu=阿里云上海话(aliyun_funasr,直接输出普通话)。默认 sensevoice。
       const model = opts.model ?? 'sensevoice';
       const streaming = model === 'stream';
-      const backend = model === 'stream' ? 'zipformer' : model;
+      const backend =
+        model === 'stream' ? 'zipformer'
+        : model === 'shanghainese' ? 'wenet_ctc'
+        : model === 'aliyun' ? 'aliyun_paraformer'
+        : model === 'aliyun_wu' ? 'aliyun_funasr'
+        : model;
       send({
         cmd: 'start',
         title: opts.title ?? null,

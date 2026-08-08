@@ -18,6 +18,7 @@ export default function Tabs({ tabs, activeTab, onTabChange }: TabsProps) {
       {tabs.map((tab) => (
         <button
           key={tab.id}
+          data-guide={`tab-${tab.id}`}
           onClick={() => onTabChange(tab.id)}
           className={`whitespace-nowrap px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
             activeTab === tab.id

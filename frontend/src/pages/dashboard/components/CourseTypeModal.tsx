@@ -56,6 +56,7 @@ export default function CourseTypeModal({ isOpen, onClose, courses, onSelect }: 
             filtered.map((c, idx) => (
               <button
                 key={c.name}
+                data-guide={idx === 0 ? 'course-pick' : undefined}
                 onClick={() => onSelect?.(c.name)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 bg-background-50 border border-background-100 rounded-xl hover:border-accent-300 hover:bg-accent-50/40 transition-colors cursor-pointer text-left group"
               >

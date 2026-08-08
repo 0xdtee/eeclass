@@ -192,6 +192,7 @@ export default function ReviewTab({
             <div className="text-center py-10">
               <p className="text-sm text-foreground-500">让 DeepSeek 把这节课做成闪卡</p>
               <button
+                data-guide="make-flashcard"
                 onClick={genCards}
                 disabled={loadingCards}
                 className="mt-4 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-50"
@@ -263,6 +264,7 @@ export default function ReviewTab({
             <div className="text-center py-10">
               <p className="text-sm text-foreground-500">让 DeepSeek 出一套这节课的自测题</p>
               <button
+                data-guide="make-quiz"
                 onClick={genQuiz}
                 disabled={loadingQuiz}
                 className="mt-4 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-50"

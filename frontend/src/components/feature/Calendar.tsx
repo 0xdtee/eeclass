@@ -360,6 +360,8 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
           weekDates={weekDates}
           today={today}
           sessionsByDate={sessionsByDate}
+          tagLabels={tagLabels}
+          tagColorMap={tagColorMap}
           onSelectSession={onSelectSession}
           onCreateSession={onCreateSession}
         />
@@ -388,13 +390,15 @@ interface WeekViewProps {
   weekDates: Date[];
   today: Date;
   sessionsByDate: Record<string, SessionRef[]>;
+  tagLabels: Record<string, string>;
+  tagColorMap: Record<string, string>;
   onSelectSession: (id: string) => void;
   onCreateSession: (date: string) => void;
 }
 
 const WEEK_HEAD = ['一', '二', '三', '四', '五', '六', '日'];
 
-function WeekView({ weekDates, today, sessionsByDate, onSelectSession, onCreateSession }: WeekViewProps) {
+function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onSelectSession, onCreateSession }: WeekViewProps) {
   const cols = weekDates.map((d) => {
     const key = formatDate(d.getFullYear(), d.getMonth(), d.getDate());
     const list = (sessionsByDate[key] ?? []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
@@ -441,6 +445,12 @@ function WeekView({ weekDates, today, sessionsByDate, onSelectSession, onCreateS
                         title={`${s.title}${s.description ? ' · ' + s.description : ''}`}
                       >
                         <div className="font-semibold line-clamp-2">{s.title}</div>
+                        {s.tags[0] && tagLabels[s.tags[0]] && (
+                          <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1 rounded text-[9px] font-medium ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
+                            <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
+                            {tagLabels[s.tags[0]]}
+                          </span>
+                        )}
                         {s.description && <div className="opacity-70 truncate mt-0.5">{s.description}</div>}
                       </button>
                     ))}
@@ -843,6 +853,14 @@ function DayView({
 
                             {/* Title */}
                             <h5 className="text-sm font-semibold text-foreground-800 mb-1.5">{session.title}</h5>
+
+                            {/* Tag chip(导入的课带的标签)*/}
+                            {session.tags[0] && tagLabels[session.tags[0]] && (
+                              <span className={`inline-flex items-center gap-1 mb-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${textClass} ${bgClass}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`}></span>
+                                {tagLabels[session.tags[0]]}
+                              </span>
+                            )}
 
                             {/* Description */}
                             <p className="text-xs text-foreground-400 mb-2">{session.description}</p>
