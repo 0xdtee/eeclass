@@ -1,6 +1,10 @@
 /**
- * 矢量 PDF:pdf-lib + 内嵌中文字体(子集化,只嵌用到的字 → 文件小)。
+ * 矢量 PDF:pdf-lib + 内嵌中文字体(HarmonyOS Sans SC Medium,已裁到 GB2312 ≈1.8MB)。
  * 文字锐利、可选中/搜索,任意长度都清晰,分页在行之间(不切断句子)。
+ *
+ * 注意:这里用 subset:false 整份嵌入字体,不用 pdf-lib 的 subset:true。
+ * 因为 pdf-lib(@pdf-lib/fontkit)的子集器对本字体有 bug,会把大部分字形嵌成空白,
+ * 只嵌完整字体才能正确出字。字体本身已裁到 GB2312,pdf-lib 会再做 Flate 压缩(≈1.27MB/份)。
  */
 import { PDFDocument, PDFFont, PDFPage, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
@@ -136,7 +140,7 @@ export async function makeSessionPdf(doc: PdfDoc): Promise<Uint8Array> {
   const bytes = await loadFontBytes();
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(bytes, { subset: true });   // 子集化:只嵌用到的字
+  const font = await pdf.embedFont(bytes, { subset: false });  // 整份嵌入:pdf-lib 子集器对本字体会出空字
   const ctx: Ctx = { pdf, page: pdf.addPage([A4.w, A4.h]), y: A4.h - M, font };
   renderDoc(ctx, doc);
   return pdf.save();
