@@ -1,92 +1,92 @@
-# eeclass 课堂纪要 — 移动端 App
+# eeclass Class Notes — Mobile App
 
-## 1. 项目描述
-一款面向大学课堂的智能纪要移动端 App，手机开麦采集声音，推送到用户自己电脑/服务器上运行的识别服务，实时出字幕、AI 整理、课后复习。**所有语音识别、说话人区分、声纹、AI 都在后端本机完成，手机只是客户端，音频不外传第三方。**
+## 1. Project description
+A smart note-taking mobile app for university classrooms. The phone turns on the mic to capture audio and streams it to a recognition service running on the user's own computer/server, producing real-time captions, AI organization, and post-class review. **All speech recognition, speaker separation, voiceprint, and AI happen locally on the backend; the phone is just a client, and audio is never sent to any third party.**
 
-**目标用户**：中国大学生、教师
-**核心价值**：手机实时录音转写 → AI 自动摘要 → 闪卡/自测/追问复习 → 课堂板书截图对齐时间轴 → 跨课全文搜索
+**Target users**: Chinese university students and teachers
+**Core value**: real-time phone recording and transcription → automatic AI summary → flashcard / self-test / follow-up review → class whiteboard screenshots aligned to the timeline → full-text search across courses
 
-## 2. 页面结构（移动端）
-- `/` — 首页（控制台：统计、搜索快捷入口、课表日历）
-- `/record` — 录音页（准备 / 录音中 / 已结束）
-- `/courses` — 课程页（历史课时、按课程分组）
-- `/study` — 复习页（闪卡 / 自测 / 追问 / 课程级 AI）
-- `/profile` — 我的（账号、设置、标签、服务器配置）
-- `/login` — 登录页
-- `/register` — 注册页
-- `/server-config` — 服务器配置页（首次启动）
-- `/session/:sid` — 课时详情（转写 / 播放 / 编辑 / 板书 / 分享）
-- `/summary/:sid` — AI 摘要页
-- `/search` — 跨课全文搜索页
-- `/schedule` — 课表 / 导入页
-- `/voiceprints` — 声纹库页（仅管理员）
-- `/syllabus` — 参考资料（官方教学大纲）
-- `/shared/:key` — 只读分享页（免登录）
-- `/tags` — 标签管理页
+## 2. Page structure (mobile)
+- `/` — Home (console: statistics, search shortcut, schedule calendar)
+- `/record` — Recording page (ready / recording / ended)
+- `/courses` — Courses page (past sessions, grouped by course)
+- `/study` — Review page (flashcards / self-test / follow-up / course-level AI)
+- `/profile` — Me (account, settings, tags, server config)
+- `/login` — Login page
+- `/register` — Registration page
+- `/server-config` — Server configuration page (first launch)
+- `/session/:sid` — Session detail (transcript / playback / edit / whiteboard / share)
+- `/summary/:sid` — AI summary page
+- `/search` — Cross-course full-text search page
+- `/schedule` — Schedule / import page
+- `/voiceprints` — Voiceprint library page (admin only)
+- `/syllabus` — Reference materials (official teaching syllabus)
+- `/shared/:key` — Read-only share page (no login required)
+- `/tags` — Tag management page
 
-**底部 Tab 导航（5 个，中间录音按钮突出）**：
-1. 首页（`/`）
-2. 课程（`/courses`）
-3. 录音（`/record`）— 中间大圆按钮
-4. 复习（`/study`）
-5. 我的（`/profile`）
+**Bottom tab navigation (5 tabs, with the center record button emphasized)**:
+1. Home (`/`)
+2. Courses (`/courses`)
+3. Record (`/record`) — large center round button
+4. Review (`/study`)
+5. Me (`/profile`)
 
-## 3. 核心功能
-- [x] 用户登录注册（教师/学生角色）
-- [ ] 服务器地址配置（首次启动）
-- [ ] 实时录音 + WebSocket 二进制 PCM 推送
-- [ ] 实时字幕流（说话人区分、重点/定义高亮、英文翻译）
-- [ ] 说话人改名 + 声纹回溯
-- [ ] 板书截图（拍照上传、时间轴对齐、灯箱查看）
-- [ ] AI 实时纠错 / 智能分句 / 英文翻译
-- [ ] AI 摘要生成（含可能听错替换）
-- [ ] 音频回放（可 seek、倍速、当前句高亮）
-- [ ] 闪卡（艾宾浩斯间隔复习）
-- [ ] 自测题（作答判对错 + 解析）
-- [ ] 追问（多轮对话 + 出处引用）
-- [ ] 课程级 AI（总结 / 考点预测 / 模拟卷）
-- [ ] 跨课全文搜索（按课程分组、关键词高亮）
-- [ ] 课程分组 + 每课程独立术语表 + 纠错替换表
-- [ ] 课表日历（日/周/月视图、导入）
-- [ ] 声纹库管理（仅管理员）
-- [ ] 参考资料（官方教学大纲预览）
-- [ ] 分享（生成只读链接）
-- [ ] 标签管理
-- [ ] 设置（AI 默认开关、深浅色、拾音灵敏度）
+## 3. Core features
+- [x] User login and registration (teacher/student roles)
+- [ ] Server address configuration (first launch)
+- [ ] Real-time recording + WebSocket binary PCM streaming
+- [ ] Real-time caption stream (speaker separation, key-point/definition highlighting, English translation)
+- [ ] Speaker renaming + voiceprint retroaction
+- [ ] Whiteboard screenshots (photo upload, timeline alignment, lightbox viewing)
+- [ ] AI real-time correction / smart sentence segmentation / English translation
+- [ ] AI summary generation (including likely-misheard substitutions)
+- [ ] Audio playback (seekable, playback speed, current sentence highlighted)
+- [ ] Flashcards (Ebbinghaus spaced repetition)
+- [ ] Self-test questions (answer graded right/wrong + explanation)
+- [ ] Follow-up (multi-turn conversation + source citations)
+- [ ] Course-level AI (summary / exam-point prediction / mock exam)
+- [ ] Cross-course full-text search (grouped by course, keyword highlighting)
+- [ ] Course grouping + per-course glossary + correction substitution table
+- [ ] Schedule calendar (day/week/month views, import)
+- [ ] Voiceprint library management (admin only)
+- [ ] Reference materials (official teaching syllabus preview)
+- [ ] Sharing (generate read-only link)
+- [ ] Tag management
+- [ ] Settings (AI default toggles, light/dark mode, pickup sensitivity)
 
-## 4. 数据存储
-- 后端自建 Python 服务（REST + WebSocket），App 只作为客户端
-- 服务器地址、令牌、设置等存 localStorage
-- 闪卡复习进度存 localStorage（key: sid + 卡片序号）
-- 所有课表/课程/转写/摘要/声纹 数据存在后端，按账号隔离
+## 4. Data storage
+- Self-hosted Python backend service (REST + WebSocket); the app is only a client
+- Server address, token, settings, etc. stored in localStorage
+- Flashcard review progress stored in localStorage (key: sid + card index)
+- All schedule/course/transcript/summary/voiceprint data stored on the backend, isolated per account
 
-## 5. 后端 / 第三方集成
-- **自建后端**：HTTPS + WebSocket，跑在用户自己的电脑/服务器上
-- **不需要 Supabase**：所有数据存在自建后端
-- **不需要第三方云服务**：音频不出设备，只有文本可选发给大模型
+## 5. Backend / third-party integration
+- **Self-hosted backend**: HTTPS + WebSocket, running on the user's own computer/server
+- **No Supabase needed**: all data stored on the self-hosted backend
+- **No third-party cloud services needed**: audio never leaves the device, and only text can optionally be sent to a large model
 
-## 6. 开发阶段计划
+## 6. Development phase plan
 
-### Phase 1：移动端 App Shell + 首页 + 认证（当前阶段）
-- 目标：搭建移动优先的 App 骨架，让用户能在手机上看到整体框架
-- 交付：底部导航、服务器配置页、登录/注册（接入真实 API）、首页控制台（统计卡片 + 搜索快捷入口 + 快捷操作）
+### Phase 1: Mobile App Shell + Home + Auth (current phase)
+- Goal: build a mobile-first app skeleton so users can see the overall framework on their phone
+- Deliverables: bottom navigation, server config page, login/registration (wired to the real API), home console (stat cards + search shortcut + quick actions)
 
-### Phase 2：录音页（核心功能）
-- 目标：实现完整的录音流程（准备 → 录音中 → 已结束）
-- 交付：麦克风权限申请、WebSocket 连接、16kHz Int16 PCM 推送、实时字幕流、说话人改名、标重点、拍板书、我的笔记、断线重连
+### Phase 2: Recording page (core feature)
+- Goal: implement the full recording flow (ready → recording → ended)
+- Deliverables: microphone permission request, WebSocket connection, 16kHz Int16 PCM streaming, real-time caption stream, speaker renaming, key-point marking, whiteboard photos, my notes, reconnection on drop
 
-### Phase 3：课时详情 + AI 摘要
-- 目标：历史课回看、AI 摘要生成与查看、音频播放
-- 交付：课时详情页（转写/播放/编辑/板书/分享/导出）、AI 摘要页（含可能听错替换）、只读分享页
+### Phase 3: Session detail + AI summary
+- Goal: review past classes, generate and view AI summaries, audio playback
+- Deliverables: session detail page (transcript/playback/edit/whiteboard/share/export), AI summary page (including likely-misheard substitutions), read-only share page
 
-### Phase 4：复习功能
-- 目标：闪卡、自测题、追问、课程级 AI
-- 交付：闪卡系统（艾宾浩斯）、自测题、追问对话框、课程级 AI（总结/考点/模拟卷）
+### Phase 4: Review features
+- Goal: flashcards, self-test questions, follow-up, course-level AI
+- Deliverables: flashcard system (Ebbinghaus), self-test questions, follow-up dialog, course-level AI (summary/exam points/mock exam)
 
-### Phase 5：搜索 + 课程 + 课表
-- 目标：跨课搜索、课程分组、课表日历
-- 交付：全文搜索页、课程分组页、课表日历（日/周/月）、导入功能
+### Phase 5: Search + Courses + Schedule
+- Goal: cross-course search, course grouping, schedule calendar
+- Deliverables: full-text search page, course grouping page, schedule calendar (day/week/month), import feature
 
-### Phase 6：高级功能
-- 目标：声纹库、参考资料、设置完善
-- 交付：声纹库页（管理员）、教学大纲预览、我的/设置页完善、标签管理
+### Phase 6: Advanced features
+- Goal: voiceprint library, reference materials, settings polish
+- Deliverables: voiceprint library page (admin), syllabus preview, Me/settings page polish, tag management
