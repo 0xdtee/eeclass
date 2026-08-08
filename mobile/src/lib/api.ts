@@ -8,9 +8,9 @@ function getStoredServerUrl(): string {
   }
 }
 
-// 后端地址:
-//  · 网页版部署在后端同源(https://dtee.os.hi.cn:5901/m)→ 用"当前网页来源",免配置、无 CORS。
-//  · 原生 App(打包进 Capacitor,来源是 capacitor://localhost)/ 本地开发 → 用写死的后端地址。
+// Backend URL:
+//  · Web version is deployed same-origin as the backend (https://dtee.os.hi.cn:5901/m) → use the "current page origin", no config, no CORS.
+//  · Native app (bundled into Capacitor, origin is capacitor://localhost) / local dev → use a hardcoded backend URL.
 const BACKEND = 'https://dtee.os.hi.cn:5901';
 function defaultOrigin(): string {
   if (typeof window === 'undefined') return BACKEND;
@@ -34,7 +34,7 @@ export function getServerUrl(): string {
 }
 
 export function hasServerUrl(): boolean {
-  // 总有默认后端(网页版=同源,App=写死后端),不强制走服务器配置页;用户仍可手动改。
+  // There's always a default backend (web = same-origin, app = hardcoded backend), so don't force the server-config page; the user can still change it manually.
   return true;
 }
 

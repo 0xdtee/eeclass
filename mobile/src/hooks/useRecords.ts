@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { apiFetch } from '@/lib/api';
 
-// 后端返回的字段和本 App 的类型不完全一致,这里做适配。
+// The fields returned by the backend don't exactly match this app's types, so adapt them here.
 function fmtDuration(sec?: number): string {
   const s = Math.floor(sec || 0);
   if (s < 60) return `${s}秒`;
@@ -11,7 +11,7 @@ function fmtDuration(sec?: number): string {
 function titleOf(sid: string, title?: string): string {
   return (title && title.trim()) || sid.replace(/^\d{4}-\d{2}-\d{2}_\d{4}_?/, '') || sid;
 }
-// 后端 /api/sessions 每条:{ id, title, duration_s, owner, lines, summary?, key_points?, ... }
+// Each backend /api/sessions entry: { id, title, duration_s, owner, lines, summary?, key_points?, ... }
 function adaptSession(s: Record<string, unknown>): SessionRecord {
   const sid = (s.id ?? s.sid) as string;
   return {
@@ -182,16 +182,16 @@ export function useSessionDetail(sid: string | null) {
     setError('');
     try {
       const enc = encodeURIComponent(sid);
-      // 转写正文
+      // Transcript body
       const t = await apiFetch<{ dir: string; lines: Record<string, unknown>[] }>(`/api/transcript/${enc}`);
-      // 摘要(可能没有,忽略错误)
+      // Summary (may not exist, ignore errors)
       let summary: string | undefined;
       let key_points: string[] | undefined;
       try {
         const s = await apiFetch<{ summary?: string; key_points?: string[] }>(`/api/transcript/${enc}/summary`);
         summary = s.summary; key_points = s.key_points;
-      } catch { /* 没存过摘要 */ }
-      // 板书(可能没有)
+      } catch { /* no summary was ever saved */ }
+      // Whiteboard shots (may not exist)
       let shots: ShotRecord[] | undefined;
       try {
         const sh = await apiFetch<ShotsResponse>(`/api/shots/${enc}`);

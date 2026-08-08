@@ -40,14 +40,14 @@ export default function MobileHomePage() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 列表弹窗(和网页版一致:点统计卡片弹出清单)
+  // List modal (same as web: click a stat card to pop up the list)
   const [showCourseTypes, setShowCourseTypes] = useState(false);
   const [showAudioList, setShowAudioList] = useState(false);
   const [showSummaryList, setShowSummaryList] = useState(false);
 
   const tagCount = useMemo(() => defaultTags.length, []);
 
-  // 真实数据:全部课时 + 标签
+  // Real data: all sessions + tags
   const { sessions } = useSessions();
   const { tags } = useTagsStore();
 
@@ -57,7 +57,7 @@ export default function MobileHomePage() {
     return map;
   }, [tags]);
 
-  // 后端 SessionRecord → 弹窗需要的统一形状(和网页版 SessionItem 对齐)
+  // Backend SessionRecord → unified shape the modal needs (aligned with web's SessionItem)
   const modalSessions = useMemo(
     () =>
       sessions.map((s) => ({
@@ -73,13 +73,13 @@ export default function MobileHomePage() {
     [sessions]
   );
 
-  // 只显示有摘要的课时(和「AI摘要」卡片计数一致)
+  // Only show sessions that have a summary (matches the "AI摘要" card count)
   const summarySessions = useMemo(
     () => modalSessions.filter((s) => s.summary && s.summary.trim().length > 0),
     [modalSessions]
   );
 
-  // 「课程总数」按去掉编号后的基名归类:高数第1课/第2课… 都算同一门「高数」
+  // "课程总数" groups by base name after stripping the number: 高数第1课/第2课… all count as one "高数"
   const distinctCourses = useMemo(() => {
     const baseName = (t: string) =>
       (t || '').replace(/\s*第\s*\d+\s*[课讲节]\s*$/, '').replace(/\s*[（(]\s*\d+\s*[）)]\s*$/, '').trim();
@@ -133,7 +133,7 @@ export default function MobileHomePage() {
           const m = Math.floor(s / 60);
           return s % 60 ? `${m}分${s % 60}秒` : `${m}分钟`;
         };
-        // 后端返回 { id, title, duration_s, summary? },字段名和本页类型不同,做适配
+        // Backend returns { id, title, duration_s, summary? }; field names differ from this page's type, so adapt
         const sessions: SessionMeta[] = raw.map((s) => {
           const id = String((s.id ?? s.sid) ?? '');
           const title = typeof s.title === 'string' && s.title.trim() ? (s.title as string) : id;
@@ -377,7 +377,7 @@ export default function MobileHomePage() {
         </div>
       </div>
 
-      {/* 统计卡片弹窗:和网页版一致,点卡片弹出清单 */}
+      {/* Stat card modal: same as web, click a card to pop up the list */}
       <CourseTypeModal
         isOpen={showCourseTypes}
         onClose={() => setShowCourseTypes(false)}

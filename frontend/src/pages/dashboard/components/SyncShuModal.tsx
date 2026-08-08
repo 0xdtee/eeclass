@@ -37,7 +37,7 @@ export default function SyncShuModal({ isOpen, onClose, onSync, onConfirmEvents 
   return (
     <Modal isOpen={isOpen} onClose={close} title="上大选课 → 同步日历" width="max-w-md">
       <div className="space-y-4">
-        {/* 第一步:去上大官网选课 */}
+        {/* Step 1: pick courses on the SHU official site */}
         <div className="rounded-xl border border-background-200 p-3.5">
           <p className="text-xs font-semibold text-foreground-800 mb-2 flex items-center gap-2">
             <span className="w-5 h-5 flex items-center justify-center bg-accent-100 text-accent-700 rounded-full text-[11px]">1</span>
@@ -56,7 +56,7 @@ export default function SyncShuModal({ isOpen, onClose, onSync, onConfirmEvents 
           </p>
         </div>
 
-        {/* 第二步:同步已选课程到日历 */}
+        {/* Step 2: sync the selected courses to the calendar */}
         <div className="rounded-xl border border-background-200 p-3.5 space-y-3">
           <p className="text-xs font-semibold text-foreground-800 flex items-center gap-2">
             <span className="w-5 h-5 flex items-center justify-center bg-accent-100 text-accent-700 rounded-full text-[11px]">2</span>

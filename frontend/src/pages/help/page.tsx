@@ -10,13 +10,13 @@ interface Feature {
   name: string;
   desc: string;
   route: string;
-  /** 「前往使用」按钮的文案,默认「前往使用」 */
+  /** Label for the 「前往使用」 button, defaults to 「前往使用」 */
   cta?: string;
-  /** 对应的动态演示组件 key(可选) */
+  /** Key of the corresponding animated-demo component (optional) */
   demo?: DemoKey;
-  /** 操作步骤(逐条) */
+  /** Steps to follow (one by one) */
   steps?: string[];
-  /** 逐步引导时,每一步用箭头指向的真实元素选择器(与 steps 对齐,没有就居中提示) */
+  /** During step-by-step guidance, the real-element selector each arrow points to (aligned with steps; centered hint if absent) */
   targets?: string[];
 }
 
@@ -28,7 +28,7 @@ interface Category {
   features: Feature[];
 }
 
-// 说明书内容:只写代码里真实存在的功能,分门别类。
+// Manual content: only features that actually exist in the code, organized by category.
 const CATEGORIES: Category[] = [
   {
     id: 'record',
@@ -330,7 +330,7 @@ const CATEGORIES: Category[] = [
 
 export default function HelpPage() {
   const navigate = useNavigate();
-  // 当前分类存进 URL(?cat=),这样从功能页返回时能恢复到刚才看的分类,而不是重置成默认
+  // Store the current category in the URL (?cat=), so returning from a feature page restores the category you were viewing instead of resetting to default
   const [sp, setSp] = useSearchParams();
   const raw = sp.get('cat') || '';
   const active: CatId = (['record', 'ai', 'manage', 'account'].includes(raw) ? raw : 'record') as CatId;
@@ -340,7 +340,7 @@ export default function HelpPage() {
   return (
     <div className="min-h-screen bg-background-100">
       <HelpDemoStyles />
-      {/* 顶栏 */}
+      {/* Top bar */}
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
         <div className="flex items-center gap-3 h-14 px-6 max-w-5xl mx-auto">
           <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer">
@@ -367,7 +367,7 @@ export default function HelpPage() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-5 items-start">
-          {/* 左:分类边栏 */}
+          {/* Left: category sidebar */}
           <aside className="w-full md:w-56 flex-shrink-0 flex md:flex-col gap-1.5 overflow-x-auto md:sticky md:top-20 no-scrollbar">
             {CATEGORIES.map((c) => (
               <button
@@ -392,7 +392,7 @@ export default function HelpPage() {
             ))}
           </aside>
 
-          {/* 右:该分类下的功能卡片 */}
+          {/* Right: feature cards under this category */}
           <div className="flex-1 min-w-0 w-full">
             <div className="mb-4">
               <h3 className="text-lg font-bold text-foreground-900 flex items-center gap-2">
@@ -410,7 +410,7 @@ export default function HelpPage() {
                     key={f.name}
                     className="flex flex-col bg-background-50 border border-background-200 rounded-2xl p-4 hover:border-accent-400 transition-colors"
                   >
-                    {/* 标题 */}
+                    {/* Title */}
                     <div className="flex items-start gap-3 mb-3">
                       <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-accent-100 text-accent-600 rounded-xl">
                         <i className={`${f.icon} text-lg`}></i>
@@ -421,14 +421,14 @@ export default function HelpPage() {
                       </div>
                     </div>
 
-                    {/* 动态演示 */}
+                    {/* Animated demo */}
                     {Demo && (
                       <div className="mb-3">
                         <Demo />
                       </div>
                     )}
 
-                    {/* 操作步骤 */}
+                    {/* Steps */}
                     {f.steps && f.steps.length > 0 && (
                       <div className="mb-3">
                         <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground-500 mb-2">
@@ -448,7 +448,7 @@ export default function HelpPage() {
                       </div>
                     )}
 
-                    {/* 前往使用 */}
+                    {/* Go use it */}
                     <div className="mt-auto pt-3 border-t border-background-100">
                       <button
                         onClick={() => { startGuide(f.name, f.steps, f.targets); navigate(f.route); }}

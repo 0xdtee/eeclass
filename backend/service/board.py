@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""识别板书/PPT 截图内容,供课堂总结、课程总结、考点、模拟卷等一起参考。
-有阿里云百炼 DashScope key 就用 Qwen-VL 视觉大模型"看懂"板书(公式/图/字),
-否则退回本地 RapidOCR 提取文字。结果按图片文件名缓存(OCR/大模型都慢)。"""
+"""Recognize the content of whiteboard/PPT screenshots, for use by the class summary, course summary, exam points, mock papers, etc.
+If an Aliyun Bailian DashScope key is available, use the Qwen-VL vision model to "read" the board (formulas/figures/text),
+otherwise fall back to local RapidOCR text extraction. Results are cached by image filename (both OCR and the model are slow)."""
 import os
 import json
 
@@ -52,7 +52,7 @@ def recognize_board(image_bytes, cfg):
         try:
             return _qwen_describe(image_bytes, key)
         except Exception:
-            pass  # 云端失败退回本地
+            pass  # fall back to local when the cloud call fails
     try:
         return _rapidocr_text(image_bytes)
     except Exception:
@@ -60,7 +60,7 @@ def recognize_board(image_bytes, cfg):
 
 
 def board_content(session_dir, cfg):
-    """识别一节课的所有板书,返回合并文本;按文件名缓存到 shots/board_ocr.json。"""
+    """Recognize all whiteboard shots of one class, return the merged text; cached by filename to shots/board_ocr.json."""
     shots_dir = os.path.join(session_dir, "shots")
     if not os.path.isdir(shots_dir):
         return ""

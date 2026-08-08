@@ -149,7 +149,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
 
   const handleNavigate = (sessionId: string, view: 'summary' | 'transcript') => {
     onClose();
-    // 带上课程 id 和目标标签页:纪要→摘要页(自动生成),原文→课堂转写页
+    // Pass the course id and target tab: minutes -> summary page (auto-generated), original text -> class-transcript page
     const tab = view === 'summary' ? 'summary' : 'transcription';
     navigate(`/course?sid=${encodeURIComponent(sessionId)}&tab=${tab}`);
   };

@@ -20,13 +20,13 @@ interface CalendarProps {
   onCreateSession: (date: string) => void;
   onImport?: () => void;
   onSyncShu?: () => void;
-  /** 变化时日历跳到这个日期所在的月(如导入课表后跳到课程所在月) */
+  /** When changed, the calendar jumps to the month containing this date (e.g. jump to the course's month after importing a schedule) */
   focusDate?: string;
 }
 
 type CalendarView = 'year' | 'month' | 'week' | 'day';
 
-// 课程块配色:按课名(去掉「第N课」)哈希取色,同一门课颜色一致
+// Course block color: hashed from the course name (with "Lesson N" stripped), so the same course always gets the same color
 const BLOCK_COLORS = [
   'bg-red-100 text-red-700 border-red-200',
   'bg-blue-100 text-blue-700 border-blue-200',
@@ -78,7 +78,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   const [viewDay, setViewDay] = useState(today.getDate());
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
-  // 导入课表后跳到课程所在的月份,不然课在别的月看不到
+  // After importing a schedule, jump to the course's month, otherwise courses in other months aren't visible
   useEffect(() => {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(focusDate || '');
     if (m) {
@@ -111,10 +111,10 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   const currentDateStr = formatDate(viewYear, viewMonth, viewDay);
   const currentSessions = sessionsByDate[currentDateStr] ?? [];
 
-  // 当前周的周一~周日 7 天
+  // The 7 days (Monday–Sunday) of the current week
   const weekDates = useMemo(() => {
     const base = new Date(viewYear, viewMonth, viewDay);
-    const dow = (base.getDay() + 6) % 7; // 周一=0
+    const dow = (base.getDay() + 6) % 7; // Monday=0
     const mon = new Date(base);
     mon.setDate(base.getDate() - dow);
     return Array.from({ length: 7 }, (_, i) => {
@@ -135,7 +135,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
         setViewMonth((m) => m - 1);
       }
     } else {
-      const step = viewMode === 'week' ? 7 : 1;   // 周视图整周翻,日视图一天翻
+      const step = viewMode === 'week' ? 7 : 1;   // Week view pages a whole week, day view pages one day
       const prev = new Date(viewYear, viewMonth, viewDay - step);
       setViewYear(prev.getFullYear());
       setViewMonth(prev.getMonth());
@@ -198,7 +198,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   const handleDateClick = (year: number, month: number, day: number) => {
     const dateStr = formatDate(year, month, day);
     const daySessions = sessionsByDate[dateStr] ?? [];
-    // 年视图点任意一天 → 进这天的「日」视图(不要直接跳进某节课录音)
+    // Clicking any day in year view → enter that day's "day" view (don't jump straight into a session's recording)
     if (viewMode === 'year') {
       setViewYear(year);
       setViewMonth(month);
@@ -384,7 +384,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   );
 }
 
-/* ============ WEEK VIEW(课表网格)============ */
+/* ============ WEEK VIEW (schedule grid) ============ */
 
 interface WeekViewProps {
   weekDates: Date[];
@@ -404,7 +404,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
     const list = (sessionsByDate[key] ?? []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     return { d, key, list };
   });
-  // 时间行:本周出现过的所有开始时间,从早到晚
+  // Time rows: all start times that appear this week, earliest to latest
   const times = Array.from(new Set(cols.flatMap((c) => c.list.map((s) => s.time).filter(Boolean)))).sort();
   const isToday = (d: Date) =>
     d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
@@ -412,7 +412,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
   return (
     <div className="p-4 overflow-x-auto">
       <div className="min-w-[720px]">
-        {/* 表头:周一~周日 + 日期 */}
+        {/* Header: Monday–Sunday + dates */}
         <div className="grid" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
           <div></div>
           {cols.map((c, i) => (
@@ -753,8 +753,8 @@ function DayView({
     { label: '晚间 18:00 - 21:00', range: '18' },
   ];
 
-  // 把每节课归到「起点小时 <= 该课小时」的最后一个时段,保证任何时间的课都能显示(不丢课);
-  // 早于第一段的课归到第一段,晚于最后一段起点的课归到最后一段(晚间涵盖 18:00 及以后)。
+  // Assign each session to the last slot whose start hour <= the session's hour, so sessions at any time are shown (none dropped);
+  // sessions before the first slot go to the first slot, those after the last slot's start go to the last slot (evening covers 18:00 and later).
   const slotHours = timeSlots.map((s) => parseInt(s.range, 10));
   const slotIndexOf = (hour: number) => {
     let idx = 0;
@@ -854,7 +854,7 @@ function DayView({
                             {/* Title */}
                             <h5 className="text-sm font-semibold text-foreground-800 mb-1.5">{session.title}</h5>
 
-                            {/* Tag chip(导入的课带的标签)*/}
+                            {/* Tag chip (label carried by imported courses) */}
                             {session.tags[0] && tagLabels[session.tags[0]] && (
                               <span className={`inline-flex items-center gap-1 mb-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${textClass} ${bgClass}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`}></span>

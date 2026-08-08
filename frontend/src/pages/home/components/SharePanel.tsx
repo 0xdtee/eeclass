@@ -26,7 +26,7 @@ export default function SharePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  // 面板内自选要共享哪节课(默认用外面选中的那节,没有就选第一节)
+  // Pick which session to share within the panel (defaults to the one selected outside, or the first if none)
   const [selectedSid, setSelectedSid] = useState('');
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function SharePanel({
     try {
       await navigator.clipboard.writeText(shareUrl(share.id));
     } catch {
-      // 旧浏览器或非安全上下文下 clipboard 不可用，退回选中让用户自己复制
+      // Clipboard is unavailable in old browsers or non-secure contexts, so fall back to selecting the text for the user to copy manually
       (document.getElementById('share-url') as HTMLInputElement | null)?.select();
     }
     setCopied(true);
@@ -88,7 +88,7 @@ export default function SharePanel({
           他们看不到别的课、不能录音、不能修改。
         </p>
 
-        {/* 选择要共享哪节课 */}
+        {/* Choose which session to share */}
         <div>
           <label className="block text-xs font-medium text-foreground-600 mb-1.5">选择要共享的课</label>
           {sessions.length === 0 ? (

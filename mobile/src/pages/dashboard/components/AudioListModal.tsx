@@ -16,11 +16,11 @@ interface AudioListModalProps {
   sessions: SessionItem[];
 }
 
-// 后端 /api/audio/{sid} 直接回传原始 audio.wav,接受 token 查询参数(跨源 <audio> 无法带请求头,只能用 query)。
+// Backend /api/audio/{sid} returns the raw audio.wav directly and accepts a token query param (cross-origin <audio> can't send headers, only query).
 const audioUrl = (sid: string) =>
   `${getServerUrl()}/api/audio/${encodeURIComponent(sid)}?token=${encodeURIComponent(getToken())}`;
 
-// 下载原始录音:带 download=文件名,让服务端以附件形式回传。
+// Download the raw recording: pass download=filename so the server returns it as an attachment.
 const audioDownloadUrl = (sid: string, filename: string) =>
   `${audioUrl(sid)}&download=${encodeURIComponent(filename)}`;
 
@@ -33,7 +33,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="录音回放" width="max-w-2xl">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
-        {/* 顶部统计 + 搜索 */}
+        {/* Top stats + search */}
         <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 flex items-center justify-center bg-primary-100 rounded-lg">
@@ -63,7 +63,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
           <p className="text-[11px] text-foreground-300">点播放条即可听这节课的原始录音;可拖动进度、变速。</p>
         </div>
 
-        {/* 录音列表 */}
+        {/* Recording list */}
         <div className="overflow-y-auto flex-1">
           {filtered.length === 0 ? (
             <div className="py-12 text-center">
@@ -95,7 +95,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                         </span>
                       </div>
                     </div>
-                    {/* 导出录音:直接下载原始 audio.wav */}
+                    {/* Export recording: download the raw audio.wav directly */}
                     <a
                       href={audioDownloadUrl(s.id, `${(s.title || '录音').replace(/[\\/:*?"<>|]/g, '_')}.wav`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-200 cursor-pointer whitespace-nowrap flex-shrink-0"
@@ -105,7 +105,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                       导出录音
                     </a>
                   </div>
-                  {/* 原始录音:原生播放器,preload=none 避免一次性拉全部元数据 */}
+                  {/* Raw recording: native player, preload=none to avoid fetching all metadata at once */}
                   <audio
                     controls
                     preload="none"

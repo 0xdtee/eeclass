@@ -1,13 +1,15 @@
-/* 课堂实时字幕 —— 浏览器控制台
+/* Live classroom captions — browser console
  *
- * 和 taskpane.js 的区别：这一端**不写 Word**，只负责操作和显示。
- * 写文档由本地服务通过 COM 完成（service\word_com.py），因为这台机器上
- * Word 的 Web 加载项子系统是死的，任务窗格那条路点不出按钮。
+ * Difference from taskpane.js: this side does **not** write to Word; it only
+ * handles controls and display. Document writing is done by the local service
+ * via COM (service\word_com.py), because on this machine Word's web add-in
+ * subsystem is dead — the task pane path can't even click a button.
  *
- * 好处顺带也拿到了：这个页面关掉、浏览器崩了，录音转写和写文档都照常继续。
+ * A bonus that comes for free: even if this page is closed or the browser
+ * crashes, recording, transcription, and document writing all keep running.
  */
 
-const MAX_LIVE = 200;     // 页面里最多留多少条字幕
+const MAX_LIVE = 200;     // max number of caption lines kept on the page
 
 let ws = null;
 let running = false;
@@ -19,7 +21,7 @@ window.addEventListener("DOMContentLoaded", () => {
   connect();
 });
 
-// 本机实测数据（90 秒课堂录音，同一套 VAD 切句）。选引擎时直接看到代价。
+// Measured on this machine (90s of classroom audio, same VAD segmentation). Shows the cost of each engine at selection time.
 const BK_HINT = {
   sensevoice: "RTF 0.05，最差单句 0.4 秒，自带标点。中文错字最少，默认就用它。",
   "zipformer-stream": "真流式：说到一半就出字（首字约 0.6 秒），但中途文本会边说边改、且没有标点；断句定稿时才补标点并写进 Word。",
@@ -28,8 +30,8 @@ const BK_HINT = {
   whisper: "RTF 0.44，最差单句 3.1 秒——比 SenseVoice 慢 10 倍，中文错字也更多。留着做对照。",
 };
 
-// 拾音灵敏度。数字是本机用真实课堂录音扫出来的，别随手改。
-// 0.20 以下会开始把噪声认成人话（实测冒出「一颗佛的城堡」这种）。
+// Pickup sensitivity. These numbers were swept on this machine using real classroom audio — don't change them casually.
+// Below 0.20 it starts hearing noise as speech (in testing it produced hallucinations like "a Buddha's castle").
 const SENS = {
   std:  { threshold: 0.50, exit_threshold: 0.35, min_speech_ms: 250 },
   high: { threshold: 0.35, exit_threshold: 0.22, min_speech_ms: 180 },
@@ -75,7 +77,7 @@ function start() {
   send({
     cmd: "start",
     title: $("title").value.trim() || null,
-    device: dev === "" ? null : dev,          // "sd:9"（麦克风）或 "sc:0"（系统声音）
+    device: dev === "" ? null : dev,          // "sd:9" (microphone) or "sc:0" (system audio)
     loopback: opt && opt.dataset.kind === "loopback",
     backend: bk === "zipformer-stream" ? "zipformer" : bk,
     streaming: bk === "zipformer-stream",
@@ -90,7 +92,7 @@ function start() {
   $("start").textContent = "正在启动…";
 }
 
-/* ============ 与本地服务通信 ============ */
+/* ============ Communication with the local service ============ */
 function connect() {
   try {
     ws = new WebSocket(`wss://${location.host}/ws`);
@@ -168,8 +170,8 @@ function fillDevices(devs, def) {
     const o = document.createElement("option");
     o.value = d.id;
     o.dataset.kind = d.kind;
-    // shaky = 只有 WDM-KS 这一条驱动通道，实测经常开不起来（-9999 / -9996）。
-    // 不隐藏（有的设备只剩这一条路），但要让人一眼看出风险。
+    // shaky = only the WDM-KS driver channel is available, which often fails to open in testing (-9999 / -9996).
+    // We don't hide it (some devices have no other path), but the risk should be obvious at a glance.
     o.textContent = (d.shaky ? "⚠ " : "") +
       (d.kind === "loopback" ? "🔊 系统声音 · " : "🎤 ") + d.name +
       (d.shaky ? "（这条通道可能开不起来）" : "");
@@ -227,7 +229,7 @@ function drawSpeakers(list) {
   }
 }
 
-/* 流式后端的中途结果。只显示，不写文档——它随时会被改写。 */
+/* Interim results from the streaming backend. Display only, never written to the document — it can be rewritten at any time. */
 function onPartial(text) {
   const box = $("lines");
   let el = document.getElementById("partial");
@@ -245,7 +247,7 @@ function onPartial(text) {
 function onLine(m) {
   const box = $("lines");
   const p = document.getElementById("partial");
-  if (p) p.remove();          // 这句定稿了，把中途那行换掉
+  if (p) p.remove();          // this line is finalized, replace the interim row
   const div = document.createElement("div");
   div.className = "ln" + (m.kind ? " " + m.kind : "");
   const meta = document.createElement("span");
@@ -264,7 +266,7 @@ function onLine(m) {
   box.scrollTop = box.scrollHeight;
 }
 
-/* ============ 杂项 ============ */
+/* ============ Misc ============ */
 function fmtTime(sec) {
   sec = Math.floor(sec || 0);
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;

@@ -8,7 +8,7 @@ export default function SearchPage() {
   const { results, total, loading, error, search } = useSearch();
   const [q, setQ] = useState(params.get('q') || '');
 
-  // 首屏若带 ?q= 直接搜一次
+  // If the initial URL has ?q=, run a search once
   useEffect(() => {
     const initial = params.get('q') || '';
     if (initial.trim()) search(initial.trim());

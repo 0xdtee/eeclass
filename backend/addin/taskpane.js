@@ -1,22 +1,22 @@
-/* 课堂实时字幕 —— Word 任务窗格
+/* Live classroom captions — Word task pane
  *
- * 这一端只干两件事：显示状态、把识别结果写进文档。
- * 录音、识别、说话人、划重点全部在本地 Python 服务里完成（见 ..\service\）。
- * 即使这个窗格关掉或 Word 崩了，服务那边的录音和转写都照常继续。
+ * This side does only two things: show status and write recognition results into the document.
+ * Recording, recognition, speaker ID, and highlighting all happen in the local Python service (see ..\service\).
+ * Even if this pane is closed or Word crashes, the service keeps recording and transcribing.
  */
 
-// ——— 排版参数，想改字号颜色就改这里 ———
+// ——— Formatting parameters; change font sizes and colors here ———
 const STYLE = {
-  prefixColor: "#9AA0A6",  // 时间和说话人的灰色
+  prefixColor: "#9AA0A6",  // gray for timestamp and speaker
   prefixSize: 9,
   textColor: "#000000",
   textSize: 11,
-  keyHighlight: "#FFFF00",   // 重点：黄
-  defineHighlight: "#C7F0C7", // 定义：浅绿
+  keyHighlight: "#FFFF00",   // key point: yellow
+  defineHighlight: "#C7F0C7", // definition: light green
 };
 
-const FLUSH_MS = 500;     // 攒 0.5 秒写一次，避免 Word 界面被高频写入拖卡
-const MAX_LIVE = 200;     // 窗格里最多留多少条字幕
+const FLUSH_MS = 500;     // batch writes every 0.5s to avoid bogging down the Word UI with frequent writes
+const MAX_LIVE = 200;     // max number of caption lines kept in the pane
 
 let ws = null;
 let running = false;
@@ -25,13 +25,13 @@ let writing = false;
 let hasWritten = false;
 let wordReady = false;
 let speakers = {};
-// 服务端是不是已经在用 COM 写文档了（浏览器控制台开的课就是这种）。
-// 是的话这一端必须闭嘴，否则同一句会被写两遍。
+// Whether the server is already writing the document via COM (that's the case for a session started from the browser console).
+// If so, this side must stay quiet, otherwise the same line gets written twice.
 let comWriting = false;
 
 const $ = (id) => document.getElementById(id);
 
-/* ============ Office 初始化 ============ */
+/* ============ Office initialization ============ */
 Office.onReady((info) => {
   wordReady = info.host === Office.HostType.Word;
   if (!wordReady) note("请在 Word 中打开本加载项。", true);
@@ -59,7 +59,7 @@ function start() {
   send({
     cmd: "start",
     title: $("title").value.trim() || null,
-    device: dev === "" ? null : dev,          // "sd:9"（麦克风）或 "sc:0"（系统声音）
+    device: dev === "" ? null : dev,          // "sd:9" (microphone) or "sc:0" (system audio)
     loopback: opt && opt.dataset.kind === "loopback",
     model: $("model").value,
     new_para_gap_ms: Math.round(parseFloat($("gap").value) * 1000),
@@ -68,7 +68,7 @@ function start() {
   $("start").textContent = "正在启动…";
 }
 
-/* ============ 与本地服务通信 ============ */
+/* ============ Communication with the local service ============ */
 function connect() {
   try {
     ws = new WebSocket(`wss://${location.host}/ws`);
@@ -189,7 +189,7 @@ function drawSpeakers(list) {
   }
 }
 
-/* ============ 字幕 ============ */
+/* ============ Captions ============ */
 function onLine(m) {
   const box = $("lines");
   const div = document.createElement("div");
@@ -215,7 +215,7 @@ function onLine(m) {
   }
 }
 
-/* ============ 写入 Word ============ */
+/* ============ Writing to Word ============ */
 async function writeHeader() {
   if (!wordReady) return;
   const t = $("title").value.trim();
@@ -226,7 +226,7 @@ async function writeHeader() {
       p.styleBuiltIn = Word.Style.heading2;
       await ctx.sync();
     });
-    hasWritten = false; // 标题之后第一句照样另起一段
+    hasWritten = false; // the first line after the title still starts a new paragraph
   } catch (e) { note("写入标题失败：" + e.message, true); }
 }
 
@@ -258,7 +258,7 @@ async function flush() {
           last = p.insertText(it.text, Word.InsertLocation.end);
           hasWritten = true;
         } else {
-          // 停顿很短，接着上一段写，读起来才连贯
+          // short pause, keep appending to the previous paragraph so it reads coherently
           last = body.insertText(it.text, Word.InsertLocation.end);
         }
         applyStyle(last, it.kind);
@@ -268,13 +268,13 @@ async function flush() {
     });
   } catch (e) {
     note("写入文档失败：" + (e.message || e) + "（内容仍在本地记录中，不会丢）", true);
-    // 写不进去就别死循环重试，丢回队列头部只会越积越多
+    // if the write fails, don't retry in a tight loop — pushing back to the queue head only makes it pile up
   }
   writing = false;
 }
 
 async function renameInDoc(oldName, newName) {
-  // COM 那边改名时会自己替换文档里的旧名字，这里再替一次就重复了
+  // when the COM side renames, it replaces the old name in the document itself; doing it again here would duplicate the change
   if (!wordReady || comWriting || !oldName || oldName === newName) return;
   try {
     await Word.run(async (ctx) => {
@@ -292,7 +292,7 @@ async function renameInDoc(oldName, newName) {
   } catch (e) { note("重命名替换失败：" + e.message, true); }
 }
 
-/* ============ 杂项 ============ */
+/* ============ Misc ============ */
 function fmtTime(sec) {
   sec = Math.floor(sec || 0);
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;

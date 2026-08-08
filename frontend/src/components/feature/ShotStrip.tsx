@@ -1,6 +1,6 @@
 /**
- * 板书 / PPT 截图。这是课堂特有的需求——复习时想看到「老师说这句话的时候黑板上写的是什么」，
- * 会议类工具全都没有这个。截图按录音秒数插进转写流里。
+ * Blackboard / PPT screenshots. This is a classroom-specific need — during review you want to see "what was on the board when the teacher said this sentence";
+ * meeting tools have nothing like it. Screenshots are inserted into the transcript stream by their audio-second timestamps.
  */
 import { useState } from 'react';
 import { shotUrl } from '@/hooks/useLibrary';

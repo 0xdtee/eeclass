@@ -1,6 +1,6 @@
 /**
- * 复习：闪卡（带艾宾浩斯排期）、自测题、拿这节课追问 DeepSeek。
- * 转写只是原料，能自测的东西才是复习真正需要的。
+ * Review: flashcards (with Ebbinghaus scheduling), self-test questions, and asking DeepSeek follow-ups about this session.
+ * The transcript is just raw material; what you can self-test on is what review really needs.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AskCite, Flashcard, QuizItem } from '@/hooks/useLibrary';
@@ -22,7 +22,7 @@ interface ReviewTabProps {
   onSeek: (seconds: number) => void;
 }
 
-/** 艾宾浩斯间隔（天）。忘了=10分钟后再来，其余按这个递进。 */
+/** Ebbinghaus intervals (days). Forgot = come back in 10 minutes; the rest progress by this. */
 const LADDER = [1, 2, 4, 7, 15];
 const AGAIN_MS = 10 * 60 * 1000;
 
@@ -49,20 +49,20 @@ export default function ReviewTab({
 }: ReviewTabProps) {
   const [section, setSection] = useState<'cards' | 'quiz' | 'ask'>('cards');
 
-  // ---- 闪卡 ----
+  // ---- Flashcards ----
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [cardState, setCardState] = useState<Record<number, CardState>>({});
   const [loadingCards, setLoadingCards] = useState(false);
 
-  // ---- 自测 ----
+  // ---- Self-test ----
   const [quiz, setQuiz] = useState<QuizItem[]>([]);
   const [picked, setPicked] = useState<Record<number, number>>({});
   const [wrongOnly, setWrongOnly] = useState(false);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
 
-  // ---- 追问 ----
+  // ---- Follow-up ----
   const [chat, setChat] = useState<{ role: string; content: string; cites?: AskCite[] }[]>([]);
   const [q, setQ] = useState('');
   const [asking, setAsking] = useState(false);
@@ -185,7 +185,7 @@ export default function ReviewTab({
         </div>
       )}
 
-      {/* ---------------- 闪卡 ---------------- */}
+      {/* ---------------- Flashcards ---------------- */}
       {section === 'cards' && (
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           {cards.length === 0 ? (
@@ -257,7 +257,7 @@ export default function ReviewTab({
         </div>
       )}
 
-      {/* ---------------- 自测题 ---------------- */}
+      {/* ---------------- Self-test ---------------- */}
       {section === 'quiz' && (
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           {quiz.length === 0 ? (
@@ -352,7 +352,7 @@ export default function ReviewTab({
         </div>
       )}
 
-      {/* ---------------- 追问 ---------------- */}
+      {/* ---------------- Follow-up ---------------- */}
       {section === 'ask' && (
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           <div className="min-h-[240px] max-h-[440px] overflow-y-auto space-y-4 mb-4">

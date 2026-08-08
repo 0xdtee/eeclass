@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""一次性把文件版数据导入 PostgreSQL（幂等，可反复跑）。
+"""One-time import of the file-based data into PostgreSQL (idempotent, safe to re-run).
 
   users.json    -> accounts
-  sessions.json -> auth_sessions   （账号不存在的会话跳过）
+  sessions.json -> auth_sessions   (sessions whose account doesn't exist are skipped)
   records/<sid>/{owner.json,meta.json,summary.json} -> recordings
 
-只读导入：绝不删改任何 JSON / records 文件。全部走 UPSERT，重复跑不会重复插。
+Read-only import: never deletes or modifies any JSON / records file. Everything goes through UPSERT, so re-running won't insert duplicates.
 
     python migrate_to_db.py [records_dir]
 
-不带参数时，按 server.py 的算法从 config.json 的 server.records_dir（相对 service/）解析。
-DSN 从环境变量 EECLASS_DB_DSN 读，缺省 postgresql:///eeclass。
+With no argument, it resolves server.records_dir from config.json (relative to service/) using server.py's algorithm.
+The DSN is read from the EECLASS_DB_DSN environment variable, defaulting to postgresql:///eeclass.
 """
 import json
 import os
@@ -39,7 +39,7 @@ def _records_dir(argv):
 
 
 def _created_from(meta, sid):
-    """记录创建时间：优先 meta 里的时间戳，否则从目录名前缀 YYYY-MM-DD_HHMM 推。"""
+    """Record creation time: prefer the timestamp in meta, otherwise infer it from the directory name prefix YYYY-MM-DD_HHMM."""
     for k in ("created", "at", "time", "date"):
         v = (meta or {}).get(k)
         if v:
@@ -76,7 +76,7 @@ def migrate_sessions(records_dir):
     n = skipped = 0
     with db.connection() as conn:
         with conn.cursor() as cur:
-            # 已存在的账号集合：外键约束下，账号缺失的会话直接跳过
+            # set of existing accounts: under the foreign-key constraint, sessions with a missing account are simply skipped
             cur.execute("SELECT email FROM accounts")
             accounts = {r[0] for r in cur.fetchall()}
             for token, s in sessions.items():
@@ -109,7 +109,7 @@ def migrate_recordings(records_dir):
         meta = _load_json(os.path.join(d, "meta.json"))
         owner_j = _load_json(os.path.join(d, "owner.json")) or {}
         summ = _load_json(os.path.join(d, "summary.json"))
-        # 只当目录里确有记录文件时才导入（跳过 shots-only 之类）
+        # only import when the directory actually contains record files (skip shots-only ones, etc.)
         if meta is None and not owner_j and summ is None:
             if not (os.path.exists(os.path.join(d, "transcript.jsonl"))):
                 continue

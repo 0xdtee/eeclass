@@ -1,16 +1,16 @@
 import { useSyncExternalStore } from 'react';
 
 /**
- * 全局「逐步引导」:说明书点「前往使用」后跳到功能页,用高亮+箭头直接指向下一步该点的按钮,
- * 点击该按钮(或「下一步」)即前进到下一步。
- * targets[i] 是第 i 步要指向的元素的 CSS 选择器(通常是 [data-guide="xxx"]),没有就居中提示。
- * 用模块级共享 state —— SPA 换路由组件树不卸载,引导状态自然跨页保留。
+ * Global "step-by-step guide": after clicking "Go use it" in the manual, jump to the feature page and use highlight+arrow to point directly at the button to click next,
+ * clicking that button (or "Next") advances to the next step.
+ * targets[i] is the CSS selector of the element step i points at (usually [data-guide="xxx"]); if absent, show a centered hint.
+ * Uses module-level shared state — in an SPA the component tree isn't unmounted on route changes, so the guide state naturally persists across pages.
  */
 export interface GuideState {
   active: boolean;
   title: string;
   steps: string[];
-  targets: string[];   // 与 steps 对齐,元素选择器;空串表示该步无指向
+  targets: string[];   // Aligned with steps, element selectors; empty string means the step has no target
   index: number;
 }
 
@@ -32,7 +32,7 @@ export function startGuide(title: string, steps?: string[], targets?: string[]) 
 export function nextGuide() {
   if (!state.active) return;
   if (state.index >= state.steps.length - 1) {
-    set({ ...state, active: false });   // 最后一步 → 完成并关闭
+    set({ ...state, active: false });   // Last step → finish and close
   } else {
     set({ ...state, index: state.index + 1 });
   }

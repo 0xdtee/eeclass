@@ -4,9 +4,9 @@ interface SummaryTabProps {
   summary: string;
   keyPoints: string[];
   corrections?: string[];
-  /** 已一键替换掉的原始错误串,列表里隐藏这些条 */
+  /** Original error strings already one-click-replaced; hide these entries from the list */
   appliedCorrections?: string[];
-  /** 当前转写全文(用于只显示"确实还在转写里"的可替换项,避免点了没反应) */
+  /** The current full transcript (used to show only replaceable items that "really are still in the transcript", avoiding clicks with no effect) */
   transcriptText?: string;
   onApplyCorrection?: (from: string, to: string, raw?: string) => void | Promise<void>;
   onApplyAll?: () => void | Promise<void>;
@@ -18,8 +18,8 @@ interface SummaryTabProps {
   deepseekReady?: boolean;
 }
 
-/** 把「听成"X"应为"Y",解释…」解析成 {from:X, to:Y}。
- *  认中英文/全角引号,to 到引号或标点就截断(不吞后面的解释),from==to 的无效条目返回 null。 */
+/** Parse 「听成"X"应为"Y",解释…」 into {from:X, to:Y}.
+ *  Recognizes ASCII/full-width quotes; to is cut off at a quote or punctuation (so it doesn't swallow the trailing explanation); returns null for invalid entries where from==to. */
 export function parseCorrection(s: string): { from: string; to: string } | null {
   const m = (s || '').match(
     /听成[\s"'“”「『]*(.+?)[\s"'“”」』]*应为[\s"'“”「『]*(.+?)(?:["'“”」』]|[，,。；;、]|$)/
@@ -28,7 +28,7 @@ export function parseCorrection(s: string): { from: string; to: string } | null 
   const clean = (x: string) => x.trim().replace(/^[「『"'“”\s]+|[」』"'“”。，,、；;\s]+$/g, '').trim();
   const from = clean(m[1]);
   const to = clean(m[2]);
-  if (!from || !to || from === to) return null;   // 空的、或"此处无错误/正确"这类没变化的丢掉
+  if (!from || !to || from === to) return null;   // Drop empty ones, or unchanged ones like "no error here / correct"
   return { from, to };
 }
 
@@ -54,14 +54,14 @@ export default function SummaryTab({
     setExportOpts((o) => ({ ...o, [k]: !o[k] }));
   const doExport = () => { setExportOpen(false); onExport(exportFmt, exportOpts); };
   const applied = appliedCorrections ?? [];
-  // 交互列表:只显示还没替换、能解析成"X→Y"、且错误词**确实还在转写里**的条目——
-  // 否则(已被同音纠正/AI纠错自动改掉)点替换会"没找到",看着像坏了。
+  // Interactive list: only show entries not yet replaced, parseable as "X->Y", and whose error word **really is still in the transcript** --
+  // otherwise (already fixed by homophone/AI correction) clicking replace would "find nothing" and look broken.
   const pendingCorrections = (corrections ?? []).filter((c) => {
     if (applied.includes(c)) return false;
     const p = parseCorrection(c);
     if (!p) return false;
     if (transcriptText && transcriptText.length > 0) return transcriptText.includes(p.from);
-    return true;   // 拿不到转写全文时不过滤,保持原样
+    return true;   // When the full transcript is unavailable, don't filter; leave as is
   });
   const exportCorrections = () => {
     const text = (corrections ?? [])
@@ -116,7 +116,7 @@ export default function SummaryTab({
                 保存
               </button>
             )}
-            {/* 导出为…:点开先选格式(Word/PDF),再勾选导出内容 */}
+            {/* Export as…: open it to first choose a format (Word/PDF), then check what to export */}
             <div className="relative">
               <button
                 onClick={() => setExportOpen((v) => !v)}
@@ -130,7 +130,7 @@ export default function SummaryTab({
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 z-20 w-52 bg-background-50 border border-background-200 rounded-xl shadow-lg p-3">
-                    {/* 格式 */}
+                    {/* Format */}
                     <p className="text-[11px] text-foreground-400 mb-1.5">导出格式</p>
                     <div className="flex gap-2 mb-3">
                       {([
@@ -151,7 +151,7 @@ export default function SummaryTab({
                         </button>
                       ))}
                     </div>
-                    {/* 内容 */}
+                    {/* Content */}
                     <p className="text-[11px] text-foreground-400 mb-1">导出内容</p>
                     {([
                       { k: 'summary', label: '摘要', icon: 'ri-magic-line' },

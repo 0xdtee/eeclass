@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);   // 发送验证码后的倒计时(秒)
+  const [cooldown, setCooldown] = useState(0);   // Countdown after sending the verification code (seconds)
 
   useEffect(() => {
     if (cooldown <= 0) return;

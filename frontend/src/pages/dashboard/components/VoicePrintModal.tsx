@@ -3,8 +3,8 @@ import Modal from '@/components/base/Modal';
 import { useRecords, type VoiceCluster } from '@/hooks/useRecords';
 import { audioUrl } from '@/hooks/useLibrary';
 
-/** 语音标记 / 声纹库:列出过去录音里的声音(同一个人已合并成一条),试听后打标签;
- *  之后录到同声纹的人自动用这身份。 */
+/** Voice tagging / voiceprint library: lists voices from past recordings (the same person already merged into one entry); preview, then label them;
+ *  future recordings of the same voiceprint automatically use that identity. */
 export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const records = useRecords();
   const [clusters, setClusters] = useState<VoiceCluster[]>([]);
@@ -12,7 +12,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
   const [library, setLibrary] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const [names, setNames] = useState<Record<string, string>>({});   // key sid:idx -> 输入的名字
+  const [names, setNames] = useState<Record<string, string>>({});   // key sid:idx -> entered name
   const [busy, setBusy] = useState('');
   const [playing, setPlaying] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -45,7 +45,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
     const onMeta = () => {
       try { a.currentTime = v.sample_start || 0; } catch { /* ignore */ }
       void a.play().catch(() => setPlaying(''));
-      stopRef.current = window.setTimeout(stopAudio, 5000);   // 试听 5 秒
+      stopRef.current = window.setTimeout(stopAudio, 5000);   // Preview 5 seconds
       a.removeEventListener('loadedmetadata', onMeta);
     };
     a.addEventListener('loadedmetadata', onMeta);
@@ -60,7 +60,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
       await records.addVoiceprint({ name, embedding: v.embedding });
       setNames((n) => ({ ...n, [key]: '' }));
       stopAudio();
-      load();   // 重新拉:这条及同声纹的其它条会归到"已识别"
+      load();   // Refetch: this one and others with the same voiceprint move to "identified"
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -83,7 +83,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
           从你过去的录音里提取出每个人的声音。试听后给他打个名字,存进声纹库;之后录到<b>相同声纹</b>的人,会自动用这个名字记录。同一个人可能出现在多节课里,<b>标一次即可</b>,其余会自动识别。
         </p>
 
-        {/* 声纹库 */}
+        {/* Voiceprint library */}
         <div>
           <p className="text-xs font-semibold text-foreground-500 mb-1.5">声纹库({library.length})</p>
           {library.length === 0 ? (
@@ -111,7 +111,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
           <p className="text-xs text-red-600"><i className="ri-error-warning-line mr-1"></i>{err}</p>
         ) : (
           <>
-            {/* 待标记:同一个人已合并成一条 */}
+            {/* Pending: the same person already merged into one entry */}
             <div>
               <p className="text-xs font-semibold text-foreground-500 mb-1.5">待标记的人({clusters.length})</p>
               {clusters.length === 0 ? (
@@ -156,7 +156,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
               )}
             </div>
 
-            {/* 已识别 */}
+            {/* Identified */}
             {recognized.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-foreground-500 mb-1.5">已识别</p>

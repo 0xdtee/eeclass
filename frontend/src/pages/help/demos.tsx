@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 
 /**
- * 使用说明页的「动态演示」组件集合。
- * 全部用纯 CSS / SVG / React 状态循环绘制,不依赖任何外部图片 / GIF / 资源,
- * 保持应用离线自足。动画都基于 transform / opacity,尽量轻量。
- * 尊重 prefers-reduced-motion:开启后动画退化为静态「最终态」。
+ * Collection of "animated demo" components for the help page.
+ * All drawn with pure CSS / SVG / React state loops, without any external images / GIFs / assets,
+ * keeping the app offline-self-sufficient. Animations rely on transform / opacity, kept as light as possible.
+ * Respects prefers-reduced-motion: when on, animations degrade to a static "final state".
  */
 
 /* ------------------------------------------------------------------ */
-/* 通用 hooks                                                          */
+/* Shared hooks                                                        */
 /* ------------------------------------------------------------------ */
 
 function usePrefersReducedMotion(): boolean {
@@ -27,7 +27,7 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-/** 循环推进一个步进计数器 [0, total)。reduced 时冻结在最后一帧。 */
+/** Cyclically advance a step counter [0, total). When reduced, freezes on the last frame. */
 function useCycle(total: number, interval: number, reduced: boolean): number {
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -43,7 +43,7 @@ function useCycle(total: number, interval: number, reduced: boolean): number {
 }
 
 /* ------------------------------------------------------------------ */
-/* 一次性注入的 keyframes(整页只渲染一次)                           */
+/* Keyframes injected once (rendered a single time per page)        */
 /* ------------------------------------------------------------------ */
 
 const KEYFRAMES = `
@@ -92,7 +92,7 @@ export function HelpDemoStyles() {
 }
 
 /* ------------------------------------------------------------------ */
-/* 迷你「应用界面」外框                                                 */
+/* Mini "app UI" outer frame                                            */
 /* ------------------------------------------------------------------ */
 
 function Screen({
@@ -126,7 +126,7 @@ function Screen({
   );
 }
 
-/** 说话人小标签 */
+/** Speaker mini-label */
 function Speaker({ who }: { who: 'teacher' | 'student' }) {
   const teacher = who === 'teacher';
   return (
@@ -142,7 +142,7 @@ function Speaker({ who }: { who: 'teacher' | 'student' }) {
 }
 
 /* ================================================================== */
-/* 1. 实时录音转写                                                      */
+/* 1. Real-time recording transcription                                 */
 /* ================================================================== */
 
 const RECORD_LINES = [
@@ -195,7 +195,7 @@ export function RecordDemo() {
 }
 
 /* ================================================================== */
-/* 2. 说话人区分与声纹                                                  */
+/* 2. Speaker separation and voiceprint                                 */
 /* ================================================================== */
 
 const SPEAKER_LINES: { who: 'teacher' | 'student'; s: string }[] = [
@@ -231,7 +231,7 @@ export function SpeakerDemo() {
 }
 
 /* ================================================================== */
-/* 3. 标记重点                                                          */
+/* 3. Mark highlights                                                   */
 /* ================================================================== */
 
 export function MarkDemo() {
@@ -277,7 +277,7 @@ export function MarkDemo() {
 }
 
 /* ================================================================== */
-/* 4. 拍板书                                                            */
+/* 4. Photograph board notes                                            */
 /* ================================================================== */
 
 export function PhotoDemo() {
@@ -287,18 +287,18 @@ export function PhotoDemo() {
   return (
     <Screen title="拍板书" icon="ri-camera-fill">
       <div className="relative rounded-lg bg-foreground-900 h-[92px] overflow-hidden flex items-center justify-center">
-        {/* 模拟黑板板书 */}
+        {/* Simulated blackboard notes */}
         <div className="text-center leading-relaxed">
           <div className="text-emerald-300 text-[11px] font-semibold">∮ P dx + Q dy</div>
           <div className="text-background-50/80 text-[10px]">= ∬ (∂Q/∂x − ∂P/∂y) dσ</div>
           <div className="text-amber-200/80 text-[9px] mt-0.5">— 格林公式 —</div>
         </div>
-        {/* 取景框四角 */}
+        {/* Viewfinder corners */}
         <span className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 border-accent-300/80 rounded-tl" />
         <span className="absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 border-accent-300/80 rounded-tr" />
         <span className="absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 border-accent-300/80 rounded-bl" />
         <span className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-accent-300/80 rounded-br" />
-        {/* 快门闪白 */}
+        {/* Shutter flash */}
         {!reduced && (
           <span
             className="hd-anim absolute inset-0 bg-white pointer-events-none"
@@ -315,12 +315,12 @@ export function PhotoDemo() {
 }
 
 /* ================================================================== */
-/* 5. AI 实时纠错                                                       */
+/* 5. AI real-time correction                                           */
 /* ================================================================== */
 
 export function CorrectionDemo() {
   const reduced = usePrefersReducedMotion();
-  const i = useCycle(4, 1100, reduced); // 0 原句 1 高亮 2 纠正 3 保持
+  const i = useCycle(4, 1100, reduced); // 0 original 1 highlight 2 corrected 3 hold
   const stage = reduced ? 2 : i;
   const wrong = stage <= 1;
   return (
@@ -360,14 +360,14 @@ export function CorrectionDemo() {
 }
 
 /* ================================================================== */
-/* 6. AI 智能分句                                                       */
+/* 6. AI smart sentence splitting                                       */
 /* ================================================================== */
 
 const FRAGMENTS = ['这个', '定理', '很', '重要', '大家', '记一下'];
 
 export function SegmentDemo() {
   const reduced = usePrefersReducedMotion();
-  const i = useCycle(3, 1300, reduced); // 0 碎片 1 合并 2 保持
+  const i = useCycle(3, 1300, reduced); // 0 fragments 1 merged 2 hold
   const merged = reduced || i >= 1;
   return (
     <Screen title="AI 智能分句" icon="ri-scissors-cut-fill">
@@ -407,7 +407,7 @@ export function SegmentDemo() {
 }
 
 /* ================================================================== */
-/* 7. 英文自动翻译                                                      */
+/* 7. Automatic English translation                                     */
 /* ================================================================== */
 
 export function TranslateDemo() {
@@ -440,7 +440,7 @@ export function TranslateDemo() {
 }
 
 /* ================================================================== */
-/* 8. AI 课程概要                                                       */
+/* 8. AI course summary                                                 */
 /* ================================================================== */
 
 const SUMMARY_POINTS = [
@@ -479,7 +479,7 @@ export function SummaryDemo() {
 }
 
 /* ================================================================== */
-/* 9. 复习闪卡与自测                                                    */
+/* 9. Review flashcards and self-test                                   */
 /* ================================================================== */
 
 export function FlashcardDemo() {
@@ -494,7 +494,7 @@ export function FlashcardDemo() {
             animation: reduced ? 'none' : 'hd-flip 4s ease-in-out infinite',
           }}
         >
-          {/* 正面:问 */}
+          {/* Front: question */}
           <div
             className="absolute inset-0 rounded-xl bg-background-50 border border-background-200 flex flex-col items-center justify-center px-2"
             style={{ backfaceVisibility: 'hidden' }}
@@ -504,7 +504,7 @@ export function FlashcardDemo() {
               格林公式成立的前提是?
             </span>
           </div>
-          {/* 背面:答 */}
+          {/* Back: answer */}
           <div
             className="absolute inset-0 rounded-xl bg-accent-500 text-background-50 flex flex-col items-center justify-center px-2"
             style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
@@ -522,12 +522,12 @@ export function FlashcardDemo() {
 }
 
 /* ================================================================== */
-/* 10. 课程大总结(多节课汇总)                                         */
+/* 10. Overall course summary (multi-session aggregation)             */
 /* ================================================================== */
 
 export function CourseSummaryDemo() {
   const reduced = usePrefersReducedMotion();
-  const i = useCycle(4, 900, reduced); // 3 节课依次并入 + 保持
+  const i = useCycle(4, 900, reduced); // 3 sessions merged in one by one + hold
   const merged = Math.min(i, 3);
   const lessons = ['第 3 讲 · 曲线积分', '第 4 讲 · 格林公式', '第 5 讲 · 曲面积分'];
   return (
@@ -571,7 +571,7 @@ export function CourseSummaryDemo() {
 }
 
 /* ================================================================== */
-/* 11. 考点推测(动画饼图)                                             */
+/* 11. Exam-topic prediction (animated pie chart)                     */
 /* ================================================================== */
 
 const EXAM_SEGMENTS = [
@@ -588,7 +588,7 @@ export function ExamPieDemo() {
 
   let acc = 0;
   const arcs = EXAM_SEGMENTS.map((s, idx) => {
-    const rot = acc * 3.6; // 每 1% = 3.6deg
+    const rot = acc * 3.6; // each 1% = 3.6deg
     acc += s.pct;
     return { ...s, rot, visible: idx < shown };
   });
@@ -637,7 +637,7 @@ export function ExamPieDemo() {
 }
 
 /* ================================================================== */
-/* 12. 模拟试卷                                                         */
+/* 12. Mock exam paper                                                  */
 /* ================================================================== */
 
 const QUIZ_OPTIONS = ['牛顿-莱布尼茨公式', '格林公式', '斯托克斯公式', '高斯公式'];
@@ -645,7 +645,7 @@ const QUIZ_ANSWER = 1;
 
 export function QuizDemo() {
   const reduced = usePrefersReducedMotion();
-  // 扫描 4 个选项后停在正确项,再保持
+  // scan the 4 options, stop on the correct one, then hold
   const total = QUIZ_OPTIONS.length + 4;
   const i = useCycle(total, 500, reduced);
   const scanning = i < QUIZ_OPTIONS.length;
@@ -701,7 +701,7 @@ export function QuizDemo() {
 }
 
 /* ================================================================== */
-/* 13. 标签管理                                                         */
+/* 13. Tag management                                                   */
 /* ================================================================== */
 
 const TAGS = [
@@ -745,7 +745,7 @@ export function TagDemo() {
 }
 
 /* ================================================================== */
-/* 14. 参考资料(勾选学科作为 AI 上下文)                               */
+/* 14. Reference materials (check subjects as AI context)             */
 /* ================================================================== */
 
 export function ReferenceDemo() {
@@ -789,7 +789,7 @@ export function ReferenceDemo() {
 }
 
 /* ================================================================== */
-/* 15. 共享课程(生成只读链接)                                         */
+/* 15. Course sharing (generate read-only link)                       */
 /* ================================================================== */
 
 export function ShareDemo() {
@@ -833,7 +833,7 @@ export function ShareDemo() {
 }
 
 /* ================================================================== */
-/* 16. 历史课程(搜索 + 结果)                                          */
+/* 16. Past courses (search + results)                                */
 /* ================================================================== */
 
 const HISTORY_ROWS = [
@@ -883,7 +883,7 @@ export function HistoryDemo() {
 }
 
 /* ================================================================== */
-/* 17. AI 处理默认项 / 录音设置(开关面板)                             */
+/* 17. AI default options / recording settings (toggle panel)         */
 /* ================================================================== */
 
 const TOGGLES = ['实时纠错', '智能分句', '英文翻译', '结束自动生成概要'];
@@ -918,7 +918,7 @@ export function ToggleDemo() {
 }
 
 /* ------------------------------------------------------------------ */
-/* 演示组件注册表:按 key 映射                                          */
+/* Demo component registry: mapped by key                              */
 /* ------------------------------------------------------------------ */
 
 export const DEMOS: Record<string, React.ComponentType> = {

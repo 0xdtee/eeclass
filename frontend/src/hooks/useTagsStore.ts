@@ -8,7 +8,7 @@ export interface Tag {
   color: string;
 }
 
-// 标签跟账号走、存服务器(/api/tags),localStorage 只作本地缓存(会随账号切换清掉,避免串号)。
+// Tags are tied to the account and stored on the server (/api/tags); localStorage is only a local cache (cleared on account switch to avoid crossover).
 const STORAGE_KEY = 'app_tags_store_v3';
 
 function loadTags(): Tag[] {
@@ -56,17 +56,17 @@ function pushToServer() {
 
 function setState(next: Tag[]) {
   state = next;
-  persistLocal();   // 本地缓存
-  pushToServer();   // 同步到服务器(按账号)
+  persistLocal();   // Local cache
+  pushToServer();   // Sync to the server (per account)
   emit();
 }
 
-/** 登录/切账号时:先清掉上一个账号的本地缓存,再从服务器拉这个账号的标签。 */
+/** On login/account switch: first clear the previous account's local cache, then fetch this account's tags from the server. */
 export async function hydrateTagsFromServer() {
   const t = getToken();
   if (!t || t === lastToken) return;
   lastToken = t;
-  // 立即清掉上一个账号的标签(localStorage 是跨账号共享的,不清会串号)
+  // Immediately clear the previous account's tags (localStorage is shared across accounts; not clearing causes crossover)
   state = [...defaultTags];
   persistLocal();
   emit();
@@ -75,18 +75,18 @@ export async function hydrateTagsFromServer() {
     if (!r.ok) return;
     const j = await r.json();
     if (Array.isArray(j.tags) && j.tags.length > 0) {
-      state = j.tags;      // 该账号在服务器上的标签
+      state = j.tags;      // This account's tags on the server
     } else {
-      pushToServer();      // 该账号还没有 → 用默认(已置为默认)并存下基线
+      pushToServer();      // This account has none yet → use defaults (already set to default) and store a baseline
     }
     persistLocal();
     emit();
   } catch {
-    // 网络问题:保持默认(已清)
+    // Network issue: keep defaults (already cleared)
   }
 }
 
-/** 登出:清空本地缓存并复位,确保下个账号不会看到上个账号的标签。 */
+/** On logout: clear the local cache and reset, ensuring the next account won't see the previous account's tags. */
 export function clearTagsForLogout() {
   lastToken = '';
   state = [...defaultTags];

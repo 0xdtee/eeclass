@@ -6,7 +6,7 @@ interface BackButtonProps {
   children?: React.ReactNode;
 }
 
-// 统一返回按钮:轻点=返回上一页(无历史则回主界面);长按 ≥500ms=回主界面。
+// Unified back button: tap = go to previous page (or home if no history); long-press ≥500ms = go home.
 export default function BackButton({ className, children }: BackButtonProps) {
   const navigate = useNavigate();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -33,7 +33,7 @@ export default function BackButton({ className, children }: BackButtonProps) {
   };
 
   const handleClick = () => {
-    // 长按已经导航过了,轻点不再重复触发。
+    // A long-press already navigated, so a tap shouldn't trigger it again.
     if (longPressedRef.current) {
       longPressedRef.current = false;
       return;

@@ -5,11 +5,11 @@ import type { ScheduleCourse } from '@/hooks/useRecords';
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** 文档(docx/pdf)导入:建一节课 */
+  /** Document (docx/pdf) import: create a session */
   onConfirm: (data: { title: string; date: string; time: string; duration: string; tags: string[]; description: string }) => void;
-  /** 课表截图 → 识别课程 */
+  /** Timetable screenshot -> recognize courses */
   onImportImage: (dataUrl: string) => Promise<{ courses: ScheduleCourse[]; anchor_monday?: string; error?: string }>;
-  /** 确认把识别到的课程加进日历(anchorMonday=这周周一真实日期) */
+  /** Confirm adding the recognized courses to the calendar (anchorMonday = the real date of this week's Monday) */
   onConfirmCourses: (courses: ScheduleCourse[], anchorMonday?: string) => void;
 }
 
@@ -40,7 +40,7 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
 
   const parsePdf = async (buffer: ArrayBuffer) => {
     const pdfjsLib = await import('pdfjs-dist');
-    // 本地打包 worker,不走 CDN
+    // Bundle the worker locally, don't use a CDN
     pdfjsLib.GlobalWorkerOptions.workerSrc = (
       await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
     ).default;

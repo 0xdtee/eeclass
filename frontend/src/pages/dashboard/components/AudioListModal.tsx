@@ -29,7 +29,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="录音回放" width="max-w-2xl">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
-        {/* 顶部统计 + 搜索 */}
+        {/* Top stats + search */}
         <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 flex items-center justify-center bg-primary-100 rounded-lg">
@@ -59,7 +59,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
           <p className="text-[11px] text-foreground-300">点播放条即可听这节课的原始录音;可拖动进度、变速。</p>
         </div>
 
-        {/* 录音列表 */}
+        {/* Recording list */}
         <div className="overflow-y-auto flex-1">
           {filtered.length === 0 ? (
             <div className="py-12 text-center">
@@ -91,7 +91,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                         </span>
                       </div>
                     </div>
-                    {/* 查看转写:跳到这节课的转写全文 */}
+                    {/* View transcript: jump to this session's full transcript */}
                     <button
                       onClick={() => { onClose(); navigate('/course?sid=' + encodeURIComponent(s.id)); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap flex-shrink-0"
@@ -100,7 +100,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                       <i className="ri-file-text-line"></i>
                       查看转写
                     </button>
-                    {/* 导出录音:直接下载原始 audio.wav */}
+                    {/* Export recording: download the raw audio.wav directly */}
                     <a
                       href={audioDownloadUrl(s.id, `${(s.title || '录音').replace(/[\\/:*?"<>|]/g, '_')}.wav`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-200 cursor-pointer whitespace-nowrap flex-shrink-0"
@@ -110,7 +110,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                       导出录音
                     </a>
                   </div>
-                  {/* 原始录音:自定义播放器,进度条用已知时长渲染、永远可拖,播一段自动停其他段 */}
+                  {/* Raw recording: custom player, progress bar rendered from the known duration and always draggable; playing one segment auto-stops the others */}
                   <AudioPlayer src={audioUrl(s.id)} durationHint={s.durationSec} className="w-full" />
                 </div>
               ))}

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""发邮件(注册验证码)。SMTP over SSL,配置全从环境变量读——授权码不进代码/config/git。
+"""Send email (registration verification code). SMTP over SSL, with all config read from environment variables—the auth code never goes into the code/config/git.
 
-QQ 邮箱示例(在 start-server.sh 里设):
+QQ Mail example (set it in start-server.sh):
     export SMTP_HOST=smtp.qq.com
     export SMTP_PORT=465
-    export SMTP_USER=你的QQ号@qq.com
-    export SMTP_PASS=在QQ邮箱设置里生成的授权码   # 不是登录密码
-    export SMTP_FROM=你的QQ号@qq.com            # 可省,默认=SMTP_USER
+    export SMTP_USER=your-QQ-number@qq.com
+    export SMTP_PASS=the auth code generated in QQ Mail settings   # not your login password
+    export SMTP_FROM=your-QQ-number@qq.com            # optional, defaults to SMTP_USER
 """
 import os
 import smtplib
@@ -34,7 +34,7 @@ def ready():
 
 
 def send_code(to_email, code):
-    """给 to_email 发注册验证码。失败抛异常。"""
+    """Send a registration verification code to to_email. Raises on failure."""
     c = _cfg()
     if not ready():
         raise RuntimeError("没配邮件服务(SMTP_USER/SMTP_PASS)")

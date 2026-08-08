@@ -14,7 +14,7 @@ import HelpPage from "../pages/help/page";
 
 const routes: RouteObject[] = [
   {
-    // 共享链接：只读，不需要登录也不需要令牌
+    // Shared link: read-only, no login or token required
     path: "/shared/:key",
     element: <SharedPage />,
   },

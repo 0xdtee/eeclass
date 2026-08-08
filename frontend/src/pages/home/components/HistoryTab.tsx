@@ -16,7 +16,7 @@ interface HistoryTabProps {
   onDeleteCourse: (id: string) => Promise<void>;
   onAssign: (sid: string, courseId: string | null) => Promise<void>;
   onEditCourse: (c: Course) => void;
-  /** 批量导出选中的课时为一个 PDF */
+  /** Batch-export the selected sessions as a single PDF */
   onBatchExport?: (sessionIds: string[]) => Promise<void>;
 }
 
@@ -26,13 +26,13 @@ export default function HistoryTab({
   sessions, loading, error, activeSessionId, courses, assign,
   onSelectSession, onReload, onCreateCourse, onDeleteCourse, onAssign, onEditCourse, onBatchExport,
 }: HistoryTabProps) {
-  const [selected, setSelected] = useState<string>('');  // '' = 全部
+  const [selected, setSelected] = useState<string>('');  // '' = all
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
   const [dragSid, setDragSid] = useState<string | null>(null);
   const [busy, setBusy] = useState('');
-  const [selectMode, setSelectMode] = useState(false);          // 批量导出:多选模式
-  const [picked, setPicked] = useState<Set<string>>(new Set()); // 选中的课时
+  const [selectMode, setSelectMode] = useState(false);          // Batch export: multi-select mode
+  const [picked, setPicked] = useState<Set<string>>(new Set()); // Selected sessions
   const [exporting, setExporting] = useState(false);
   const togglePick = (id: string) =>
     setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -87,7 +87,7 @@ export default function HistoryTab({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
-        {/* 左：课程 */}
+        {/* Left: courses */}
         <div className="bg-background-50 border border-background-200 rounded-xl p-3 space-y-1 h-fit">
           <button onClick={() => setSelected('')} className={rowCls(selected === '')}>
             全部课程
@@ -178,7 +178,7 @@ export default function HistoryTab({
           </p>
         </div>
 
-        {/* 右：课时 */}
+        {/* Right: sessions */}
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs text-foreground-500">

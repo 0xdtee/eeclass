@@ -1,20 +1,20 @@
 /**
- * 接课堂实时字幕后端服务(backend/)。
+ * Talks to the live-caption backend service (backend/).
  *
- * 两种音源：
- *   · 本机声卡  —— 服务自己开麦（也能采系统声音，网课用）。只有坐在这台电脑前才有意义。
- *   · 浏览器麦克风 —— 手机/平板/别的电脑登录时用。页面拿 getUserMedia，
- *     降采样到 16k 单声道 Int16，通过 WebSocket 二进制帧推给服务。
+ * Two audio sources:
+ *   · Local sound card —— the service opens the mic itself (can also capture system audio, for online classes). Only meaningful when sitting at this computer.
+ *   · Browser microphone —— used when logging in from a phone/tablet/another computer. The page grabs getUserMedia,
+ *     downsamples to 16k mono Int16, and pushes it to the service as WebSocket binary frames.
  *
- * 注意：**浏览器只在 HTTPS 下给麦克风权限**，所以页面必须由服务同源托管
- * （https://<内网IP>:5901/app/...），不能用 http 开。
+ * Note: **browsers only grant mic permission over HTTPS**, so the page must be served same-origin by the service
+ * (https://<intranet IP>:5901/app/...), not opened over http.
  *
- * 服务地址不写死：页面从服务托管时用 location.origin，
- * 开发时（Vite 3000 端口）回落到 https://localhost:5901。
+ * The service address isn't hardcoded: when served by the service it uses location.origin,
+ * during development (Vite on port 3000) it falls back to https://localhost:5901.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/** 页面是不是由字幕服务自己托管的（手机访问就是这种） */
+/** Whether the page is served by the caption service itself (this is the case for phone access) */
 const servedByService =
   typeof window !== 'undefined' && window.location.pathname.startsWith('/app');
 
@@ -27,7 +27,7 @@ export const SERVICE_ORIGIN =
 
 const TOKEN_KEY = 'live_caption_token';
 
-/** 令牌：优先取地址栏 ?token=，其次取上次存下的 */
+/** Token: prefer the ?token= in the URL, otherwise use the one stored last time */
 export function getToken(): string {
   if (typeof window === 'undefined') return '';
   const q = new URLSearchParams(window.location.search).get('token');
@@ -43,7 +43,7 @@ export function setToken(t: string) {
 }
 
 let _redirecting = false;
-/** 令牌失效(接口返回 401/403):清掉令牌并回登录页(只跳一次,防循环)。 */
+/** Token invalid (API returns 401/403): clear the token and go back to the login page (redirect once, to prevent loops). */
 export function authFailed() {
   try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
   if (_redirecting || typeof window === 'undefined') return;
@@ -54,7 +54,7 @@ export function authFailed() {
 
 const CID_KEY = 'live_caption_cid';
 
-/** 客户端标识：断线重连时服务端靠它找回同一路会话（不丢转写）。存本地，长期固定。 */
+/** Client ID: on reconnect the server uses it to recover the same session (no lost transcription). Stored locally, fixed long-term. */
 export function getCid(): string {
   if (typeof window === 'undefined') return '';
   let c = localStorage.getItem(CID_KEY);
@@ -76,8 +76,8 @@ export interface CaptionLine {
   kind: 'key' | 'define' | null;
   reasons: string[];
   new_para: boolean;
-  aiFixed?: boolean;   // 被 AI 实时纠错改过
-  translation?: string;   // 英文句的中文字幕(挂在下面)
+  aiFixed?: boolean;   // Modified by AI real-time correction
+  translation?: string;   // Chinese subtitle for an English sentence (shown below it)
 }
 
 export interface AudioDevice {
@@ -122,21 +122,21 @@ export interface StartOptions {
   onlyKey?: boolean;
   sensitivity?: 'std' | 'high' | 'max';
   courseId?: string | null;
-  /** 识别模型:'sensevoice'/'paraformer'=整句;'stream'=流式(zipformer,边说边出字);'shanghainese'=上海话(wenet_ctc);'aliyun'=阿里云普通话;'aliyun_wu'=阿里云上海话 */
+  /** Recognition model: 'sensevoice'/'paraformer'=full-sentence; 'stream'=streaming (zipformer, words appear as you speak); 'shanghainese'=Shanghainese (wenet_ctc); 'aliyun'=Aliyun Mandarin; 'aliyun_wu'=Aliyun Shanghainese */
   model?: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';
-  /** AI 实时纠错：出字后让 DeepSeek 异步改同音错字 */
+  /** AI real-time correction: after text appears, let DeepSeek asynchronously fix homophone typos */
   aiCorrect?: boolean;
-  /** AI 智能分句:让 DeepSeek 按语意把 VAD 碎片合并成完整句(仅整句模式) */
+  /** AI smart sentence segmentation: let DeepSeek merge VAD fragments into complete sentences by meaning (full-sentence mode only) */
   smartSeg?: boolean;
-  /** 英文自动翻译:英文句下面加一行中文字幕 */
+  /** Automatic English translation: add a line of Chinese subtitle below each English sentence */
   translateEn?: boolean;
-  /** 勾选的学科标签(高等数学/大学物理…),给 AI 纠错/翻译提供学科上下文 */
+  /** Selected subject tags (Advanced Math/College Physics…), giving the AI correction/translation subject context */
   subjects?: string[];
-  /** 续录:接着这节已录过的课往下录(音频/转写接上),传它的 sid */
+  /** Continue recording: keep recording onto an already-recorded class (audio/transcript continue), pass its sid */
   appendSid?: string | null;
 }
 
-/** 拾音灵敏度。数字是在本机用真实课堂录音扫出来的，别随手改。 */
+/** Pickup sensitivity. The numbers were swept locally using real classroom recordings, don't casually change them. */
 const SENS: Record<string, { threshold: number; exit_threshold: number; min_speech_ms: number }> = {
   std: { threshold: 0.5, exit_threshold: 0.35, min_speech_ms: 250 },
   high: { threshold: 0.35, exit_threshold: 0.22, min_speech_ms: 180 },
@@ -163,7 +163,7 @@ export function useLiveCaption() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [lastDir, setLastDir] = useState('');
-  const [liveSid, setLiveSid] = useState('');   // 正在录的这节课的目录名，拍板书要用
+  const [liveSid, setLiveSid] = useState('');   // Directory name of the class being recorded, needed for blackboard shots
   const [micActive, setMicActive] = useState(false);
   const [deepseekReady, setDeepseekReady] = useState(false);
 
@@ -171,7 +171,7 @@ export function useLiveCaption() {
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aliveRef = useRef(true);
   const micRef = useRef<{ ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode } | null>(null);
-  // 断线重连恢复用：是否在录、录的哪个设备（浏览器麦要在恢复时重新开麦推流）
+  // For reconnect recovery: whether recording, and which device (browser mic must reopen and re-stream on recovery)
   const recordingRef = useRef(false);
   const deviceRef = useRef<string | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
@@ -181,25 +181,25 @@ export function useLiveCaption() {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }, []);
 
-  /* ---------- 浏览器麦克风 ---------- */
+  /* ---------- Browser microphone ---------- */
   const stopMic = useCallback(() => {
     const m = micRef.current;
     if (!m) return;
-    try { m.node.disconnect(); } catch { /* 已经断了 */ }
+    try { m.node.disconnect(); } catch { /* already disconnected */ }
     try { m.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
     try { void m.ctx.close(); } catch { /* ignore */ }
     micRef.current = null;
     setMicActive(false);
   }, []);
 
-  // 把一路 MediaStream(麦克风 or 系统声音)接到降采样→WS 推流管线上。
+  // Wire a MediaStream (mic or system audio) into the downsample → WS streaming pipeline.
   const pipeStream = useCallback((stream: MediaStream) => {
     const Ctx: typeof AudioContext =
       window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx({ sampleRate: TARGET_SR });
     const src = ctx.createMediaStreamSource(stream);
-    // 用 ScriptProcessor 而不是 AudioWorklet：活儿很轻（降采样+转 Int16），
-    // 但兼容性好太多，iOS Safari 上不用折腾。
+    // Use ScriptProcessor instead of AudioWorklet: the work is light (downsample + convert to Int16),
+    // but compatibility is far better, no fuss on iOS Safari.
     const node = ctx.createScriptProcessor(4096, 1, 1);
     const ratio = ctx.sampleRate / TARGET_SR;
 
@@ -210,7 +210,7 @@ export function useLiveCaption() {
       const outLen = Math.floor(input.length / ratio);
       const pcm = new Int16Array(outLen);
       for (let i = 0; i < outLen; i++) {
-        // 线性插值降采样，够用；音频质量瓶颈在手机麦克风不在这儿
+        // Linear-interpolation downsampling, good enough; the audio-quality bottleneck is the phone mic, not this
         const pos = i * ratio;
         const i0 = Math.floor(pos);
         const frac = pos - i0;
@@ -220,7 +220,7 @@ export function useLiveCaption() {
       ws.send(pcm.buffer);
     };
     src.connect(node);
-    // 不接扬声器（会啸叫），但有些浏览器不接目的地就不跑，所以接一个静音增益
+    // Don't connect to the speakers (would cause feedback), but some browsers won't run without a destination, so connect a muted gain
     const mute = ctx.createGain();
     mute.gain.value = 0;
     node.connect(mute);
@@ -237,17 +237,17 @@ export function useLiveCaption() {
         '手机上必须用 https://<内网IP>:5901/app/course 这个地址。'
       );
     }
-    // 直接要 16k，拿不到就自己降采样（Safari 会忽略这个参数）
+    // Ask for 16k directly, and downsample ourselves if we can't get it (Safari ignores this parameter)
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
     pipeStream(stream);
   }, [pipeStream]);
 
-  /* ---------- 本设备的“系统声音”（网课/播放的音频）：走屏幕共享抓音频 ---------- */
+  /* ---------- This device's "system audio" (online classes/playing audio): capture audio via screen sharing ---------- */
   const startSystemAudio = useCallback(async () => {
-    // Safari / iOS（本质都是 WebKit）：getDisplayMedia 只给画面、从不给音频轨，
-    // 采不到系统声音。先拦下来给清楚提示,别让用户白点。
+    // Safari / iOS (both WebKit underneath): getDisplayMedia only gives video, never an audio track,
+    // so system audio can't be captured. Intercept first and give a clear message, don't let the user click in vain.
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -265,7 +265,7 @@ export function useLiveCaption() {
     if (!md?.getDisplayMedia) {
       throw new Error('这个浏览器不支持采集系统声音。请在电脑上用 Chrome 或 Edge（手机浏览器不行）。');
     }
-    // 必须带 video:true，浏览器才会给“共享音频”的选项；音频轨才是我们要的。
+    // Must pass video:true for the browser to offer the "share audio" option; the audio track is what we actually want.
     const stream = await md.getDisplayMedia({ video: true, audio: true });
     const audioTracks = stream.getAudioTracks();
     if (!audioTracks.length) {
@@ -275,7 +275,7 @@ export function useLiveCaption() {
         '并选择「整个屏幕」或正在播放声音的那个标签页。'
       );
     }
-    // 视频轨用不到，停掉省资源（音频轨继续）；用户点“停止共享”时自动停录。
+    // The video track is unused, stop it to save resources (audio track continues); recording auto-stops when the user clicks "stop sharing".
     stream.getVideoTracks().forEach((t) => t.stop());
     audioTracks[0].addEventListener('ended', () => {
       setNotice('系统声音共享已停止');
@@ -284,7 +284,7 @@ export function useLiveCaption() {
     pipeStream(stream);
   }, [pipeStream, stopMic]);
 
-  /* ---------- 屏幕常亮（防锁屏中断录音）---------- */
+  /* ---------- Keep screen awake (prevent lock-screen from interrupting recording) ---------- */
   const requestWakeLock = useCallback(async () => {
     try {
       const nav = navigator as unknown as {
@@ -294,7 +294,7 @@ export function useLiveCaption() {
         wakeLockRef.current = await nav.wakeLock.request('screen');
       }
     } catch {
-      /* 不支持或被拒（如 iOS 低电量模式），忽略 */
+      /* Unsupported or denied (e.g. iOS low-power mode), ignore */
     }
   }, []);
 
@@ -303,13 +303,13 @@ export function useLiveCaption() {
     wakeLockRef.current = null;
   }, []);
 
-  /* ---------- 与服务通信 ---------- */
+  /* ---------- Communication with the service ---------- */
   const connect = useCallback(() => {
     if (!aliveRef.current) return;
     const token = getToken();
     const params = new URLSearchParams();
     if (token) params.set('token', token);
-    params.set('cid', getCid());       // 带上客户端标识，断线重连能恢复会话
+    params.set('cid', getCid());       // Include the client ID so reconnects can recover the session
     const wsUrl = SERVICE_ORIGIN.replace(/^http/, 'ws') + '/ws?' + params.toString();
     let ws: WebSocket;
     try {
@@ -336,7 +336,7 @@ export function useLiveCaption() {
       setRunning(false);
       setStarting(false);
       stopMic();
-      // 令牌不对时服务直接 401，握手就没成功
+      // When the token is wrong the service returns 401 outright, so the handshake never succeeded
       if (!ev.wasClean && ev.code === 1006 && getToken() === '') setAuthFailed(true);
       if (aliveRef.current) retryRef.current = setTimeout(connect, 3000);
     };
@@ -361,15 +361,15 @@ export function useLiveCaption() {
           setDevices((m.devices as AudioDevice[]) || []);
           setDefaultDevice((m.default_device as string) ?? null);
           if (m.resumed) {
-            // 断线重连，服务端那路会话还在录 → 恢复，**不清空已有字幕**
+            // Reconnected, the server's session is still recording → resume, **don't clear existing captions**
             setRunning(true);
             setStarting(false);
             if (m.sid) setLiveSid(m.sid as string);
             if (deviceRef.current === 'browser') {
-              void startMic();   // 重新开麦推流
+              void startMic();   // reopen mic and re-stream
               setNotice('已恢复录制');
             } else if (deviceRef.current === 'browser-system') {
-              // 系统声音要用户手势才能重开共享，没法自动恢复
+              // System audio needs a user gesture to reopen sharing, can't auto-resume
               setNotice('网络已恢复。系统声音共享可能已中断,如没继续请重新点「开始录制」。');
             } else {
               setNotice('已恢复录制');
@@ -397,8 +397,8 @@ export function useLiveCaption() {
           setRunning(false);
           setPaused(false);
           setPartial('');
-          // 不清空 live 行:停止后先继续显示实时行,等存档全文(histLines)加载好再无缝替换,
-          // 避免"内容先消失、过一会儿存档才出来"的空档延迟。viewLines 会在 histLines 到了自动切过去。
+          // Don't clear the live lines: after stopping, keep showing the live lines, then seamlessly replace them once the archived full text (histLines) loads,
+          // avoiding the gap delay of "content disappears first, archive shows up a moment later". viewLines auto-switches over once histLines arrives.
           stopMic();
           setLastDir((m.dir as string) || '');
           setLiveSid((m.sid as string) || '');
@@ -409,7 +409,7 @@ export function useLiveCaption() {
           setLines((prev) => [...prev, m as unknown as CaptionLine]);
           break;
         case 'line_update':
-          // AI 纠错改好了某一句 → 替换文本;或手动标记 → 改 kind(重点/定义)
+          // AI correction fixed a sentence → replace the text; or manual marking → change kind (key/definition)
           setLines((prev) =>
             prev.map((l) =>
               l.id === m.id
@@ -423,7 +423,7 @@ export function useLiveCaption() {
           );
           break;
         case 'line_translation':
-          // 英文句翻好了 → 挂到那一句下面
+          // An English sentence got translated → attach it below that sentence
           setLines((prev) =>
             prev.map((l) => (l.id === m.id ? { ...l, translation: m.text as string } : l))
           );
@@ -464,7 +464,7 @@ export function useLiveCaption() {
     };
   }, [stopMic, startMic]);
 
-  // connect 会随回调身份(startMic 等)变化;用 ref 存最新的,让下面的 WS effect 只建一次、不反复重连
+  // connect changes with callback identity (startMic etc.); store the latest in a ref so the WS effect below builds only once, not reconnecting repeatedly
   const connectRef = useRef(connect);
   useEffect(() => { connectRef.current = connect; }, [connect]);
 
@@ -477,18 +477,18 @@ export function useLiveCaption() {
       stopMic();
       wsRef.current?.close();
     };
-    // 只在挂载/卸载建立/断开 WS —— 不因回调身份变化就反复关开;否则续录时正好赶上重连,
-    // 会把刚点的 start 命令冲掉,导致要点两次。
+    // Only open/close the WS on mount/unmount —— don't repeatedly close and reopen on callback identity changes; otherwise a reconnect during continue-recording
+    // would blow away the start command just clicked, forcing a second click.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 录音时保持屏幕常亮（防锁屏中断）；停止即释放
+  // Keep the screen awake while recording (prevent lock-screen interruption); release on stop
   useEffect(() => {
     if (running) void requestWakeLock();
     else releaseWakeLock();
   }, [running, requestWakeLock, releaseWakeLock]);
 
-  // 切后台系统会释放 wake lock，回前台且还在录时重新申请
+  // Going to the background releases the wake lock; re-request it when returning to the foreground while still recording
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === 'visible' && recordingRef.current) void requestWakeLock();
@@ -501,7 +501,7 @@ export function useLiveCaption() {
     async (opts: StartOptions = {}) => {
       setStarting(true);
       setError('');
-      setLines([]);        // 立刻清空,别让"正在启动…"期间还显示上一节的字幕
+      setLines([]);        // Clear immediately, don't keep showing the previous class's captions during "starting…"
       setPartial('');
       const useBrowserMic = opts.device === 'browser';
       const useBrowserSystem = opts.device === 'browser-system';
@@ -514,10 +514,10 @@ export function useLiveCaption() {
         return;
       }
       const dev = devices.find((d) => d.id === opts.device);
-      deviceRef.current = opts.device ?? null;   // 记住音源，断线恢复时重新开麦要用
-      // 模型选择:sensevoice/paraformer=整句;stream=流式 zipformer(边说边出字);
-      // shanghainese=上海话(wenet_ctc,吴语识别,后端自动翻普通话字幕);
-      // aliyun=阿里云普通话(aliyun_paraformer);aliyun_wu=阿里云上海话(aliyun_funasr,直接输出普通话)。默认 sensevoice。
+      deviceRef.current = opts.device ?? null;   // Remember the audio source, needed to reopen the mic on reconnect recovery
+      // Model selection: sensevoice/paraformer=full-sentence; stream=streaming zipformer (words appear as you speak);
+      // shanghainese=Shanghainese (wenet_ctc, Wu recognition, backend auto-translates to Mandarin captions);
+      // aliyun=Aliyun Mandarin (aliyun_paraformer); aliyun_wu=Aliyun Shanghainese (aliyun_funasr, outputs Mandarin directly). Defaults to sensevoice.
       const model = opts.model ?? 'sensevoice';
       const streaming = model === 'stream';
       const backend =
@@ -538,17 +538,17 @@ export function useLiveCaption() {
         backend,
         streaming,
         ai_correct: !!opts.aiCorrect,
-        smart_seg: opts.smartSeg !== false,   // AI 智能分句(默认开)
-        translate_en: opts.translateEn !== false,   // 英文自动翻译(默认开)
-        subjects: opts.subjects ?? [],        // 勾选的学科标签
-        append_sid: opts.appendSid ?? null,   // 续录:接着这节课往下录
+        smart_seg: opts.smartSeg !== false,   // AI smart sentence segmentation (on by default)
+        translate_en: opts.translateEn !== false,   // Automatic English translation (on by default)
+        subjects: opts.subjects ?? [],        // Selected subject tags
+        append_sid: opts.appendSid ?? null,   // Continue recording: keep recording onto this class
       });
     },
     [devices, send, startMic, startSystemAudio]
   );
 
   const stop = useCallback(() => {
-    recordingRef.current = false;   // 主动停止：别再触发断线恢复
+    recordingRef.current = false;   // Deliberate stop: don't trigger reconnect recovery anymore
     send({ cmd: 'stop' });
     stopMic();
   }, [send, stopMic]);
@@ -557,14 +557,14 @@ export function useLiveCaption() {
   const mark = useCallback(() => send({ cmd: 'mark' }), [send]);
   const rename = useCallback((id: number, name: string) => send({ cmd: 'rename', id, name }), [send]);
 
-  /** 让 DeepSeek 整理这节课。key 在服务端，浏览器拿不到也不需要。
-   *  不传 which 就用本次实时录到的内容；看历史课时把那节课的行传进来。 */
+  /** Let DeepSeek summarize this class. The key lives on the server; the browser can't get it and doesn't need to.
+   *  Omit `which` to use the content recorded live this time; when viewing a past class, pass in that class's lines. */
   const summarize = useCallback(
     async (title?: string, which?: { ts: string; speaker: string; text: string }[], sid?: string): Promise<AiSummary> => {
       const r = await fetch(SERVICE_ORIGIN + '/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
-        // sid 让后端识别这节课的板书一并纳入总结
+        // sid lets the backend identify this class's blackboard shots and fold them into the summary
         body: JSON.stringify({ title, lines: which ?? lines, dir: lastDir || undefined, sid: sid || liveSid || undefined }),
       });
       const j = await r.json();

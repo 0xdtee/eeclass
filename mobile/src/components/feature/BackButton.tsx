@@ -7,9 +7,9 @@ interface BackButtonProps {
 }
 
 /**
- * 统一返回按钮:
- *  · 轻点 → 回上一页(navigate(-1);没有上一页则回主界面)
- *  · 长按(≥500ms)→ 直接回主界面
+ * Unified back button:
+ *  · Tap → go back one page (navigate(-1); go home if there's no previous page)
+ *  · Long press (≥500ms) → go straight home
  */
 export default function BackButton({ label = '返回', className }: BackButtonProps) {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function BackButton({ label = '返回', className }: BackButtonPr
     longPressed.current = false;
     timer.current = setTimeout(() => {
       longPressed.current = true;
-      navigate('/'); // 长按回主界面
+      navigate('/'); // long press goes home
     }, 500);
   };
 
@@ -32,8 +32,8 @@ export default function BackButton({ label = '返回', className }: BackButtonPr
   };
 
   const handleClick = () => {
-    if (longPressed.current) return; // 已由长按处理
-    // 回上一页;历史栈没有上一页时回主界面
+    if (longPressed.current) return; // already handled by long press
+    // Go back one page; go home when the history stack has no previous page
     if (typeof window !== 'undefined' && window.history.length > 1) {
       navigate(-1);
     } else {

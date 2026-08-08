@@ -1,6 +1,6 @@
 /**
- * 别人通过共享链接打开的只读页面。
- * 不需要令牌，也只能看这一节课的文字——录音、改动、别的课都碰不到。
+ * Read-only page opened by others via a share link.
+ * No token needed, and only this session's text is visible -- recordings, edits, and other sessions are all off-limits.
  */
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';

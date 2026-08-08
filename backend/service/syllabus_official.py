@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""按学校组织的**真实官方教学大纲 PDF** 目录 + 代理缓存。
+"""Catalog + proxy cache of **real official syllabus PDFs**, organized by school.
 
-目录文件:records/syllabus_official/catalog.json
-  {"schools":[{"id":"shu","name":"上海大学","items":[
-      {"course":"高等数学","title":"《高等数学》教学大纲","pdf_url":"https://.../x.pdf",
-       "source_page":"https://jwb.shu.edu.cn/...","note":""}]}]}
+Catalog file: records/syllabus_official/catalog.json
+  {\"schools\":[{\"id\":\"shu\",\"name\":\"Shanghai University\",\"items\":[
+      {\"course\":\"Advanced Mathematics\",\"title\":\"Advanced Mathematics Syllabus\",\"pdf_url\":\"https://.../x.pdf\",
+       \"source_page\":\"https://jwb.shu.edu.cn/...\",\"note\":\"\"}]}]}
 
-前端不直接访问各校 pdf_url(会有 https 混合内容/防盗链/CORS),而是请求本服务的
-/api/syllabus/official/{school}/{course},由服务端把远端 PDF 拉下来缓存到本地再回传。
+The frontend doesn't hit each school's pdf_url directly (https mixed-content / hotlink-protection / CORS issues); instead it requests this service's
+/api/syllabus/official/{school}/{course}, and the server fetches the remote PDF, caches it locally, and returns it.
 """
 import os
 import re
@@ -58,9 +58,9 @@ def find_item(records_root, school_id, course):
 
 
 def cache_page(records_root, school_id, course):
-    """把某校某课的**网页版**官方大纲抓下、注入 <base> 后缓存为本地 .html,返回路径。
-    注入 <base href=原URL> 是为了让页面里的相对 CSS/图片/链接指回原站,否则挂在我们
-    域名下会全部 404。失败返回 None。"""
+    """Fetch a school/course's **web-page** official syllabus, inject <base>, cache it as a local .html, and return the path.
+    Injecting <base href=originalURL> makes the page's relative CSS/images/links point back to the original site; otherwise,
+    served under our domain they would all 404. Returns None on failure."""
     it = find_item(records_root, school_id, course)
     if not it or not it.get("page_url"):
         return None
@@ -96,7 +96,7 @@ def cache_page(records_root, school_id, course):
 
 
 def cache_pdf(records_root, school_id, course):
-    """把某校某课的官方 PDF 下载并缓存到本地,返回本地路径;失败返回 None。"""
+    """Download and cache a school/course's official PDF locally, returning the local path; None on failure."""
     it = find_item(records_root, school_id, course)
     if not it or not it.get("pdf_url"):
         return None
@@ -106,7 +106,7 @@ def cache_pdf(records_root, school_id, course):
     if os.path.exists(local) and os.path.getsize(local) > 1024:
         return local
     url = it["pdf_url"]
-    # 很多高校文件服务器裸请求 403,要浏览器 UA + 同源 Referer 才放行。
+    # Many university file servers return 403 on a bare request; they only allow a browser UA + same-origin Referer.
     pu = urllib.parse.urlsplit(url)
     origin = f"{pu.scheme}://{pu.netloc}/"
     data = None

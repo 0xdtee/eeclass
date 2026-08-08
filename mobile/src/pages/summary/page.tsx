@@ -35,7 +35,7 @@ export default function SummaryPage() {
     setGenerating(true);
     setGenError('');
     try {
-      // 服务端调 DeepSeek(API key 只在服务端)。传逐句转写 + sid(让后端一并纳入板书)。
+      // Server calls DeepSeek (API key stays server-side). Send per-sentence transcript + sid (so the backend also folds in the blackboard).
       const ai = await apiFetch<AiSummary>('/api/summarize', {
         method: 'POST',
         body: JSON.stringify({
@@ -50,7 +50,7 @@ export default function SummaryPage() {
         ...(ai.formulas ?? []).map((x) => `【公式/定理】${x}`),
         ...(ai.questions ?? []).map((x) => `【课堂问答】${x}`),
       ];
-      // 持久化,下次进来直接显示、并让首页统计到"已出摘要"
+      // Persist so it shows directly next time and the home page counts it as "已出摘要"
       try {
         await apiFetch(`/api/transcript/${encodeURIComponent(sid)}/summary`, {
           method: 'POST',
@@ -105,7 +105,7 @@ export default function SummaryPage() {
           <>
             {hasSummary ? (
               <div className="space-y-4">
-                {/* 摘要正文 */}
+                {/* Summary body */}
                 {detail.summary && (
                   <div className="bg-background-50 rounded-xl p-5 border border-background-200">
                     <div className="flex items-center gap-2 mb-3">
@@ -120,7 +120,7 @@ export default function SummaryPage() {
                   </div>
                 )}
 
-                {/* 重点 */}
+                {/* Key points */}
                 {detail.key_points && detail.key_points.length > 0 && (
                   <div className="bg-background-50 rounded-xl p-5 border border-background-200">
                     <div className="flex items-center gap-2 mb-3">
@@ -140,7 +140,7 @@ export default function SummaryPage() {
                   </div>
                 )}
 
-                {/* 重新生成 */}
+                {/* Regenerate */}
                 <button
                   onClick={handleGenerate}
                   disabled={generating}
@@ -160,7 +160,7 @@ export default function SummaryPage() {
                 </button>
               </div>
             ) : (
-              /* 还没有摘要 */
+              /* No summary yet */
               <div className="flex flex-col items-center py-10 text-center">
                 <div className="w-16 h-16 flex items-center justify-center bg-accent-100 rounded-2xl mb-4">
                   <i className="ri-magic-line text-accent-600 text-2xl"></i>
@@ -196,7 +196,7 @@ export default function SummaryPage() {
               </div>
             )}
 
-            {/* 板书 */}
+            {/* Blackboard */}
             {detail.shots && detail.shots.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center gap-2 mb-3">
@@ -224,7 +224,7 @@ export default function SummaryPage() {
               </div>
             )}
 
-            {/* 去看全文 */}
+            {/* View full text */}
             {sid && (
               <button
                 onClick={() => navigate(`/session/${encodeURIComponent(sid)}`)}

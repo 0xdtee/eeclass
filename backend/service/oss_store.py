@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""从阿里云 OSS 取文件的签名直链(私有桶)。App 请求某文件时,后端 302 跳到这个
-签名 URL,让浏览器直接从 OSS 拉,省 xx01 带宽。找不到就让调用方回退本地。
+"""Signed direct links to files on Alibaba Cloud OSS (private bucket). When the App requests a file,
+the backend 302-redirects to this signed URL so the browser pulls straight from OSS, saving xx01 bandwidth.
+If not found, let the caller fall back to local.
 
-复用 start-server.sh 里已有的 ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET;
-桶/地域可用 OSS_BUCKET/OSS_REGION 覆盖,默认 live-caption-kt / oss-cn-shanghai。
-OSS 上的 key = 'records/' + 相对 records 根目录的路径(与同步脚本一致)。
+Reuses the ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET already set in start-server.sh;
+bucket/region can be overridden via OSS_BUCKET/OSS_REGION, default live-caption-kt / oss-cn-shanghai.
+The OSS key = 'records/' + the path relative to the records root (matching the sync script).
 """
 import os
 import threading
@@ -58,10 +59,10 @@ def object_exists(relpath):
 
 
 def signed_url(relpath, expires=7200, disposition=None, inline=False, content_type=None):
-    """生成私有对象的签名 GET URL。对象不存在或出错返回 None(调用方回退本地)。
-      disposition=文件名 → 强制以该名下载(attachment);
-      inline=True → 强制内嵌显示(response-content-disposition=inline,覆盖对象上误存的 attachment);
-      content_type → 覆盖返回的 Content-Type(如 application/pdf,保证浏览器内嵌预览而不是下载)。"""
+    """Generate a signed GET URL for a private object. Returns None if the object is missing or on error (caller falls back to local).
+      disposition=filename → force download under that name (attachment);
+      inline=True → force inline display (response-content-disposition=inline, overriding an attachment mistakenly stored on the object);
+      content_type → override the returned Content-Type (e.g. application/pdf, so the browser previews inline instead of downloading)."""
     b = _get_bucket()
     if not b:
         return None
@@ -83,7 +84,7 @@ def signed_url(relpath, expires=7200, disposition=None, inline=False, content_ty
 
 
 def read_bytes(relpath):
-    """直接从 OSS 读对象内容(本地已删的文件靠它读回)。没有/出错返回 None。"""
+    """Read an object's content directly from OSS (used to read back files already deleted locally). Returns None if missing or on error."""
     b = _get_bucket()
     if not b:
         return None
@@ -94,7 +95,7 @@ def read_bytes(relpath):
 
 
 def download_to(relpath, local_path):
-    """把 OSS 上的对象下载到本地路径(续录时回灌已下沉的旧 transcript/audio)。成功返回 True。"""
+    """Download an OSS object to a local path (used to restore offloaded old transcript/audio when resuming a recording). Returns True on success."""
     data = read_bytes(relpath)
     if data is None:
         return False
@@ -110,7 +111,7 @@ def download_to(relpath, local_path):
 
 
 def ensure_uploaded(relpath, local_path):
-    """本地有、OSS 还没有就补传一份(供刚生成的文件即时可用)。"""
+    """Upload a copy if present locally but not yet on OSS (so a freshly generated file is immediately available)."""
     b = _get_bucket()
     if not b:
         return False

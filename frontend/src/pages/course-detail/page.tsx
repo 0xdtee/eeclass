@@ -8,7 +8,7 @@ import BackButton from '@/components/feature/BackButton';
 import MathText from '@/components/base/MathText';
 import AudioPlayer from '@/components/feature/AudioPlayer';
 
-// 选择题选项 A./B./C./D. 常糊在一行,显示时在每个选项前插换行(要求后面带空格,避免误伤「A、B、ω为常量」这种)
+// MC options A./B./C./D. often run together on one line; insert a line break before each when displaying (require a trailing space so we don't wrongly split cases like 「A、B、ω为常量」)
 function splitChoices(s: string): string {
   return (s || '').replace(/\s+(?=[A-H][.．)]\s)/g, '\n');
 }
@@ -24,7 +24,7 @@ const PIE = ['#f87171', '#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '
 const baseName = (t: string) =>
   (t || '').replace(/\s*第\s*\d+\s*[课讲节]\s*$/, '').replace(/\s*[（(]\s*\d+\s*[）)]\s*$/, '').trim();
 
-// 考点名和总结模块的相关度:共有的汉字个数(简单但对中文有效)
+// Relevance between an exam-topic name and a summary section: count of shared Chinese characters (simple but effective for Chinese)
 function overlapScore(a: string, b: string): number {
   const isCJK = (c: string) => /[一-鿿]/.test(c);
   const sa = new Set(Array.from(a || '').filter(isCJK));
@@ -33,7 +33,7 @@ function overlapScore(a: string, b: string): number {
   return n;
 }
 
-/* ---- SVG 饼图(切片上带考点名 + 百分比)---- */
+/* ---- SVG pie chart (slices labeled with topic name + percentage) ---- */
 function Pie({ values, labels, selected, onSelect }: { values: number[]; labels: string[]; selected: number; onSelect: (i: number) => void }) {
   const total = values.reduce((s, v) => s + Math.max(0, v), 0) || 1;
   const cx = 100, cy = 100, r = 92;
@@ -69,7 +69,7 @@ function Pie({ values, labels, selected, onSelect }: { values: number[]; labels:
           onClick={() => onSelect(a.i)}
         />
       ))}
-      {/* 切片够大才标名字,太小的靠下面图例 */}
+      {/* Only label a slice when it's large enough; tiny ones rely on the legend below */}
       {arcs.filter((a) => a.frac >= 0.07).map((a) => (
         <text key={'t' + a.i} textAnchor="middle" fill="#fff" className="pointer-events-none select-none" style={{ fontWeight: 600 }}>
           <tspan x={a.lx} y={a.ly} fontSize="7.5">{a.short}</tspan>
@@ -83,13 +83,13 @@ function Pie({ values, labels, selected, onSelect }: { values: number[]; labels:
 export default function CourseDetailPage() {
   const [sp] = useSearchParams();
   const name = sp.get('name') || '';
-  const tag = sp.get('tag') || '';       // 有 tag 时优先按标签聚合(否则按课程名)
+  const tag = sp.get('tag') || '';       // Prefer grouping by tag when present (otherwise by course name)
   const byTag = !!tag;
-  const displayName = tag || name;       // 页面各处展示用的名字
+  const displayName = tag || name;       // Display name used throughout the page
   const navigate = useNavigate();
   const records = useRecords();
   const { tags: allTags } = useTagsStore();
-  // 本地标签覆盖:给录音打完标签立即生效,不必等重新拉取
+  // Local tag override: takes effect immediately after tagging a recording, no need to wait for a refetch
   const [localTags, setLocalTags] = useState<Record<string, string[]>>({});
   const effTags = useCallback(
     (s: SessionMeta) => localTags[s.id] ?? s.tags ?? [],
@@ -103,7 +103,7 @@ export default function CourseDetailPage() {
       try {
         await records.setSessionTags(s.id, next);
       } catch {
-        setLocalTags((prev) => ({ ...prev, [s.id]: cur }));   // 失败回滚
+        setLocalTags((prev) => ({ ...prev, [s.id]: cur }));   // Roll back on failure
       }
     },
     [localTags, records]
@@ -115,12 +115,12 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [sel, setSel] = useState(0);
-  const [jumpTarget, setJumpTarget] = useState('');   // 从考点跳到总结时,要定位的考点名
+  const [jumpTarget, setJumpTarget] = useState('');   // The topic name to locate when jumping from an exam topic to the summary
   const [highlightCh, setHighlightCh] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const handledJumpRef = useRef('');   // 已处理过的跳转目标,避免重复处理/误清高亮定时器
+  const handledJumpRef = useRef('');   // Jump targets already handled, to avoid reprocessing / wrongly clearing the highlight timer
   const [playingKey, setPlayingKey] = useState('');
-  const [tagPickerFor, setTagPickerFor] = useState('');   // 哪段录音正在展开标签选择器
+  const [tagPickerFor, setTagPickerFor] = useState('');   // Which recording currently has its tag selector expanded
 
   const playRef = useCallback((sid: string, start: number, key: string) => {
     const a = audioRef.current;
@@ -173,26 +173,26 @@ export default function CourseDetailPage() {
 
   useEffect(() => { void loadTab(tab); /* eslint-disable-next-line */ }, [tab, name, tag]);
 
-  // 从考点详情点"查看总结相关模块":切到总结页 → 加载好 → 定位并高亮最相关的章节
+  // From topic detail, clicking "view related summary section": switch to summary -> load -> locate and highlight the most relevant section
   useEffect(() => {
     if (tab !== 'summary' || !jumpTarget) return;
-    if (jumpTarget === handledJumpRef.current) return;   // 这个跳转已处理过,别再跑(否则清 jumpTarget 会误杀高亮定时器)
+    if (jumpTarget === handledJumpRef.current) return;   // This jump was already handled, don't rerun (otherwise clearing jumpTarget would kill the highlight timer)
     if (!summary || summary.no_transcript) { void loadTab('summary'); return; }
     handledJumpRef.current = jumpTarget;
     const chs = summary.chapters || [];
-    let best = -1, bestScore = 1;   // 至少 2 个共有汉字才算匹配
+    let best = -1, bestScore = 1;   // Require at least 2 shared Chinese characters to count as a match
     chs.forEach((ch, i) => {
       const s = overlapScore(jumpTarget, ch.title) * 2 + overlapScore(jumpTarget, (ch.points || []).join(''));
       if (s > bestScore) { bestScore = s; best = i; }
     });
-    setHighlightCh(best);   // >=0 章节;-1 表示定位到"核心知识点"
+    setHighlightCh(best);   // >=0 section; -1 means locate to the "core knowledge points"
     const id = best >= 0 ? `sum-ch-${best}` : 'sum-keypoints';
     setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
     const clr = setTimeout(() => setHighlightCh(null), 3500);
     return () => clearTimeout(clr);
   }, [tab, jumpTarget, summary, loadTab]);
 
-  // 没录音时的"纯AI一键生成"占位
+  // Placeholder for "one-click pure-AI generation" when there are no recordings
   const NoTranscriptAI = ({ kind, onGen }: { kind: string; onGen: () => void }) => (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="w-16 h-16 flex items-center justify-center bg-accent-100 rounded-2xl mb-4">
@@ -215,7 +215,7 @@ export default function CourseDetailPage() {
 
   return (
     <div className="min-h-screen bg-background-100">
-      {/* 顶栏 */}
+      {/* Top bar */}
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
         <div className="flex items-center justify-between h-14 px-6 max-w-5xl mx-auto">
           <div className="flex items-center gap-3 min-w-0">
@@ -271,7 +271,7 @@ export default function CourseDetailPage() {
           </div>
         )}
 
-        {/* ===== 课程总结 ===== */}
+        {/* ===== Course summary ===== */}
         {tab === 'summary' && summary?.no_transcript && !loading && (
           <NoTranscriptAI kind="课程总结" onGen={() => void loadTab('summary', { aiOnly: true })} />
         )}
@@ -308,7 +308,7 @@ export default function CourseDetailPage() {
           </div>
         ))}
 
-        {/* ===== 录音集合 ===== */}
+        {/* ===== Recordings ===== */}
         {tab === 'audio' && (
           courseSessions.length === 0 ? (
             <p className="text-sm text-foreground-400 py-16 text-center">{byTag ? `还没有录音打了「${tag}」标签。可到某门课的「录音集合」里给录音打上这个标签。` : '这门课还没有录音。'}</p>
@@ -333,7 +333,7 @@ export default function CourseDetailPage() {
                   </div>
                   <AudioPlayer src={audioUrl(s.id)} durationHint={s.duration_s} className="w-full" />
 
-                  {/* 标签编辑:当前标签用胶囊显示,＋标签 展开可选标签列表,点选切换并即时保存 */}
+                  {/* Tag editing: current tags shown as pills; "+tag" expands the available tag list, clicking toggles and saves immediately */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5 border-t border-background-100">
                     <span className="text-xs text-foreground-400 mr-0.5"><i className="ri-price-tag-3-line mr-0.5"></i>标签</span>
                     {effTags(s).length === 0 && (
@@ -391,7 +391,7 @@ export default function CourseDetailPage() {
           )
         )}
 
-        {/* ===== 考点推测(饼图)===== */}
+        {/* ===== Exam-topic prediction (pie chart) ===== */}
         {tab === 'exam' && exam?.no_transcript && !loading && (
           <NoTranscriptAI kind="考点" onGen={() => void loadTab('exam', { aiOnly: true })} />
         )}
@@ -456,7 +456,7 @@ export default function CourseDetailPage() {
           </div>
         ))}
 
-        {/* ===== 模拟试卷 ===== */}
+        {/* ===== Mock exam paper ===== */}
         {tab === 'mock' && mock?.no_transcript && !loading && (
           <NoTranscriptAI kind="模拟试卷" onGen={() => void loadTab('mock', { aiOnly: true })} />
         )}

@@ -4,8 +4,8 @@ import { hydrateTagsFromServer } from '@/hooks/useTagsStore';
 import { hydrateSettingsFromServer } from '@/lib/settings';
 
 /**
- * 登录后把「标签」「设置」从服务器同步下来(跟着账号走)。
- * 账号切换(email 变化)会重新同步,避免上一个账号的数据串到下一个。
+ * After login, syncs "tags" and "settings" down from the server (tied to the account).
+ * Switching accounts (email change) re-syncs, preventing one account's data from bleeding into the next.
  */
 export default function AccountSync() {
   const { user } = useAuth();

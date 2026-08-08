@@ -1,23 +1,30 @@
 # -*- coding: utf-8 -*-
-"""通过 COM 把字幕写进 Word —— 不需要 Office 加载项。
+"""Write captions into Word via COM -- no Office add-in required.
 
-为什么有这个模块：这台机器上 Word 的 Web 加载项子系统是死的（注册、manifest、
-证书全对，但 Word 从不扫描、缓存不重建、运行时日志不生成），所以任务窗格那条路
-点不出按钮。COM 自动化是完全独立的另一条通道，实测可用。
+Why this module exists: Word's web add-in subsystem is dead on this machine
+(registration, manifest, and certificate are all correct, but Word never scans,
+the cache never rebuilds, and no runtime log is produced), so the task-pane
+route never surfaces a button. COM automation is a completely separate channel,
+verified working in practice.
 
-设计要点：
-  · COM 必须在**单线程套间(STA)**里用，且同一个 Word 对象只能被创建它的线程碰。
-    所以这里自己开一个线程，外面只往队列里塞，绝不跨线程碰 COM 对象。
-  · 攒批写入（默认 0.6 秒一批）。一句一次 COM 调用会让 Word 界面明显卡顿。
-  · **写不进去绝不能影响录音转写**。Word 被关掉、文档被关掉、用户正在拖动窗口
-    都会让 COM 调用抛异常，这里一律吞掉并记录状态，服务端照常落盘。
+Design notes:
+  - COM must be used inside a **single-threaded apartment (STA)**, and a given
+    Word object may only be touched by the thread that created it. So this
+    opens its own thread; outsiders only push to a queue and never touch COM
+    objects across threads.
+  - Batched writes (0.6s per batch by default). One COM call per sentence makes
+    Word's UI visibly stutter.
+  - **A failed write must never affect recording/transcription.** Word being
+    closed, the document being closed, or the user dragging the window all make
+    COM calls raise; these are all swallowed and recorded as status, and the
+    server persists as usual.
 """
 import ctypes
 import queue
 import threading
 import time
 
-# Word 常量（不引 constants 模块，省得依赖类型库缓存）
+# Word constants (don't import the constants module, to avoid depending on the type-library cache)
 WD_COLLAPSE_END = 0
 WD_STYLE_NORMAL = -1
 WD_STYLE_HEADING2 = -3
@@ -29,14 +36,14 @@ HIGHLIGHT = {"key": WD_YELLOW, "define": WD_BRIGHT_GREEN}
 
 
 def _bgr(hex_color):
-    """#RRGGBB -> Word 要的 BGR 整数。"""
+    """#RRGGBB -> the BGR integer Word wants."""
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return (b << 16) | (g << 8) | r
 
 
 class WordWriter:
-    """把识别结果实时写进 Word 文档。线程安全的入口只有 push/rename/close。"""
+    """Writes recognition results into a Word document in real time. The only thread-safe entry points are push/rename/close."""
 
     def __init__(self, style=None, target="active", flush_s=0.6):
         s = style or {}
@@ -44,11 +51,11 @@ class WordWriter:
         self.prefix_size = s.get("prefix_size", 9)
         self.text_color = _bgr(s.get("text_color", "#000000"))
         self.text_size = s.get("text_size", 11)
-        self.target = target          # "active" 用当前文档，"new" 新建一篇
+        self.target = target          # "active" uses the current document, "new" creates a new one
         self.flush_s = flush_s
 
         self.q = queue.Queue()
-        self.ok = False               # 当前能不能写
+        self.ok = False               # whether writing is currently possible
         self.err = None
         self.doc_name = None
         self.written = 0
@@ -57,9 +64,9 @@ class WordWriter:
         self._run = False
         self._thread = None
         self._started = threading.Event()
-        self._has_para = False        # 当前段落是否已经起头（决定接着写还是另起一段）
+        self._has_para = False        # whether the current paragraph has been started (decides append vs. new paragraph)
 
-    # ---------------- 对外（任意线程） ----------------
+    # ---------------- public (any thread) ----------------
     def start(self, title=None):
         self._run = True
         self._title = title
@@ -84,9 +91,9 @@ class WordWriter:
     def status(self):
         return {"ok": self.ok, "doc": self.doc_name, "error": self.err, "written": self.written}
 
-    # ---------------- COM 线程 ----------------
+    # ---------------- COM thread ----------------
     def _loop(self):
-        # STA：Word 自动化必须用单线程套间，用 MTA 会各种诡异失败
+        # STA: Word automation must use a single-threaded apartment; MTA fails in all sorts of weird ways
         ctypes.windll.ole32.CoInitializeEx(None, 2)
         try:
             self._attach()
@@ -131,23 +138,23 @@ class WordWriter:
         self.doc_name = self._doc.Name
         self.ok, self.err = True, None
 
-    # ---- 段落与字符要分开处理 ----
-    # Word 的段落样式作用于「段落标记所属的那一段」。如果把 Style 设在一个跨越
-    # 段落标记的 range 上，样式会粘在末尾那段上、而不是你以为的那段——标题会跑到
-    # 文末去。所以：样式一律设在 Paragraph 对象上，字体/高亮才设在字符 range 上。
+    # ---- paragraphs and characters must be handled separately ----
+    # Word's paragraph style applies to "the paragraph the paragraph-mark belongs to". If you set Style on a range that
+    # spans a paragraph mark, the style sticks to the trailing paragraph instead of the one you expected -- the heading ends up
+    # at the end of the document. So: always set the style on the Paragraph object, and set font/highlight on the character range.
     def _new_para(self, style=WD_STYLE_NORMAL):
         last = self._doc.Paragraphs.Last
-        if last.Range.Text.strip():        # 末段有内容才另起一段；空段直接复用
+        if last.Range.Text.strip():        # only start a new paragraph if the last one has content; reuse an empty paragraph directly
             self._doc.Paragraphs.Add()
             last = self._doc.Paragraphs.Last
         last.Style = style
         return last
 
     def _append_run(self, text, size=None, color=None, highlight=WD_NO_HIGHLIGHT):
-        """在最后一段末尾追加一串字符，只给这串字符设格式。"""
+        """Appends a string of characters at the end of the last paragraph, formatting only that string."""
         p = self._doc.Paragraphs.Last
         r = self._doc.Range(p.Range.End - 1, p.Range.End - 1)
-        r.InsertAfter(text)      # InsertAfter 之后 r 扩张到刚插入的内容上
+        r.InsertAfter(text)      # after InsertAfter, r expands onto the just-inserted content
         f = r.Font
         if size is not None:
             f.Size = size
@@ -161,7 +168,7 @@ class WordWriter:
         stamp = time.strftime("%Y/%m/%d %H:%M")
         head = (title + " · " if title else "") + stamp
         self._new_para(WD_STYLE_HEADING2)
-        self._append_run(head)   # 字号颜色交给「标题 2」样式，别覆盖
+        self._append_run(head)   # leave font size and color to the "Heading 2" style, don't override
         self._has_para = False
 
     def _flush(self, items):
@@ -178,7 +185,7 @@ class WordWriter:
                                  HIGHLIGHT.get(it.get("kind"), WD_NO_HIGHLIGHT))
                 self.written += 1
         except Exception as e:
-            # Word 被关了/文档被关了/正忙。不重试、不阻塞——记录照样落盘。
+            # Word closed / document closed / busy. Don't retry, don't block -- the record persists anyway.
             self.ok = False
             self.err = f"写入 Word 中断: {e}（录音和转写仍在继续，记录不会丢）"
 
@@ -189,7 +196,7 @@ class WordWriter:
             find = self._doc.Content.Find
             find.ClearFormatting()
             find.Replacement.ClearFormatting()
-            # 只替换 "[时间 名字] " 里的名字，正文里恰好同名的字不会被误伤
+            # only replace the name inside "[time name] "; body text that happens to share the name won't be clobbered
             find.Text = " " + old + "] "
             find.Replacement.Text = " " + new + "] "
             find.Forward = True

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""上海大学教务系统(jwxt.shu.edu.cn)自动登录 + 抓课表。
-用 Playwright 无头浏览器模拟登录(统一身份认证 newsso),登录成功后找课表页抓取。
-密码只在这台服务器内存里用一下,不落盘。debug 阶段会把登录后的页面存到 debug_dir 供适配解析。"""
+"""Shanghai University academic system (jwxt.shu.edu.cn) auto-login + timetable scraping.
+Uses a Playwright headless browser to simulate login (unified identity auth, newsso), then finds and scrapes the timetable page on success.
+The password is only used briefly in this server's memory and never written to disk. In the debug phase the post-login page is saved to debug_dir to help adapt the parsing."""
 import os
 import re
 
@@ -18,11 +18,11 @@ def sync_timetable(username, password, debug_dir):
         try:
             pg.goto("https://jwxt.shu.edu.cn", wait_until="networkidle", timeout=45000)
             pg.wait_for_timeout(1500)
-            # 登录表单:#username / #password / 提交按钮
+            # login form: #username / #password / submit button
             pg.fill("#username", username)
             pg.fill("#password", password)
             pg.click("button[type=submit]")
-            # 登录成功 = 跳回 jwxt.shu.edu.cn
+            # login succeeded = redirected back to jwxt.shu.edu.cn
             try:
                 pg.wait_for_url(re.compile(r"jwxt\.shu\.edu\.cn"), timeout=30000)
             except Exception:
@@ -31,20 +31,20 @@ def sync_timetable(username, password, debug_dir):
                     body = pg.inner_text("body")
                 except Exception:
                     pass
-                # 还停在 newsso = 登录没过
+                # still on newsso = login didn't go through
                 if "newsso" in pg.url:
                     return {"error": "登录失败:学工号或密码不对(也可能需要验证码)", "detail": body[:200]}
             pg.wait_for_load_state("networkidle", timeout=30000)
             pg.wait_for_timeout(2500)
 
             os.makedirs(debug_dir, exist_ok=True)
-            # 存首页,供适配
+            # save the home page, for adaptation
             try:
                 open(os.path.join(debug_dir, "home.html"), "w", encoding="utf-8").write(pg.content())
                 pg.screenshot(path=os.path.join(debug_dir, "home.png"), full_page=True)
             except Exception:
                 pass
-            # 收集所有链接/菜单文字,找"课表"
+            # collect all link/menu text, look for "timetable"
             links = pg.eval_on_selector_all(
                 "a", "els=>els.map(e=>({t:(e.innerText||'').trim(),h:e.href})).filter(x=>x.t)")
             try:
@@ -56,7 +56,7 @@ def sync_timetable(username, password, debug_dir):
             out["debug"] = {"home_url": pg.url, "link_count": len(links),
                             "kb_links": kb[:10]}
 
-            # 尝试进第一个"课表"链接,把页面存下来供解析适配
+            # try the first "timetable" link and save the page for parsing/adaptation
             if kb:
                 try:
                     pg.goto(kb[0]["h"], wait_until="networkidle", timeout=40000)

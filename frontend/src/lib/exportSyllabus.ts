@@ -2,7 +2,7 @@ import { renderPdf, buildPdfBlob } from './exportPdf';
 
 export interface Syllabus {
   course: string;
-  source?: string;   // 'official' 官方 | 'standard' 通用
+  source?: string;   // 'official' official | 'standard' generic
   overview?: string;
   credits_hint?: string;
   textbooks?: string[];
@@ -64,7 +64,7 @@ export function exportSyllabusPdf(s: Syllabus): Promise<void> {
   return renderPdf(`${s.course}-教学大纲`, syllabusHtml(s));
 }
 
-/** 生成大纲 PDF 的 Blob,用于页面内嵌预览。 */
+/** Generate the syllabus PDF as a Blob, for in-page inline preview. */
 export function syllabusPdfBlob(s: Syllabus): Promise<Blob> {
   return buildPdfBlob(syllabusHtml(s));
 }

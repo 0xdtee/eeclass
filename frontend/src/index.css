@@ -91,6 +91,6 @@ body {
   overflow: hidden;
   pointer-events: none;
 }
-/* 隐藏横向滚动条(手机上 tab 栏/横滑区域用) */
+/* Hide horizontal scrollbar (used for tab bars/horizontal-swipe areas on mobile) */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

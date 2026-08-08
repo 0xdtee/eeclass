@@ -149,7 +149,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
 
   const handleNavigate = (sessionId: string, view: 'summary' | 'transcript') => {
     onClose();
-    // 纪要 → 摘要页;原文 → 课堂详情页(转写)
+    // Minutes → summary page; transcript → class detail page (transcription)
     if (view === 'summary') {
       navigate(`/summary/${encodeURIComponent(sessionId)}`);
     } else {

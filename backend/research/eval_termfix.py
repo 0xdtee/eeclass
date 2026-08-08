@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""评测拼音同音术语纠错(term_fix)在真实课堂录音上的效果。
+"""Evaluate the effect of pinyin-homophone term correction (term_fix) on real classroom recordings.
 
-数据:每节课的 transcript.jsonl(原始 ASR 输出)+ edits.jsonl(人工/AI 纠正)。
-参考(reference)= 原始转写套用所有编辑后的文本(可视作"已校对"版本)。
+Data: each class's transcript.jsonl (raw ASR output) + edits.jsonl (human/AI corrections).
+Reference = the raw transcript with all edits applied (treated as the "proofread" version).
 
-指标:
-  · CER      —— 字符错误率(vs reference),对比 无纠错 / 拼音同音层
-  · 同音召回 —— 在"同长且改动全同音"的真实纠错实例上,term_fix 能纠回多少
-  · 误纠率   —— 在原本就正确(未被编辑)的文本上,term_fix 误改了多少字
-  · 留一验证 —— 术语只来自"其他课学到的",看对本课召回的提升(=个性化反哺价值)
+Metrics:
+  · CER            —— character error rate (vs reference), comparing no correction / pinyin-homophone layer
+  · homophone recall —— on real correction instances that are "same length with all changes homophonic", how many term_fix recovers
+  · over-correction —— on text that was already correct (not edited), how many characters term_fix wrongly changed
+  · leave-one-out  —— terms come only from "learned from other classes", measuring the recall gain on this class (= value of personalized feedback)
 
-用法: ../.venv/bin/python research/eval_termfix.py
+Usage: ../.venv/bin/python research/eval_termfix.py
 """
 import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "service"))
@@ -28,7 +28,7 @@ def py(s):
 
 
 def lev(a, b):
-    """字符级编辑距离(Levenshtein)。"""
+    """Character-level edit distance (Levenshtein)."""
     m, n = len(a), len(b)
     if m == 0 or n == 0:
         return max(m, n)
@@ -47,7 +47,7 @@ def load_rec(r):
     for line in open(os.path.join(d, "transcript.jsonl"), encoding="utf-8"):
         j = json.loads(line)
         raw[j["id"]] = j["text"]
-    ref = dict(raw)                       # reference = raw 套用最新编辑
+    ref = dict(raw)                       # reference = raw with the latest edits applied
     edits = []
     for line in open(os.path.join(d, "edits.jsonl"), encoding="utf-8"):
         e = json.loads(line)
@@ -57,7 +57,7 @@ def load_rec(r):
 
 
 def homophone_edits(edits):
-    """挑出'同长且所有改动都同音'的编辑——这是 ASR 真实的同音错误实例。"""
+    """Pick out edits that are 'same length with all changes homophonic' — these are real ASR homophone-error instances."""
     out = []
     for e in edits:
         b, a = e["before"], e["after"]
@@ -69,7 +69,7 @@ def homophone_edits(edits):
 
 
 def corrected_terms(b, a):
-    """从一条同音编辑里抽出被纠对的术语(改动字为中心,扩成 2~3 字词)。"""
+    """Extract the correctly-fixed terms from one homophone edit (centered on the changed character, expanded into 2~3-character words)."""
     terms = set()
     n = len(a)
     idx = [i for i in range(n) if b[i] != a[i]]
@@ -83,8 +83,8 @@ def corrected_terms(b, a):
 
 
 def pair_recall(fx, gold):
-    """字符对级召回:每个同音错字对(错→对),term_fix 在该位置是否改成了'对'。
-    term_fix 长度不变,可按位置对齐。"""
+    """Character-pair-level recall: for each homophone error pair (wrong→right), whether term_fix changed that position to 'right'.
+    term_fix preserves length, so positions can be aligned."""
     tot = rec = 0
     for b, a in gold:
         f = fx.fix(b)[0]
@@ -113,7 +113,7 @@ def main():
     base = TermFixer(base_terms)
 
     data = {r: load_rec(r) for r in RECS}
-    # 每节课学到的术语(供留一验证用)
+    # terms learned from each class (for leave-one-out validation)
     learned_per = {r: set().union(*[corrected_terms(b, a) for b, a in homophone_edits(data[r][2])]) if homophone_edits(data[r][2]) else set() for r in RECS}
 
     print(f"配置术语数: {len(set(base_terms))}\n")
@@ -127,14 +127,14 @@ def main():
 
         gold = homophone_edits(edits)
         rec_b, tot_p = pair_recall(base, gold)
-        # 覆盖上限(oracle):把本课纠对的术语都加进表,看召回天花板
-        # —— 证明"漏纠=术语没进表",而这正是个性化反哺(学一键纠错的术语)要补的。
+        # coverage ceiling (oracle): add all terms correctly fixed in this class to the table and see the recall ceiling
+        # —— proving "missed corrections = terms not in the table", which is exactly what personalized feedback (learning one-click-corrected terms) fills in.
         oracle = set(base_terms)
         for b, a in gold:
             oracle |= corrected_terms(b, a)
         rec_l, _ = pair_recall(TermFixer(list(oracle)), gold)
 
-        # 误纠:在未被编辑(raw==ref,视为已正确)的行上,fix 改了多少字
+        # over-correction: on lines that weren't edited (raw==ref, treated as already correct), how many characters fix changed
         over = ok = 0
         for k in raw:
             if raw[k] == ref.get(k) and len(fix[k]) == len(raw[k]):

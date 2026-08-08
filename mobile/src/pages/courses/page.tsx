@@ -8,7 +8,7 @@ export default function CoursesPage() {
   const { courses } = useCourses();
   const [activeCourse, setActiveCourse] = useState<string>('all');
 
-  // 课程分组:sid -> course_id;未归类的归到 all
+  // Group sessions by course: sid -> course_id; uncategorized go to all
   const courseOf = useMemo(() => {
     const map = new Map<string, string>();
     courses.forEach((c) => (c.session_ids || []).forEach((sid) => map.set(sid, c.id)));
@@ -28,7 +28,7 @@ export default function CoursesPage() {
         <p className="text-xs md:text-sm text-foreground-400 mt-1">全部课时与课程分组</p>
       </div>
 
-      {/* 课程筛选 chips */}
+      {/* Course filter chips */}
       {courses.length > 0 && (
         <div className="px-5 md:px-8 mb-3">
           <div className="flex gap-2 overflow-x-auto pb-1">

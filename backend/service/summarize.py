@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""用 DeepSeek 把课堂转写整理成摘要和知识点。
+"""Use DeepSeek to turn a classroom transcript into a summary and key points.
 
-DeepSeek 只有文本大模型（deepseek-chat / deepseek-reasoner，标准 HTTP JSON 接口），
-**没有语音识别**——转文字仍然是本机 sherpa-onnx 干的，这里只处理已经转好的文字。
+DeepSeek only has text LLMs (deepseek-chat / deepseek-reasoner, standard HTTP JSON interface)
+and **no speech recognition**—speech-to-text is still done locally by sherpa-onnx; this module only handles the already-transcribed text.
 
-API key 放在服务端配置里，绝不下发给浏览器：页面只调本服务的 /api/summarize，
-由服务端代为请求 DeepSeek。这样手机上登录也不用配 key，key 也不会泄露在前端。
+The API key lives in server-side config and is never sent to the browser: the page only calls this service's /api/summarize,
+and the server makes the DeepSeek request on its behalf. This way logging in on a phone needs no key, and the key never leaks to the frontend.
 """
 import json
 import os
@@ -75,7 +75,7 @@ cite_ids 是你引用的那几句的序号，最多 5 个，没有就空数组�
 
 
 def _close_truncated(t):
-    """把被截断的 JSON 尽量补齐:闭合未结束的字符串、去掉悬空的 key/逗号/反斜杠、按括号栈补齐闭合。"""
+    """Repair truncated JSON as best we can: close unterminated strings, drop dangling keys/commas/backslashes, and close brackets per the bracket stack."""
     stack = []
     in_str = False
     esc = False
@@ -97,12 +97,12 @@ def _close_truncated(t):
             elif ch in '}]' and stack:
                 stack.pop()
     s = t
-    if esc:                                    # 末尾悬空反斜杠
+    if esc:                                    # trailing dangling backslash
         s = s[:-1]
-    if in_str:                                 # 字符串没闭合,补个引号
+    if in_str:                                 # unterminated string, add a quote
         s += '"'
-    s = re.sub(r'[,\s]*$', '', s)              # 尾逗号/空白
-    s = re.sub(r'"[^"]*"\s*:\s*$', '', s)      # 悬空的 "key":(值还没开始就断了)
+    s = re.sub(r'[,\s]*$', '', s)              # trailing comma/whitespace
+    s = re.sub(r'"[^"]*"\s*:\s*$', '', s)      # dangling "key": (cut off before the value even started)
     s = re.sub(r'[,\s]*$', '', s)
     for closer in reversed(stack):
         s += closer
@@ -110,7 +110,7 @@ def _close_truncated(t):
 
 
 def _loads_forgiving(text):
-    """容错解析模型返回的 JSON:处理 ```json 包裹、LaTeX 反斜杠没转义、以及输出被截断的情况。"""
+    """Fault-tolerant parse of the model's JSON: handles ```json wrapping, unescaped LaTeX backslashes, and truncated output."""
     t = (text or "").strip()
     if t.startswith("```"):
         t = t.strip("`")
@@ -118,7 +118,7 @@ def _loads_forgiving(text):
             t = t[4:]
 
     def fix_bs(x):
-        return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', x)   # LaTeX 反斜杠补成 \\ 保证 JSON 合法
+        return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', x)   # escape LaTeX backslashes to \\ to keep the JSON valid
 
     candidates = [t, fix_bs(t), _close_truncated(t), _close_truncated(fix_bs(t))]
     last = None
@@ -133,7 +133,7 @@ def _loads_forgiving(text):
 class DeepSeek:
     def __init__(self, cfg):
         d = (cfg.get("deepseek") or {})
-        # key 优先读环境变量，其次读配置文件——别把 key 提交进版本库
+        # read the key from an env var first, then the config file—don't commit the key into version control
         self.api_key = os.environ.get("DEEPSEEK_API_KEY") or d.get("api_key") or ""
         self.base_url = d.get("base_url", "https://api.deepseek.com")
         self.model = d.get("model", "deepseek-chat")
@@ -145,8 +145,8 @@ class DeepSeek:
         return bool(self.api_key)
 
     def _open_retry(self, req, timeout, retries=2):
-        """发请求并读回响应体。DeepSeek 偶发 5xx/超时/网络抖动 → 退避后自动重试。
-        一次性调用(摘要/自测/追问)用 retries>=2;实时调用(纠错/分句)用 retries=0 快速失败。"""
+        """Send the request and read back the response body. DeepSeek occasionally returns 5xx/timeouts/network jitter → auto-retry after backoff.
+        One-shot calls (summary/self-test/follow-up) use retries>=2; real-time calls (correction/segmentation) use retries=0 to fail fast."""
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         delay = 1.5
         for attempt in range(retries + 1):
@@ -154,7 +154,7 @@ class DeepSeek:
                 with opener.open(req, timeout=timeout) as resp:
                     return resp.read()
             except urllib.error.HTTPError as e:
-                # 429/5xx 是 DeepSeek 那边临时忙,值得重试;4xx(如鉴权)重试也没用,直接抛
+                # 429/5xx means DeepSeek is temporarily busy and is worth retrying; 4xx (e.g. auth) won't be helped by retrying, so raise directly
                 if e.code in (429, 500, 502, 503, 504) and attempt < retries:
                     time.sleep(delay); delay *= 2; continue
                 raise
@@ -184,9 +184,9 @@ class DeepSeek:
         return out
 
     def correct(self, text, topic="", timeout_s=15):
-        """实时纠错:只改一句里明显的同音/近音错字,返回纠正后的句子。
-        topic=课程标题(如"高等数学"),给模型学科上下文,往对应专业术语方向纠。
-        失败、没配 key、或模型跑偏(长度差太多)都退回原文,绝不删内容。"""
+        """Real-time correction: fix only the obvious homophone/near-homophone errors in one sentence and return the corrected sentence.
+        topic = course title (e.g. "Advanced Mathematics"), gives the model subject context to steer toward the right domain terms.
+        On failure, no key, or a model that goes off the rails (length differs too much), fall back to the original—never delete content."""
         text = (text or "").strip()
         if not self.api_key or len(text) < 4:
             return text
@@ -228,14 +228,14 @@ class DeepSeek:
             out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
         except Exception:
             return text
-        # 模型若跑偏(长度差太多)就不信,退回原文
+        # if the model goes off the rails (length differs too much), don't trust it, fall back to the original
         if not out or abs(len(out) - len(text)) > max(6, int(len(text) * 0.4)):
             return text
         return out
 
     def translate(self, text, topic="", timeout_s=12):
-        """把英文/中英混说的一句翻成自然简洁的中文,当字幕用。返回中文译文;
-        没配 key / 失败 / 本来就是中文无需翻,返回 ""。"""
+        """Translate one English or mixed English-Chinese sentence into natural, concise Chinese for use as a caption. Returns the Chinese translation;
+        with no key / on failure / when it's already Chinese and needs no translation, returns ""."""
         text = (text or "").strip()
         if not self.api_key or len(text) < 2:
             return ""
@@ -264,14 +264,14 @@ class DeepSeek:
             out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
         except Exception:
             return ""
-        # 译文里不该全是英文/空;简单挡一下
+        # the translation shouldn't be all English/empty; a simple guard
         if not out or out == text:
             return ""
         return out
 
     def translate_wu_to_mandarin(self, text, topic="", timeout_s=12):
-        """把上海话(吴语)的逐句转写翻成规范普通话,当原句下面的一行字幕。
-        返回普通话译文;没配 key / 失败 / 空句,返回 ""(调用方就只显示吴语原句)。"""
+        """Translate a per-sentence Shanghainese (Wu) transcript into standard Mandarin, as a caption line beneath the original.
+        Returns the Mandarin translation; with no key / on failure / on an empty sentence, returns "" (the caller then shows only the Wu original)."""
         text = (text or "").strip()
         if not self.api_key or len(text) < 2:
             return ""
@@ -304,11 +304,11 @@ class DeepSeek:
         return out
 
     def segment(self, fragments, topic="", timeout_s=12):
-        """智能分句:把连续的 ASR 口语碎片(每个是一次 VAD 停顿切出来的)按语意合并成完整句子。
-        fragments: ["碎片1","碎片2",...] 时间顺序。返回 dict:
-          {"commit":[{"n":<吃掉开头几个碎片>,"text":"<合成的完整句,带标点>"}...],"tail_n":<剩下没说完的碎片数>}
-          语意没说完的结尾碎片留在 tail、先不成句。sum(n)+tail_n == 碎片数。
-        没配 key / 失败返回 None(调用方退回:每个碎片各成一行)。"""
+        """Smart segmentation: merge consecutive ASR speech fragments (each cut out by one VAD pause) into complete sentences by meaning.
+        fragments: ["fragment1","fragment2",...] in time order. Returns a dict:
+          {"commit":[{"n":<how many leading fragments to consume>,"text":"<the assembled complete sentence, with punctuation>"}...],"tail_n":<count of remaining unfinished fragments>}
+          Trailing fragments whose meaning isn't finished stay in the tail and don't form a sentence yet. sum(n)+tail_n == fragment count.
+        With no key / on failure, returns None (the caller falls back: each fragment becomes its own line)."""
         if not self.api_key or not fragments:
             return None
         numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(fragments))
@@ -358,7 +358,7 @@ class DeepSeek:
         sys_prompt = FLASHCARD_SYS if mode == "flashcards" else QUIZ_SYS
         user = (f"课程：{title}\n\n" if title else "") + "逐句转写：\n" + self._body(lines)
         out = self._chat(sys_prompt, user, temperature=0.5)
-        # 把时间戳映射回秒数，前端要靠它跳转音频
+        # map the timestamps back to seconds; the frontend needs it to seek the audio
         ts2start = {l.get("ts"): l.get("start", 0) for l in lines if l.get("ts")}
         for item in out.get("flashcards", []) or out.get("quiz", []) or []:
             item["start"] = ts2start.get(item.get("ts"), 0)
@@ -384,7 +384,7 @@ class DeepSeek:
         return out
 
     def summarize(self, lines, title=None, board=""):
-        """lines: [{ts, speaker, text, kind}];board: 板书/PPT 识别内容。返回 dict。"""
+        """lines: [{ts, speaker, text, kind}]; board: recognized whiteboard/slide content. Returns a dict."""
         if not self.ready:
             raise RuntimeError(
                 "还没配 DeepSeek API key。把 key 填到 service/config.json 的 "
@@ -393,7 +393,7 @@ class DeepSeek:
         body = "\n".join(f"[{l.get('ts','')} {l.get('speaker','')}] {l.get('text','')}"
                          for l in lines if l.get("text"))
         if len(body) > self.max_chars:
-            # 超长就掐头去尾保留中间以外的部分：优先留开头（引入）和结尾（总结）
+            # if too long, drop the middle and keep everything else: prefer keeping the opening (intro) and ending (summary)
             half = self.max_chars // 2
             body = body[:half] + "\n…（中间略）…\n" + body[-half:]
 
@@ -417,14 +417,14 @@ class DeepSeek:
             data=payload,
             headers={"Content-Type": "application/json",
                      "Authorization": f"Bearer {self.api_key}"})
-        # DeepSeek 偶发 5xx/超时会自动重试(_open_retry 内部绕开系统代理)。
+        # DeepSeek's occasional 5xx/timeouts are auto-retried (_open_retry internally bypasses the system proxy).
         data = json.loads(self._open_retry(req, self.timeout, retries=2).decode("utf-8"))
         text = data["choices"][0]["message"]["content"]
         usage = data.get("usage", {})
         try:
             out = json.loads(text)
         except json.JSONDecodeError:
-            out = _loads_forgiving(text)   # ```json 包裹 / LaTeX 反斜杠 / 输出被截断 都兜住
+            out = _loads_forgiving(text)   # handles ```json wrapping / LaTeX backslashes / truncated output
         out["_usage"] = usage
         out["_model"] = self.model
         return out

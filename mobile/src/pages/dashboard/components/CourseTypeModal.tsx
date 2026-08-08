@@ -3,8 +3,8 @@ import Modal from '@/components/base/Modal';
 
 export interface CourseGroup {
   name: string;
-  recordings: number;   // 这门课录了几次
-  schedule: number;     // 课表里出现几节
+  recordings: number;   // how many times this course was recorded
+  schedule: number;     // how many sessions appear in the timetable
 }
 
 interface CourseTypeModalProps {
@@ -21,7 +21,7 @@ export default function CourseTypeModal({ isOpen, onClose, courses, onSelect }: 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="全部课程" width="max-w-lg">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
-        {/* 统计 + 搜索 */}
+        {/* Stats + search */}
         <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 flex items-center justify-center bg-accent-100 rounded-xl">
@@ -46,7 +46,7 @@ export default function CourseTypeModal({ isOpen, onClose, courses, onSelect }: 
           </div>
         </div>
 
-        {/* 课程清单 */}
+        {/* Course list */}
         <div className="overflow-y-auto flex-1 space-y-2">
           {filtered.length === 0 ? (
             <div className="py-10 text-center text-sm text-foreground-400">

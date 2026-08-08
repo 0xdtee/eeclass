@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-"""音频采集：麦克风（线下课）或 系统声音回环（网课）。
+"""Audio capture: microphone (in-person class) or system audio loopback (online class).
 
-两条路径用了不同的库，因为没有一个库能把两件事都干好：
-  · 麦克风   —— sounddevice。回调式，延迟低，成熟稳定。
-  · 系统声音 —— soundcard。sounddevice 0.5.5 的 WasapiSettings **没有**
-                loopback 参数（实测确认），拿不到系统输出，只能换库。
-                soundcard 是拉取式的，所以单开一个线程去 record。
+The two paths use different libraries because no single one does both well:
+  · microphone   —— sounddevice. Callback-based, low latency, mature and stable.
+  · system audio —— soundcard. sounddevice 0.5.5's WasapiSettings has **no**
+                loopback parameter (confirmed in testing), so it can't grab the
+                system output; a different library is required.
+                soundcard is pull-based, so we run its record() in its own thread.
 
-统一输出 16kHz 单声道 float32 帧（512 点）交给 VAD。
+Both paths output 16kHz mono float32 frames (512 samples) for the VAD.
 
-设备 id 用字符串区分来源： "sd:9" = sounddevice 第 9 号输入， "sc:0" = soundcard 第 0 个回环。
+Device ids use a string prefix for the source: "sd:9" = sounddevice input #9, "sc:0" = soundcard loopback #0.
 """
 import queue
 import re
@@ -19,9 +20,9 @@ from fractions import Fraction
 import numpy as np
 from scipy.signal import resample_poly
 
-# sounddevice 依赖 PortAudio，服务器（无声卡的 Linux）上装不上也用不到——
-# 服务器场景音频全来自浏览器推流（BrowserCapture）。所以做成可选，
-# 缺了只是本机采集（Capture / 回环）不可用，不影响手机端整条链路。
+# sounddevice depends on PortAudio, which can't (and needn't) be installed on the server (headless Linux, no sound card)——
+# on the server all audio comes from browser streaming (BrowserCapture). So it's optional:
+# without it only local capture (Capture / loopback) is unavailable, which doesn't affect the whole mobile pipeline.
 try:
     import sounddevice as sd
     HAS_LOCAL_AUDIO = True
@@ -30,46 +31,48 @@ except Exception:
     HAS_LOCAL_AUDIO = False
 
 TARGET_SR = 16000
-FRAME = 512  # VAD 要求的帧长（16k 下 = 32ms）
+FRAME = 512  # frame length required by the VAD (= 32ms at 16k)
 
-# 同一个物理麦克风会在四套主机 API 下各列一遍。可靠性差很多，实测：
-#   WASAPI      —— 首选，延迟低，稳
-#   MME         —— 老接口，能用，延迟高一点
-#   DirectSound —— 能用
-#   WDM-KS      —— 最底层，经常直接开不起来。本机实测：
-#                  蓝牙耳机免提 → PaErrorCode -9999 'WdmSyncIoctl: DeviceIoControl GLE=0x490'
-#                  Realtek 麦克风阵列 → -9996 Invalid device
-# 所以按这个顺序去重，只把每个物理设备最好的那条列出来。
+# the same physical mic gets listed once under each of the four host APIs. Reliability varies a lot; measured:
+#   WASAPI      —— first choice, low latency, stable
+#   MME         —— old API, works, slightly higher latency
+#   DirectSound —— works
+#   WDM-KS      —— lowest level, often just fails to open. Measured on this machine:
+#                  Bluetooth headset hands-free → PaErrorCode -9999 'WdmSyncIoctl: DeviceIoControl GLE=0x490'
+#                  Realtek mic array → -9996 Invalid device
+# so we dedupe in this order and list only the best channel for each physical device.
 HOST_RANK = {"Windows WASAPI": 0, "MME": 1, "Windows DirectSound": 2, "Windows WDM-KS": 3}
-SHAKY_RANK = 3      # 到这一级就标记为「可能开不起来」
+SHAKY_RANK = 3      # at this level, flag it as "might fail to open"
 
 
 def _dev_key(name):
-    """把同一个设备在不同 API 下的名字归一。MME 会把名字截断到 31 字符，
-    所以只取前面一小段做键。"""
+    """Normalize the name of the same device across different APIs. MME truncates
+    names to 31 chars, so use only a short leading segment as the key."""
     return re.sub(r"\s+", "", name)[:22].lower()
 
 
 class AGC:
-    """自动增益。把偏小的输入拉到一个合适的电平再送去 VAD 和识别。
+    """Automatic gain. Raise a too-quiet input to a sensible level before sending it to the VAD and recognizer.
 
-    为什么需要：这台机器实测录下来的课堂音频峰值只有 0.02~0.20，比正常录音低
-    20~30dB。虽然实测 VAD 和 SenseVoice 抗噪很好（0dB 信噪比、-36dB 衰减都不丢字），
-    但电平太低时余量很小，稍微远一点、小声一点就容易掉出来。
+    Why it's needed: classroom audio recorded on this machine peaks at only 0.02~0.20,
+    20~30dB below a normal recording. VAD and SenseVoice do handle noise well in testing
+    (no dropped words at 0dB SNR or -36dB attenuation), but at such low levels the margin
+    is tiny—a little farther away or a little quieter and words start dropping out.
 
-    做法是峰值跟踪 + 慢衰减：
-      · 只在有声音时抬高包络，静音时让它慢慢往下滑——这样不会在没人说话的时候
-        把底噪一路放大（那会让 VAD 疯狂误触发）。
-      · 增益只放大不缩小（下限 1.0），本来就够响的输入原样通过。
-      · 变化做平滑，避免一句话中间音量突然跳变。
-      · 最后软限幅，别削顶。
+    The approach is peak tracking + slow decay:
+      · only raise the envelope when there's sound, and let it slide down slowly during
+        silence—so we don't amplify the noise floor while nobody is speaking (that would
+        make the VAD fire constantly).
+      · gain only amplifies, never attenuates (floor 1.0); an already-loud input passes through unchanged.
+      · smooth the changes to avoid sudden volume jumps mid-sentence.
+      · finally soft-clip so peaks aren't clipped.
     """
 
     def __init__(self, target_rms=0.05, max_gain=15.0, floor=3e-4,
                  decay=0.9993, smooth=0.05):
         self.target = target_rms
         self.max_gain = max_gain
-        self.floor = floor          # 低于这个电平当作静音，不参与包络
+        self.floor = floor          # below this level, treat as silence and exclude from the envelope
         self.decay = decay
         self.smooth = smooth
         self.env = floor
@@ -85,7 +88,7 @@ class AGC:
         want = min(max(want, 1.0), self.max_gain)
         self.gain += (want - self.gain) * self.smooth
         out = mono * self.gain
-        # 软限幅：超过 0.95 的部分压缩进去，不硬削
+        # soft clip: compress anything above 0.95 rather than hard-clipping it
         peak = float(np.abs(out).max()) if out.size else 0.0
         if peak > 0.95:
             out = np.tanh(out / peak * 1.5) * (0.95 / np.tanh(1.5))
@@ -93,31 +96,32 @@ class AGC:
 
 
 def _ensure_com():
-    """soundcard 走 MediaFoundation/COM，而 COM 是**按线程**初始化的。
+    """soundcard goes through MediaFoundation/COM, and COM is initialized **per thread**.
 
-    本模块的回环代码会在三种线程上跑（主线程、aiohttp 的 executor 线程、
-    自己开的采集线程），任何一个没 CoInitializeEx 就直接
-    RuntimeError: Error 0x800401f0 (CO_E_NOTINITIALIZED)。
-    返回 True 表示"是我初始化的"，调用方负责在线程退出前 CoUninitialize。
+    The loopback code in this module runs on three kinds of threads (main thread,
+    aiohttp's executor thread, and our own capture thread); any one of them without
+    CoInitializeEx fails outright with
+    RuntimeError: Error 0x800401f0 (CO_E_NOTINITIALIZED).
+    Returns True to mean "I did the init", so the caller knows to CoUninitialize before the thread exits.
     """
     import ctypes
     if not hasattr(ctypes, "windll"):
-        return False           # 非 Windows：本机回环用不到，直接跳过
-    hr = ctypes.windll.ole32.CoInitializeEx(None, 0)   # 0 = 多线程套间
-    return hr == 0            # S_OK=新初始化；S_FALSE(1)=本线程早就初始化过
+        return False           # non-Windows: local loopback isn't used, just skip
+    hr = ctypes.windll.ole32.CoInitializeEx(None, 0)   # 0 = multithreaded apartment
+    return hr == 0            # S_OK = newly initialized; S_FALSE(1) = this thread was already initialized
 
 
 def _loopback_mics():
     try:
         import soundcard as sc
-        _ensure_com()   # 枚举本身也过 COM；这里在池线程上跑，不配对 uninit
+        _ensure_com()   # enumeration itself also goes through COM; this runs on a pool thread, no paired uninit
         return [m for m in sc.all_microphones(include_loopback=True) if m.isloopback]
     except Exception:
         return []
 
 
 def _all_mics():
-    """所有输入设备的原始清单（含各 API 下的重复项），内部用。"""
+    """Raw list of all input devices (including duplicates per API), for internal use."""
     apis = sd.query_hostapis()
     try:
         default_in = sd.default.device[0]
@@ -139,8 +143,8 @@ def _all_mics():
 
 
 def list_devices():
-    """列出可用音源：麦克风（每个物理设备只留最可靠的那条）+ 系统声音回环。
-    服务器上没有本机声卡，返回空——手机端会自动用「本设备的麦克风」，不受影响。"""
+    """List available audio sources: microphones (only the most reliable channel per physical device) + system audio loopback.
+    The server has no local sound card and returns empty—the mobile side automatically uses "this device's microphone", so it's unaffected."""
     if not HAS_LOCAL_AUDIO:
         return []
     best = {}
@@ -151,7 +155,7 @@ def list_devices():
                 d["default"] = d["default"] or cur["default"]
             best[d["key"]] = d
         elif d["default"]:
-            cur["default"] = True     # 系统默认设备的标记别在去重时丢了
+            cur["default"] = True     # don't lose the system-default marker during dedup
 
     out = sorted(best.values(), key=lambda x: (x["rank"], x["index"]))
     for d in out:
@@ -181,8 +185,9 @@ def pick_default_device():
 
 
 def _alternates(index):
-    """给定一个输入设备序号，返回「同一个物理设备」在其它主机 API 下的序号，
-    按可靠性排序。WDM-KS 开不起来时用它换一条路，而不是直接让用户上不了课。"""
+    """Given an input device index, return the indexes of "the same physical device"
+    under other host APIs, sorted by reliability. When WDM-KS fails to open, use this
+    to take another route instead of just leaving the user unable to start class."""
     mics = _all_mics()
     me = next((d for d in mics if d["index"] == index), None)
     if me is None:
@@ -192,19 +197,19 @@ def _alternates(index):
 
 
 class BrowserCapture:
-    """音频来自浏览器（手机/平板/别的电脑），不是本机声卡。
+    """Audio comes from a browser (phone/tablet/another computer), not the local sound card.
 
-    和 Capture 对外接口一致（frames 队列 + start/stop + level），
-    这样 Session 那边不用关心音频到底是本机采的还是网页推来的。
+    Exposes the same interface as Capture (frames queue + start/stop + level),
+    so Session doesn't have to care whether audio was captured locally or pushed from a web page.
 
-    网页那边用 getUserMedia 拿麦克风，降采样到 16k 单声道 Int16 后
-    通过 WebSocket 二进制帧推过来。注意浏览器**必须在 HTTPS 下**才给麦克风权限，
-    所以服务是 HTTPS 的，网页也由本服务同源托管。
+    The web page uses getUserMedia for the mic, downsamples to 16k mono Int16, and
+    pushes it over WebSocket as binary frames. Note the browser only grants mic access
+    **over HTTPS**, so the service is HTTPS and the page is served same-origin by this service.
     """
 
     def __init__(self, on_error=None):
         self.on_error = on_error
-        self.frames = queue.Queue(maxsize=4000)   # 网络抖动比本机采集大，缓冲给足
+        self.frames = queue.Queue(maxsize=4000)   # network jitter is larger than local capture, so give the buffer plenty of room
         self.level = 0.0
         self.overflow_count = 0
         self._tail = np.zeros(0, dtype=np.float32)
@@ -217,7 +222,7 @@ class BrowserCapture:
                 "name": "浏览器麦克风", "loopback": False}
 
     def push_pcm(self, data):
-        """收网页推来的 16k 单声道 Int16 小端字节流。"""
+        """Receive the 16k mono Int16 little-endian byte stream pushed from the web page."""
         if not self._running or not data:
             return
         mono = np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
@@ -239,7 +244,7 @@ class BrowserCapture:
 
 
 class Capture:
-    """后台采集，把 16k 单声道 512 点帧推进 self.frames 队列。"""
+    """Background capture: push 16k mono 512-sample frames into the self.frames queue."""
 
     def __init__(self, device=None, loopback=False, gain=1.0, on_error=None, agc=None):
         self.device = device if device else pick_default_device()
@@ -249,16 +254,16 @@ class Capture:
         self.agc = AGC(target_rms=a.get("target_rms", 0.05),
                        max_gain=a.get("max_gain", 15.0)) if a.get("enabled", True) else None
         self.on_error = on_error
-        self.frames = queue.Queue(maxsize=2000)   # ~64 秒缓冲，正常远用不到
+        self.frames = queue.Queue(maxsize=2000)   # ~64 seconds of buffer, far more than normally needed
         self._stream = None
         self._thread = None
         self._running = False
         self._tail = np.zeros(0, dtype=np.float32)
         self._lock = threading.Lock()
         self.overflow_count = 0
-        self.level = 0.0   # 最近音量（0~1），界面画电平条用
+        self.level = 0.0   # most recent volume (0~1), used to draw the level bar in the UI
 
-    # ---------- 公共：把任意采样率的单声道数据切成 512 点帧 ----------
+    # ---------- shared: slice mono data of any sample rate into 512-sample frames ----------
     def _feed(self, mono, up, down):
         if self.gain != 1.0:
             mono = mono * self.gain
@@ -277,14 +282,14 @@ class Capture:
                 try:
                     self.frames.put_nowait(chunk[i:i + FRAME])
                 except queue.Full:
-                    pass   # 处理跟不上就丢帧，宁可丢也不能卡住采集
+                    pass   # if processing can't keep up, drop frames—better to drop than to stall capture
 
     def start(self):
         if self.loopback:
             return self._start_loopback()
         return self._start_mic()
 
-    # ---------- 麦克风 ----------
+    # ---------- microphone ----------
     def _start_mic(self):
         idx = int(str(self.device).split(":")[1]) if self.device else None
         if idx is None:
@@ -293,9 +298,9 @@ class Capture:
         try:
             return self._open_mic(idx)
         except Exception as first:
-            # WDM-KS 那套经常直接开不起来（-9999 WdmSyncIoctl / -9996 Invalid device）。
-            # 同一个物理麦克风在 WASAPI/MME 下通常好好的，自动换过去，
-            # 别让一堂课因为选错了一条驱动通道就录不成。
+            # the WDM-KS path often just fails to open (-9999 WdmSyncIoctl / -9996 Invalid device).
+            # the same physical mic usually works fine under WASAPI/MME, so switch to it automatically,
+            # rather than let a class fail to record just because the wrong driver channel was picked.
             for alt in _alternates(idx):
                 try:
                     info = self._open_mic(alt)
@@ -306,8 +311,8 @@ class Capture:
                 except Exception:
                     continue
 
-            # 连一条能用的通道都没有（比如蓝牙耳机没连上、声卡阵列被禁用）。
-            # 与其让人对着报错发呆、整节课白上，不如退回默认麦克风并说清楚。
+            # not a single usable channel (e.g. the Bluetooth headset isn't connected, the sound-card array is disabled).
+            # rather than leave someone staring at an error and wasting a whole class, fall back to the default mic and say so clearly.
             fb = pick_default_device()
             fb_idx = int(fb.split(":")[1]) if fb and fb.startswith("sd:") else None
             if fb_idx is not None and fb_idx != idx:
@@ -339,20 +344,20 @@ class Capture:
             try:
                 x = indata if indata.ndim == 1 else indata.mean(axis=1)
                 self._feed(np.ascontiguousarray(x, dtype=np.float32), up, down)
-            except Exception as e:   # 回调里绝不能抛，否则流会静默死掉
+            except Exception as e:   # never raise inside the callback, or the stream dies silently
                 if self.on_error:
                     self.on_error(f"采集回调异常: {e}")
 
         stream = sd.InputStream(
             device=idx, channels=channels, samplerate=src_sr, dtype="float32",
             blocksize=int(src_sr * 0.032), callback=callback)
-        stream.start()   # 打不开时是 start() 抛，不是构造时抛，所以两句都要在 try 里
+        stream.start()   # it's start() that raises when opening fails, not the constructor, so both lines must be in the try
         self._stream = stream
         self._running = True
         return {"src_sr": src_sr, "channels": channels, "api": api,
                 "name": info["name"].strip(), "loopback": False}
 
-    # ---------- 系统声音回环 ----------
+    # ---------- system audio loopback ----------
     def _start_loopback(self):
         mics = _loopback_mics()
         if not mics:

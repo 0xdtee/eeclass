@@ -1,7 +1,7 @@
 /**
- * 课程的术语表和纠错表。
- * 术语表 = 识别时的 hotwords（高数和物理的术语完全不同，不该共用一份）。
- * 纠错表 = 「格林公司 → 格林公式」这类固定错误，识别完立刻替换掉。
+ * Glossary and correction table for a course.
+ * Glossary = hotwords used during recognition (calculus and physics terms are entirely different and shouldn't share one list).
+ * Correction table = fixed errors like 「格林公司 -> 格林公式」, replaced immediately after recognition.
  */
 import { useEffect, useState } from 'react';
 import Modal from '@/components/base/Modal';

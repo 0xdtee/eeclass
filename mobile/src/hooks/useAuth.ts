@@ -61,7 +61,7 @@ export function useAuth() {
       setLoading(false);
       return;
     }
-    // Try to validate token with /api/me(后端返回 { user: {...} },按嵌套字段取)
+    // Try to validate token with /api/me (backend returns { user: {...} }, read the nested field)
     apiFetch<{ user: { email: string; name: string; role: string } }>('/api/me')
       .then((data) => {
         const info = data.user;

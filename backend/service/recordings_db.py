@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-"""课堂记录元数据在 PG 里的读写（DB 当索引，files 仍是唯一真源）。
+"""Read/write classroom-record metadata in PG (DB as index, files remain the single source of truth).
 
-server.py 在原有落盘点（owner.json/meta.json/summary.json、指派课程）之外，
-额外调用这里的 upsert_recording 把同一份元数据写进 recordings 表；只有历史列表
-api_sessions 改成从这张表读，其它端点（逐句/搜索/音频）仍读文件。
+Besides the existing disk writes (owner.json/meta.json/summary.json, course assignment),
+server.py additionally calls upsert_recording here to write the same metadata into the recordings
+table; only the history list api_sessions now reads from this table, while other endpoints
+(per-utterance/search/audio) still read files.
 
-所有写入都用 UPSERT，只更新「显式传入」的字段——None 表示「这次不动它」，不会
-把别处已写好的值清掉。查询一律参数化。
+All writes use UPSERT, updating only the fields explicitly passed -- None means 'leave it alone this
+time' and never clears a value written elsewhere. Queries are always parameterized.
 """
 import json
 
 import db
 
-# upsert 时允许更新的列（sid 是主键，单独处理；updated 由 now() 自动刷新）
+# Columns allowed to update on upsert (sid is the primary key, handled separately; updated is auto-refreshed by now())
 _COLS = ("title", "owner", "duration_s", "course_id",
          "summary", "key_points", "has_summary", "created", "meta")
 
@@ -20,11 +21,11 @@ _COLS = ("title", "owner", "duration_s", "course_id",
 def upsert_recording(sid, *, title=None, owner=None, duration_s=None,
                      course_id=None, summary=None, key_points=None,
                      has_summary=None, created=None, meta=None):
-    """插入或更新一条记录的元数据；只写显式给出的字段（非 None）。
+    """Insert or update one record's metadata; write only the explicitly given fields (non-None).
 
-    key_points / meta 会存成 jsonb（传 list/dict 即可）。meta 存整份 meta.json，
-    历史列表据此字节级复原旧响应。created 接受 datetime 或可被 PG 解析的时间字符串。
-    返回是否有行写入。"""
+    key_points / meta are stored as jsonb (just pass a list/dict). meta holds the full meta.json,
+    from which the history list byte-for-byte reconstructs the old response. created accepts a
+    datetime or a time string PG can parse. Returns whether any row was written."""
     if not sid:
         return False
     db.init_schema()
@@ -39,7 +40,7 @@ def upsert_recording(sid, *, title=None, owner=None, duration_s=None,
     }
     given = [c for c in _COLS if values[c] is not None]
 
-    # 即便没有其它字段，也要保证这条 sid 至少存在（插入一行占位）
+    # Even with no other fields, ensure this sid at least exists (insert a placeholder row)
     insert_cols = ["sid"] + given
     placeholders = ", ".join(["%s"] + ["%s"] * len(given))
     params = [sid] + [values[c] for c in given]
@@ -61,11 +62,11 @@ def upsert_recording(sid, *, title=None, owner=None, duration_s=None,
 
 
 def list_recordings(owner=None, superuser=False):
-    """历史列表：非超级用户只看自己名下（owner==自己的哈希 id）；超级用户看全部。
+    """History list: non-superusers see only their own (owner==their hashed id); superusers see all.
 
-    返回 [{sid, meta, summary, key_points, has_summary}]，按 sid 倒序（sid 以日期
-    时间开头，等价于按时间倒序）。owner 过滤走索引列 owner；响应字段由 api_sessions
-    从 meta 字节级复原旧结构。"""
+    Returns [{sid, meta, summary, key_points, has_summary}], ordered by sid descending (sid starts
+    with the date-time, equivalent to newest-first). The owner filter uses the indexed owner column;
+    response fields are byte-for-byte reconstructed from meta by api_sessions."""
     db.init_schema()
     sql = ("SELECT sid, meta, summary, key_points, has_summary FROM recordings")
     params = []

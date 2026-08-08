@@ -160,13 +160,13 @@ export default function MobileLayout() {
 
   return (
     <div className="h-screen bg-background-50 flex overflow-hidden">
-      {/* 顶部状态栏不透明遮罩:挡住滚动内容,避免露进状态栏那条安全区(inline 保证高度)*/}
+      {/* Opaque overlay for the top status bar: masks scrolling content so it doesn't bleed into the status-bar safe area (inline style guarantees height) */}
       <div className="fixed top-0 left-0 right-0 z-[60] bg-background-50" style={{ height: 'env(safe-area-inset-top)' }}></div>
 
-      {/* Sidebar — iPad only(固定不滚)*/}
+      {/* Sidebar — iPad only (fixed, non-scrolling) */}
       {renderSidebar()}
 
-      {/* Content Area(只有这里滚动)*/}
+      {/* Content Area (the only scrolling region) */}
       <main className="flex-1 h-full overflow-y-auto pb-24 md:pb-0 safe-top">
         <Outlet />
       </main>

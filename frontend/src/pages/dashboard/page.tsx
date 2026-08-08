@@ -45,8 +45,8 @@ export default function DashboardHome() {
   const [showImport, setShowImport] = useState(false);
   const [showSyncShu, setShowSyncShu] = useState(false);
   const [importDate, setImportDate] = useState('');
-  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // 带日期的课程事件(不重复)
-  const [calendarFocus, setCalendarFocus] = useState('');   // 导入后让日历跳到课程所在月
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // Dated course events (deduplicated)
+  const [calendarFocus, setCalendarFocus] = useState('');   // After import, make the calendar jump to the month of the courses
   const [showCourseTypes, setShowCourseTypes] = useState(false);
   const [showTagCourses, setShowTagCourses] = useState(false);
   const [showSummaryList, setShowSummaryList] = useState(false);
@@ -65,7 +65,7 @@ export default function DashboardHome() {
     return map;
   }, [tags]);
 
-  // 课程事件里存的是标签 label,日历需要 id,这里做 label→id 映射
+  // Course events store the tag label, but the calendar needs an id, so map label->id here
   const labelToId = useMemo(() => {
     const map: Record<string, string> = {};
     tags.forEach((t) => { map[t.label.trim()] = t.id; });
@@ -74,12 +74,12 @@ export default function DashboardHome() {
 
   const records = useRecords();
 
-  // 真实录制的课(来自后端 /api/sessions),映射成看板需要的字段
+  // Actually-recorded sessions (from backend /api/sessions), mapped to the fields the dashboard needs
   const realSessions = useMemo(
     () =>
       records.sessions.map((s) => {
-        // 从 sid(2026-07-30_1349_标题)拆出日期和时间:
-        // 日历按天分组要纯 YYYY-MM-DD,不能带时间,否则匹配不到格子
+        // Split the date and time out of the sid (2026-07-30_1349_title):
+        // The calendar groups by day and needs a pure YYYY-MM-DD, no time, or it won't match a cell
         const m = s.id.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})/);
         return {
           id: s.id,
@@ -102,12 +102,12 @@ export default function DashboardHome() {
     [realSessions, createdSessions]
   );
 
-  // 读回已保存的课程事件
+  // Read back the saved course events
   useEffect(() => {
     void records.loadSchedule().then((r) => setScheduleEvents(r.events || [])).catch(() => {});
   }, [records]);
 
-  // 课程事件映射到日历:同一门课按时间先后编号「第1课/第2课…」,好区分、点进去录音也不冲突。
+  // Map course events onto the calendar: number sessions of the same course by time as 「第1课/第2课…」, so they're distinguishable and their recordings don't clash.
   const scheduleSessions = useMemo(() => {
     const byName = new Map<string, ScheduleEvent[]>();
     [...scheduleEvents]
@@ -123,7 +123,7 @@ export default function DashboardHome() {
         const tagId = e.tag ? labelToId[e.tag.trim()] : undefined;
         out.push({
           id: `sched-${e.date}-${e.name}-${e.start}`,
-          title: arr.length > 1 ? `${name} 第${i + 1}课` : name,   // 只出现一次就不编号
+          title: arr.length > 1 ? `${name} 第${i + 1}课` : name,   // Don't number a course that appears only once
           date: e.date, time: e.start,
           duration: '', tags: tagId ? [tagId] : [],
           description: `${e.location} ${e.room}`.trim(),
@@ -134,7 +134,7 @@ export default function DashboardHome() {
     return out;
   }, [scheduleEvents, labelToId]);
 
-  // 「课程总数」按去掉编号后的基名归类:高数第1课/第2课… 都算同一门「高数」
+  // "Total courses" is grouped by the base name with numbering stripped: 高数第1课/第2课… all count as one 「高数」
   const distinctCourses = useMemo(() => {
     const baseName = (t: string) =>
       (t || '').replace(/\s*第\s*\d+\s*[课讲节]\s*$/, '').replace(/\s*[（(]\s*\d+\s*[）)]\s*$/, '').trim();
@@ -153,7 +153,7 @@ export default function DashboardHome() {
     );
   }, [allSessions, scheduleEvents]);
 
-  // 「标签数量」卡片:按标签整理——既聚合导入的课表课程,也聚合真实录音。
+  // "Tag count" card: organized by tag -- aggregating both imported timetable courses and actual recordings.
   const tagGroups = useMemo(() => {
     const map = new Map<string, { courses: Set<string>; count: number }>();
     const ensure = (tag: string) => {
@@ -161,12 +161,12 @@ export default function DashboardHome() {
       if (!v) { v = { courses: new Set<string>(), count: 0 }; map.set(tag, v); }
       return v;
     };
-    // 导入的课表课程(每门课带自己的 tag,同名去重)
+    // Imported timetable courses (each carries its own tag; deduped by name)
     scheduleEvents.forEach((e) => {
       const t = (e.tag || '').trim();
       if (t && e.name) ensure(t).courses.add(e.name);
     });
-    // 真实录音上的标签
+    // Tags on actual recordings
     records.sessions.forEach((s) => {
       (s.tags || []).forEach((t) => {
         const name = (t || '').trim();
@@ -184,12 +184,12 @@ export default function DashboardHome() {
     () => Math.round(records.sessions.reduce((a, s) => a + (s.duration_s ?? 0), 0) / 60),
     [records.sessions]
   );
-  // 本周活跃度:本周(周一~周日)每天真实录音数
+  // This week's activity: number of actual recordings per day this week (Mon-Sun)
   const weekly = useMemo(() => {
     const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
     const pad = (n: number) => String(n).padStart(2, '0');
     const now = new Date();
-    const dow = (now.getDay() + 6) % 7; // 周一=0
+    const dow = (now.getDay() + 6) % 7; // Monday = 0
     const monday = new Date(now);
     monday.setDate(now.getDate() - dow);
     const keyOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -207,7 +207,7 @@ export default function DashboardHome() {
     return days.map((day, i) => ({ day, recordings: counts[i] }));
   }, [records.sessions]);
 
-  // 课时时长分布:时长最长的前 6 节课(分钟)
+  // Session-duration distribution: the 6 longest sessions (in minutes)
   const durationDist = useMemo(() => {
     const colors = ['accent', 'primary', 'secondary'];
     return [...records.sessions]
@@ -234,7 +234,7 @@ export default function DashboardHome() {
   };
 
   const handleSelectSession = (id: string) => {
-    // 课表里的课(还没录)→ 开一节新录音,并把课名带过去预填标题;已录的课 → 打开它
+    // A timetable course (not yet recorded) -> start a new recording and prefill its title with the course name; an already-recorded one -> open it
     if (id.startsWith('sched-')) {
       const ev = scheduleSessions.find((s) => s.id === id);
       const q = ev?.title ? `&title=${encodeURIComponent(ev.title)}` : '';
@@ -266,7 +266,7 @@ export default function DashboardHome() {
     setTimeout(() => setCreatedMessage(''), 3000);
   };
 
-  // 直接把一批带日期的课程事件并入日历(上大同步用)
+  // Merge a batch of dated course events straight into the calendar (used by SHU sync)
   const handleAddEvents = (newEvents: ScheduleEvent[]) => {
     const key = (e: ScheduleEvent) => `${e.date}|${e.start}|${e.name}`;
     const map = new Map(scheduleEvents.map((e) => [key(e), e]));
@@ -284,7 +284,7 @@ export default function DashboardHome() {
 
   const handleConfirmCourses = (courses: ScheduleCourse[], anchorMonday?: string) => {
     const pad = (n: number) => String(n).padStart(2, '0');
-    // 基准周一:优先用图里表头的真实日期,识别不到才退回本周
+    // Reference Monday: prefer the real date from the timetable header, fall back to this week only if it can't be recognized
     let monday: Date;
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchorMonday || '');
     if (m) {
@@ -294,16 +294,16 @@ export default function DashboardHome() {
       monday = new Date(today);
       monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
     }
-    // ① 先按课名给每门课定标签:匹配到相似的已有标签就用它;没有就新建一个。
-    //    结果贴到课本身(event.tag),这样课表/日历上每门课都带着自己的标签。
+    // (1) First assign a tag per course by name: reuse a similar existing tag if found, otherwise create a new one.
+    //     Stick the result on the course itself (event.tag), so every course on the timetable/calendar carries its own tag.
     const st = loadSettings();
     const autoTag = st.importTagSimilar || st.importTagNew;
-    const nameToTag = new Map<string, string>();   // 课名 → 标签 label
+    const nameToTag = new Map<string, string>();   // course name -> tag label
     const createdNames: string[] = [];
     const groupedNames: string[] = [];
     if (autoTag) {
       const palette = ['accent', 'primary', 'secondary'];
-      const known = [...tags];   // 本批内新建的也累进来,避免同一次导入重复建
+      const known = [...tags];   // Accumulate ones newly created within this batch too, to avoid duplicate creation in a single import
       Array.from(new Set(courses.map((c) => c.name))).forEach((name) => {
         const trimmed = (name || '').trim();
         if (!trimmed) return;
@@ -317,7 +317,7 @@ export default function DashboardHome() {
       });
     }
 
-    // ② 每门课只落在它真实的那一天(这一周),不重复;带上刚定的标签
+    // (2) Place each course only on its real day (this week), no duplicates; attach the tag just assigned
     const newEvents: ScheduleEvent[] = courses.map((c) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + (c.day - 1));
@@ -328,16 +328,16 @@ export default function DashboardHome() {
         tag: nameToTag.get(c.name) || undefined,
       };
     });
-    // 和已有的合并去重(按 日期+时间+课名)——支持分多周多次导入累加
+    // Merge and dedup with the existing ones (by date+time+course name) -- supports accumulating across multiple weekly imports
     const key = (e: ScheduleEvent) => `${e.date}|${e.start}|${e.name}`;
     const map = new Map(scheduleEvents.map((e) => [key(e), e]));
     newEvents.forEach((e) => map.set(key(e), e));
     const merged = Array.from(map.values());
     setScheduleEvents(merged);
     void records.saveSchedule(merged).catch(() => {});
-    // 跳到这批课最早的那天所在月,让你立刻看到(不然课在别的月看不见)
+    // Jump to the month of this batch's earliest day so you see it right away (otherwise courses in another month stay hidden)
     const firstDate = newEvents.map((e) => e.date).sort()[0];
-    if (firstDate) setCalendarFocus(`${firstDate}|${Date.now()}`); // 带时间戳保证每次导入都重新触发跳转
+    if (firstDate) setCalendarFocus(`${firstDate}|${Date.now()}`); // Include a timestamp so every import re-triggers the jump
     const monthTxt = firstDate ? firstDate.slice(0, 7) : '';
 
     const tagged = nameToTag.size;

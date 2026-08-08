@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""同音术语纠正:把识别出的「读音相同但字错」的片段换回正确术语。
+"""Homophone term correction: replace recognized spans that \"sound right but use the wrong characters\" with the correct term.
 
-原理:给一份术语表(如「映射/值域/导数」),对识别文本逐位置做定长窗口比对,
-若窗口内每个汉字的拼音(忽略声调)与某术语完全一致、但字不同,就替换成该术语。
-——专治「映射→影射」「值域→职域」「导数→到数」这类同音错;换 ASR 模型救不了它们。
+How it works: given a glossary (e.g. mapping / range / derivative), scan the recognized text position by position with a fixed-length window;
+if every Chinese character in the window has the same pinyin (ignoring tones) as some term but different characters, replace it with that term.
+-- This targets homophone errors, where a term gets written with different characters that share its pinyin; swapping the ASR model can't fix them.
 
-只处理 >=2 字的术语(单字太容易误纠);英文/数字/标点按原字符参与比对,不受影响。
+Only handles terms of length >= 2 (single characters are too easily miscorrected); English/digits/punctuation are compared as their literal characters and are unaffected.
 """
 from pypinyin import lazy_pinyin
 
@@ -15,11 +15,11 @@ class TermFixer:
         self.terms = sorted({t.strip() for t in terms if len(t.strip()) >= 2}, key=len, reverse=True)
         self.by_py = {}
         for t in self.terms:
-            self.by_py.setdefault(tuple(lazy_pinyin(t)), t)   # 先登记的术语优先
+            self.by_py.setdefault(tuple(lazy_pinyin(t)), t)   # Terms registered earlier take priority
         self.lens = sorted({len(t) for t in self.terms}, reverse=True)
 
     def _py_per_char(self, text):
-        # 逐字取拼音,保证与术语的逐字拼音对齐;非汉字返回其本身
+        # Take pinyin character by character to align with the term's per-character pinyin; non-Chinese characters return themselves
         return [lazy_pinyin(c)[0] if c.strip() else c for c in text]
 
     def fix(self, text):

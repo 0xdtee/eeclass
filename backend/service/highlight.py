@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""离线划重点：纯规则，零延迟零费用。
+"""Offline highlighting: pure rules, zero latency, zero cost.
 
-四类信号加权打分：
-  1. 口头强信号  「这个必考 / 期末大题 / 记一下 / 划重点」        +2
-  2. 口头中信号  「注意 / 关键 / 核心 / 也就是说」                +1
-  3. 定义句式    「……叫做…… / 定义为 / 记作」                    +2（标成定义，绿色）
-  4. 定理公式    「格林公式 / 拉格朗日定理 / 判别法」              +1
-  5. 重复强调    90 秒内说过高度相似的话                          +1
-  6. 数学符号密度                                                +1
+Four kinds of signals are scored with weights:
+  1. Strong verbal cue   "this is definitely on the exam / big final question / write this down / this is key"   +2
+  2. Medium verbal cue   "note that / crucial / core / in other words"                                          +1
+  3. Definition phrasing  "...is called... / defined as / denoted"                                              +2 (marked as a definition, green)
+  4. Theorem/formula     "Green's formula / Lagrange's theorem / convergence test"                             +1
+  5. Repeated emphasis   a highly similar sentence said within 90 seconds                                       +1
+  6. Density of math symbols                                                                                    +1
 
-总分 ≥ key_score 就高亮。课后可再对 transcript 做语义分析补充重点。
+Highlight when the total score >= key_score. After class, semantic analysis of the transcript can add more highlights.
 """
 import re
 import time
@@ -44,7 +44,7 @@ class Highlighter:
         self.recent = []  # [(t, text)]
 
     def judge(self, text, t_sec):
-        """返回 (kind, score, reasons)。kind ∈ {None, 'key', 'define'}"""
+        """Returns (kind, score, reasons). kind in {None, 'key', 'define'}"""
         if not self.enabled or not text:
             return None, 0, []
 
@@ -77,7 +77,7 @@ class Highlighter:
             score += 1
             reasons.append("含公式")
 
-        # 重复强调：老师把同一句话说两遍，基本就是重点
+        # repeated emphasis: if the teacher says the same sentence twice, it's basically a key point
         self.recent = [(t, s) for (t, s) in self.recent if t_sec - t <= self.win]
         if len(text) >= 8:
             for _, prev in self.recent:

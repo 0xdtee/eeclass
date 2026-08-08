@@ -9,13 +9,13 @@ interface Feature {
   icon: string;
   name: string;
   desc: string;
-  /** 「前往使用」按钮跳转的移动端路由 */
+  /** Mobile route the "go to app" button navigates to */
   route: string;
-  /** 「前往使用」按钮的文案,默认「前往使用」 */
+  /** Text for the "go to app" button, defaults to "前往使用" */
   cta?: string;
-  /** 对应的动态演示组件 key(可选) */
+  /** Key of the matching live-demo component (optional) */
   demo?: DemoKey;
-  /** 操作步骤(逐条) */
+  /** Steps (one by one) */
   steps?: string[];
 }
 
@@ -27,7 +27,7 @@ interface Category {
   features: Feature[];
 }
 
-// 说明书内容:只写代码里真实存在的功能,分门别类。路由已适配移动端。
+// Manual content: only documents features that actually exist in code, grouped by category. Routes adapted for mobile.
 const CATEGORIES: Category[] = [
   {
     id: 'record',
@@ -324,7 +324,7 @@ export default function HelpPage() {
       </div>
 
       <div className="px-5 md:px-8 pb-8 max-w-5xl">
-        {/* 分类切换:窄屏横向滚动的芯片,宽屏同样一行 */}
+        {/* Category switch: chips scroll horizontally on narrow screens, single row on wide screens */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-5 px-5 md:mx-0 md:px-0 pb-1 mb-4">
           {CATEGORIES.map((c) => (
             <button
@@ -349,7 +349,7 @@ export default function HelpPage() {
           ))}
         </div>
 
-        {/* 当前分类简介 */}
+        {/* Current category intro */}
         <div className="mb-4">
           <h3 className="text-base md:text-lg font-bold text-foreground-900 flex items-center gap-2">
             <i className={`${current.icon} text-accent-500`}></i>
@@ -358,7 +358,7 @@ export default function HelpPage() {
           <p className="text-xs text-foreground-400 mt-1">{current.intro}</p>
         </div>
 
-        {/* 功能卡片 */}
+        {/* Feature cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {current.features.map((f) => {
             const Demo = f.demo ? DEMOS[f.demo] : null;
@@ -367,7 +367,7 @@ export default function HelpPage() {
                 key={f.name}
                 className="flex flex-col bg-background-50 border border-background-200 rounded-2xl p-4"
               >
-                {/* 标题 */}
+                {/* Title */}
                 <div className="flex items-start gap-3 mb-3">
                   <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-accent-100 text-accent-600 rounded-xl">
                     <i className={`${f.icon} text-lg`}></i>
@@ -378,14 +378,14 @@ export default function HelpPage() {
                   </div>
                 </div>
 
-                {/* 动态演示 */}
+                {/* Live demo */}
                 {Demo && (
                   <div className="mb-3">
                     <Demo />
                   </div>
                 )}
 
-                {/* 操作步骤 */}
+                {/* Steps */}
                 {f.steps && f.steps.length > 0 && (
                   <div className="mb-3">
                     <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground-500 mb-2">
@@ -405,7 +405,7 @@ export default function HelpPage() {
                   </div>
                 )}
 
-                {/* 前往使用 */}
+                {/* Go to app */}
                 <div className="mt-auto pt-3 border-t border-background-100">
                   <button
                     onClick={() => navigate(f.route)}

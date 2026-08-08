@@ -1,8 +1,8 @@
 /**
- * 读服务端真实的课堂记录（records\ 目录），替代 mocks/courseData.ts 里的假数据。
+ * Reads real class records from the server (records\ directory), replacing the mock data in mocks/courseData.ts.
  *
- * 每节课在服务端是一个目录：transcript.jsonl（逐句）、meta.json（时长/说话人/RTF）、
- * audio.wav、以及 edits.jsonl（改过哪些句子，用来做真实的编辑历史）。
+ * Each class is a directory on the server: transcript.jsonl (per sentence), meta.json (duration/speakers/RTF),
+ * audio.wav, and edits.jsonl (which sentences were edited, used to build the real edit history).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { SERVICE_ORIGIN, getToken, authFailed } from '@/hooks/useLiveCaption';
@@ -18,24 +18,24 @@ export interface SessionMeta {
   backend?: string;
   streaming?: boolean;
   speakers?: { id: number; name: string; seconds: number; utterances: number }[];
-  /** 已保存的 AI 摘要(有则说明这节课出过纪要) */
+  /** Saved AI summary (if present, this class already has notes) */
   summary?: string;
   key_points?: string[];
   has_summary?: boolean;
-  /** 这节课打的标签(标签名字符串,来自后端) */
+  /** Tags on this class (tag-name strings, from the backend) */
   tags?: string[];
 }
 
 export interface ScheduleCourse {
   name: string;
-  day: number;        // 1=周一 … 7=周日
+  day: number;        // 1=Monday … 7=Sunday
   start: string;      // HH:MM
   end: string;
   location: string;
   room: string;
 }
 
-/** 带具体日期的课程事件(不按周重复,导入什么就是什么) */
+/** Course events with concrete dates (not weekly-recurring, just whatever was imported) */
 export interface ScheduleEvent {
   name: string;
   date: string;       // YYYY-MM-DD
@@ -43,7 +43,7 @@ export interface ScheduleEvent {
   end: string;
   location: string;
   room: string;
-  tag?: string;       // 这门课的标签(存 label);图片导入时按课名自动匹配已有 / 没有就新建
+  tag?: string;       // This course's tag (stored as label); on image import, auto-matched to an existing one by course name / created if none
 }
 
 export interface CourseSummary {
@@ -109,9 +109,9 @@ export interface TranscriptLine {
   kind: 'key' | 'define' | null;
   new_para: boolean;
   edited?: boolean;
-  /** 英文句的中文字幕(挂在下面显示) */
+  /** Chinese subtitle for an English sentence (shown underneath) */
   translation?: string;
-  /** 相对开课的秒数，点时间戳跳录音要用 */
+  /** Seconds relative to class start, used to jump the audio when a timestamp is clicked */
   start?: number;
   end?: number;
 }
@@ -134,14 +134,14 @@ export interface ShareInfo {
 }
 
 export interface VoiceCluster {
-  sid: string;            // 代表会话(试听用)
-  idx: number;            // 代表会话里的说话人序号
-  sample_start: number;   // 试听起点(秒)
-  name: string;           // 当前显示名(老师/同学N)
-  seconds: number;        // 这个人累计时长
-  count: number;          // 合并了几段
-  sessions: number;       // 出现在几节课
-  embedding: number[];    // 合并后的声纹中心(打标签时入库)
+  sid: string;            // Representative session (for preview)
+  idx: number;            // Speaker index within the representative session
+  sample_start: number;   // Preview start point (seconds)
+  name: string;           // Current display name (teacher/student N)
+  seconds: number;        // This person's cumulative duration
+  count: number;          // How many segments were merged
+  sessions: number;       // In how many classes they appear
+  embedding: number[];    // Merged voiceprint center (stored on tagging)
 }
 
 export interface OfficialSchool {
@@ -150,12 +150,12 @@ export interface OfficialSchool {
   items: { course: string; title: string; source_page: string; note: string; kind: 'pdf' | 'page' }[];
 }
 
-/** 官方大纲 PDF 的直链(带 token,可直接喂给 iframe) */
+/** Direct link to the official syllabus PDF (with token, can be fed straight to an iframe) */
 export function officialPdfUrl(schoolId: string, course: string): string {
   return `${SERVICE_ORIGIN}/api/syllabus/official/${encodeURIComponent(schoolId)}/${encodeURIComponent(course)}?token=${encodeURIComponent(getToken())}`;
 }
 
-/** 网页版官方大纲的代理直链(注入 base 后的 HTML,可直接喂给 iframe) */
+/** Proxied direct link to the web version of the official syllabus (HTML with base injected, can be fed straight to an iframe) */
 export function officialPageUrl(schoolId: string, course: string): string {
   return `${SERVICE_ORIGIN}/api/syllabus/page/${encodeURIComponent(schoolId)}/${encodeURIComponent(course)}?token=${encodeURIComponent(getToken())}`;
 }
@@ -171,7 +171,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return j as T;
 }
 
-/** 课程名从目录名里取：2026-07-29_0936_高等数学 -> 高等数学 */
+/** Course name is taken from the directory name: 2026-07-29_0936_高等数学 -> 高等数学 */
 export function sessionTitle(s: SessionMeta) {
   if (s.title) return s.title;
   const m = s.id.match(/^\d{4}-\d{2}-\d{2}_\d{4}_(.+)$/);
@@ -246,7 +246,7 @@ export function useRecords() {
     []
   );
 
-  /** 课堂笔记读写(每节课一份) */
+  /** Read/write class notes (one per class) */
   const loadNote = useCallback(
     (sid: string) => api<{ note: string }>(`/api/transcript/${encodeURIComponent(sid)}/note`),
     []
@@ -260,7 +260,7 @@ export function useRecords() {
     []
   );
 
-  /** 手动标记某句为 重点(key)/定义(define)/取消(null),存 marks.json */
+  /** Manually mark a sentence as key point (key)/definition (define)/clear (null), stored in marks.json */
   const markLine = useCallback(
     (sid: string, lineId: number, kind: 'key' | 'define' | null) =>
       api<{ ok: boolean }>(`/api/transcript/${encodeURIComponent(sid)}/mark`, {
@@ -270,7 +270,7 @@ export function useRecords() {
     []
   );
 
-  /** 录制后改说话人名字:按 speaker_id 覆盖,这个人的每一句都改;并把声纹记进声纹库 */
+  /** Rename a speaker after recording: override by speaker_id, changing every sentence of that person; also records the voiceprint into the voiceprint library */
   const renameSpeaker = useCallback(
     (sid: string, speakerId: number, name: string) =>
       api<{ ok: boolean; learned_voiceprint: boolean }>(`/api/transcript/${encodeURIComponent(sid)}/speaker`, {
@@ -280,7 +280,7 @@ export function useRecords() {
     []
   );
 
-  /** 声纹:列出过去录音里的声音——同一个人已聚成一条(首次会现算,可能十几秒) */
+  /** Voiceprints: list voices from past recordings — the same person is already clustered into one entry (computed on first call, may take ten-plus seconds) */
   const listVoices = useCallback(
     () => api<{
       clusters: VoiceCluster[];
@@ -289,7 +289,7 @@ export function useRecords() {
     }>('/api/voices'),
     []
   );
-  /** 给一个声音(聚类后的中心)打标签入库 */
+  /** Tag a voice (a cluster center) and store it in the library */
   const addVoiceprint = useCallback(
     (body: { name: string; embedding?: number[]; sid?: string; idx?: number }) =>
       api<{ ok: boolean; id: string; name: string }>('/api/voiceprints', {
@@ -302,7 +302,7 @@ export function useRecords() {
     []
   );
 
-  /** 课表截图 → 本地 OCR + DeepSeek 提取课程 + 这周周一真实日期(可能耗时十几秒) */
+  /** Timetable screenshot → local OCR + DeepSeek course extraction + this week's real Monday date (may take ten-plus seconds) */
   const importTimetable = useCallback(
     (imageDataUrl: string) =>
       api<{ courses: ScheduleCourse[]; anchor_monday?: string; error?: string }>('/api/import/timetable', {
@@ -312,16 +312,16 @@ export function useRecords() {
     []
   );
 
-  /** 参考资料:课程教学大纲 */
+  /** Reference material: course syllabus */
   const listSyllabus = useCallback(() => api<{ courses: { name: string; official: boolean }[] }>('/api/syllabus'), []);
   const getSyllabus = useCallback(
     (name: string) => api<Syllabus>(`/api/syllabus/${encodeURIComponent(name)}`),
     []
   );
-  /** 参考资料:按学校的官方大纲 PDF 目录 */
+  /** Reference material: official syllabus PDF catalog by school */
   const listSchools = useCallback(() => api<{ schools: OfficialSchool[] }>('/api/syllabus/schools'), []);
 
-  /** 上大教务系统自动登录 + 抓课表(耗时约 15-25 秒) */
+  /** SHU academic-affairs system auto-login + timetable fetch (takes about 15-25 seconds) */
   const importShu = useCallback(
     (username: string, password: string) =>
       api<{ events: ScheduleEvent[]; note?: string; error?: string }>('/api/import/shu', {
@@ -331,7 +331,7 @@ export function useRecords() {
     []
   );
 
-  /** 保存/读取带日期的课程事件(持久化,刷新不丢;整表覆盖,累加去重由前端做好再传全量) */
+  /** Save/read dated course events (persisted, survives refresh; whole-table overwrite, with the frontend doing the merge/dedup before sending the full set) */
   const saveSchedule = useCallback(
     (events: ScheduleEvent[]) =>
       api<{ ok: boolean; count: number }>('/api/schedule', {
@@ -346,10 +346,10 @@ export function useRecords() {
   );
 
   /**
-   * 课程级 AI 分析。两种聚合口径:
-   *  - 按课程名(同名多节课合集):传 tag 为空,走 { name }(原有行为,保持不变)。
-   *  - 按标签(所有打了该标签的录音):传 tag,走 { tag }。
-   * 带服务端缓存,refresh 强制重算。
+   * Course-level AI analysis. Two aggregation modes:
+   *  - By course name (collection of same-named classes): pass tag empty, uses { name } (original behavior, unchanged).
+   *  - By tag (all recordings with that tag): pass tag, uses { tag }.
+   * Server-side cached; refresh forces recomputation.
    */
   const courseBody = (name: string, refresh: boolean, aiOnly: boolean, tag?: string) =>
     JSON.stringify(tag ? { tag, refresh, ai_only: aiOnly } : { name, refresh, ai_only: aiOnly });
@@ -369,7 +369,7 @@ export function useRecords() {
     []
   );
 
-  /** 给某节录音设置/替换标签(整表覆盖,传全量标签名数组) */
+  /** Set/replace tags on a recording (whole-table overwrite, pass the full array of tag names) */
   const setSessionTags = useCallback(
     (sid: string, sessionTags: string[]) =>
       api<{ ok: boolean; tags: string[] }>(`/api/sessions/${encodeURIComponent(sid)}/tags`, {
@@ -379,7 +379,7 @@ export function useRecords() {
     []
   );
 
-  /** 个性化反哺:把用户纠对的术语学下来,之后开的课自动纠这个同音错 */
+  /** Personalized feedback loop: learn the terms the user corrected, so later classes auto-correct this homophone error */
   const learnTerm = useCallback(
     (term: string) =>
       api<{ ok: boolean; added: boolean; count: number }>('/api/terms/learn', {
@@ -406,7 +406,7 @@ export function useRecords() {
   return { sessions, loading, error, reload, loadTranscript, editLine, loadEdits, loadSummary, saveSummary, loadNote, saveNote, markLine, renameSpeaker, learnTerm, importTimetable, importShu, saveSchedule, loadSchedule, listSyllabus, getSyllabus, listSchools, listVoices, addVoiceprint, deleteVoiceprint, courseSummary, courseExam, courseMock, setSessionTags, createShare, revokeShare };
 }
 
-/** 分享链接（给别人打开的，不需要令牌） */
+/** Share link (for others to open, no token required) */
 export function shareUrl(key: string) {
   return `${SERVICE_ORIGIN}/app/shared/${key}`;
 }

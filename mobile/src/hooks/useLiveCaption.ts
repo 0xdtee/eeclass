@@ -1,8 +1,8 @@
 /**
- * 课堂实时字幕 hook —— 手机/平板端(移植自桌面版工作实现)。
- * 浏览器麦克风 → 降采样 16k 单声道 Int16 → WebSocket 二进制帧推给后端;
- * 后端把一句句转写结果通过 WebSocket 文本消息推回来。
- * 服务器地址/令牌走 @/lib/api(同源部署时自动用当前来源)。
+ * Real-time classroom caption hook — phone/tablet (ported from the working desktop implementation).
+ * Browser mic → downsample to 16k mono Int16 → push to backend as binary WebSocket frames;
+ * the backend pushes each transcribed sentence back via WebSocket text messages.
+ * Server URL/token come from @/lib/api (same-origin deployments automatically use the current origin).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getServerUrl, getToken, clearToken } from '@/lib/api';
@@ -11,7 +11,7 @@ import { getMicGain } from '@/lib/settings';
 export { getServerUrl, getToken };
 
 const CID_KEY = 'eeclass_cid';
-/** 客户端标识:断线重连时后端靠它找回同一路会话(不丢转写)。长期固定存本地。 */
+/** Client identifier: on reconnect the backend uses it to recover the same session (no lost transcription). Stored locally and kept permanently. */
 export function getCid(): string {
   if (typeof window === 'undefined') return '';
   let c = localStorage.getItem(CID_KEY);
@@ -114,7 +114,7 @@ export function useLiveCaption() {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }, []);
 
-  /* ---------- 麦克风采集 ---------- */
+  /* ---------- Microphone capture ---------- */
   const stopMic = useCallback(() => {
     const m = micRef.current;
     if (!m) return;
@@ -138,7 +138,7 @@ export function useLiveCaption() {
     const src = ctx.createMediaStreamSource(stream);
     const node = ctx.createScriptProcessor(4096, 1, 1);
     const ratio = ctx.sampleRate / TARGET_SR;
-    // 拾音灵敏度:采集开始时读一次,给每个样本乘增益(限幅避免爆音)
+    // Mic sensitivity: read once when capture starts, multiply each sample by the gain (clamp to avoid clipping)
     const gain = getMicGain();
     node.onaudioprocess = (e) => {
       const ws = wsRef.current;
@@ -164,7 +164,7 @@ export function useLiveCaption() {
     setMicActive(true);
   }, []);
 
-  /* ---------- 屏幕常亮(防锁屏中断)---------- */
+  /* ---------- Keep screen awake (prevent lock-screen interruption) ---------- */
   const requestWakeLock = useCallback(async () => {
     try {
       const nav = navigator as unknown as {

@@ -1,6 +1,6 @@
 /**
- * 跨课全文搜索。攒一学期几十节课之后，"老师讲格林公式那次说了什么"是翻不到的。
- * 按 / 聚焦，输入即搜（防抖），结果按课程分组。
+ * Full-text search across courses. After a semester's worth of dozens of classes, "what did the teacher say the time they covered Green's theorem" is impossible to find by scrolling.
+ * Press / to focus, search as you type (debounced), results grouped by course.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SearchHit } from '@/hooks/useLibrary';
@@ -20,7 +20,7 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // 按 / 直接开始搜索（不在输入框里时）
+  // Press / to start searching directly (when not in an input field)
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -65,13 +65,13 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
     [onSearch]
   );
 
-  // 输入即搜，防抖 300ms
+  // Search as you type, debounced 300ms
   useEffect(() => {
     const t = setTimeout(() => void run(q), 300);
     return () => clearTimeout(t);
   }, [q, run]);
 
-  /** 命中的关键词标黄 */
+  /** Highlight matched keywords in yellow */
   const highlight = (text: string) => {
     const chars = Array.from(new Set(Array.from(q.trim())));
     if (chars.length === 0) return text;
@@ -87,7 +87,7 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
     );
   };
 
-  // 按课程分组
+  // Group by course
   const groups: { sid: string; title: string; date: string; items: SearchHit[] }[] = [];
   for (const h of hits) {
     let g = groups.find((x) => x.sid === h.sid);

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLiveCaption } from '@/hooks/useLiveCaption';
 import { getAiDefault } from '@/lib/settings';
 
-// 全国版课程大纲默认学科标签(勾选给 AI 纠错/翻译当学科上下文)
+// Default subject tags from the national syllabus (ticked to give AI subject context for correction/translation)
 const NATIONAL_TAGS = [
   '大学物理', '大学物理实验', '大学计算机基础', '大学英语',
   '马克思主义基本原理', '毛泽东思想和中国特色社会主义理论体系概论',
@@ -73,7 +73,7 @@ export default function RecordPage() {
     </button>
   );
 
-  /* ---------------- 录音中 ---------------- */
+  /* ---------------- Recording ---------------- */
   if (live.running || live.starting) {
     return (
       <div className="flex flex-col h-full min-h-full bg-background-100">
@@ -138,7 +138,7 @@ export default function RecordPage() {
     );
   }
 
-  /* ---------------- 准备 / 已结束 ---------------- */
+  /* ---------------- Ready / ended ---------------- */
   return (
     <div className="min-h-full bg-background-100 px-5 md:px-8 pt-6 pb-28 md:pb-8">
       <h1 className="text-lg md:text-2xl font-bold text-foreground-900">录音</h1>

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import Modal from '@/components/base/Modal';
 
 export interface TagGroup {
-  tag: string;         // 标签名
-  courses: string[];   // 这个标签下的课程名(来自导入的课表)
-  count: number;       // 有几段录音打了这个标签
+  tag: string;         // Tag name
+  courses: string[];   // Course names under this tag (from the imported timetable)
+  count: number;       // How many recordings carry this tag
 }
 
 interface TagCoursesModalProps {
@@ -12,7 +12,7 @@ interface TagCoursesModalProps {
   onClose: () => void;
   groups: TagGroup[];
   onSelect: (tag: string) => void;
-  onManage?: () => void;   // 跳到 /tags 管理标签
+  onManage?: () => void;   // Go to /tags to manage tags
 }
 
 export default function TagCoursesModal({ isOpen, onClose, groups, onSelect, onManage }: TagCoursesModalProps) {
@@ -22,7 +22,7 @@ export default function TagCoursesModal({ isOpen, onClose, groups, onSelect, onM
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="按标签整理课程" width="max-w-lg">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
-        {/* 统计 + 搜索 */}
+        {/* Stats + search */}
         <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 flex items-center justify-center bg-secondary-100 rounded-xl">
@@ -58,7 +58,7 @@ export default function TagCoursesModal({ isOpen, onClose, groups, onSelect, onM
           </div>
         </div>
 
-        {/* 标签清单 */}
+        {/* Tag list */}
         <div className="overflow-y-auto flex-1 space-y-2">
           {filtered.length === 0 ? (
             <div className="py-10 text-center">

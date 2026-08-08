@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-"""课程库：课程分组、术语表、纠错表、全文搜索索引、板书截图。
+r"""Course library: course grouping, glossary, correction table, full-text search index, whiteboard screenshots.
 
-数据都放在 records\ 下，纯文件，不引数据库服务：
-    records\library.json          课程、每课程的术语表和纠错表、课时归属
-    records\search.db             SQLite FTS5 全文索引（可随时删掉重建）
-    records\<课时>\shots\         板书截图 + shots.json
+Everything lives under records\, plain files, with no database service:
+    records\library.json          courses, per-course glossary and correction table, session ownership
+    records\search.db             SQLite FTS5 full-text index (safe to delete and rebuild anytime)
+    records\<session>\shots\      whiteboard screenshots + shots.json
 
-搜索为什么用 SQLite FTS5：一学期几十节课、几万句话，用 Python 逐个文件扫也能扫，
-但每次搜索都要读几十兆 jsonl，手机上点一下要等好几秒。FTS5 是标准库自带的
-（sqlite3 模块），零依赖，查询是毫秒级。中文没有词边界，所以用 unicode61
-按字建索引 + 查询时把词拆成单字用 AND 连接，够用且不用装分词器。
+Why search uses SQLite FTS5: a semester has dozens of classes and tens of thousands of sentences.
+Scanning each file in Python works, but every search reads tens of megabytes of jsonl, so a tap
+on a phone takes several seconds. FTS5 ships with the standard library (the sqlite3 module),
+adds zero dependencies, and queries in milliseconds. Chinese has no word boundaries, so it uses
+unicode61 to index per-character, and splits query terms into single characters joined with AND --
+good enough without installing a tokenizer.
 """
 import json
 import os
@@ -30,7 +32,7 @@ class Library:
         self.lib_path = os.path.join(self.root, "library.json")
         self.db_path = os.path.join(self.root, "search.db")
 
-    # ---------------- 课程 ----------------
+    # ---------------- courses ----------------
     def load(self):
         if not os.path.exists(self.lib_path):
             return {"courses": [], "assign": {}}
@@ -40,7 +42,7 @@ class Library:
         except Exception:
             return {"courses": [], "assign": {}}
         d.setdefault("courses", [])
-        d.setdefault("assign", {})     # {课时id: 课程id}
+        d.setdefault("assign", {})     # {session_id: course_id}
         return d
 
     def save(self, d):
@@ -103,7 +105,7 @@ class Library:
             return None
         return next((c for c in d["courses"] if c["id"] == cid), None)
 
-    # ---------------- 纠错表 ----------------
+    # ---------------- correction table ----------------
     def corrections_for(self, cid):
         d = self.load()
         c = next((x for x in d["courses"] if x["id"] == cid), None)
@@ -113,18 +115,18 @@ class Library:
 
     @staticmethod
     def apply_corrections(text, rules):
-        """识别完立刻替换。规则按「听成的词」长度倒序，避免短词先替换把长词拆了。"""
+        """Replace immediately after recognition. Rules are sorted by the length of the "misheard word" in descending order, so short words don't get replaced first and break up long ones."""
         for r in sorted(rules, key=lambda r: -len(r.get("from", ""))):
             if r["from"] in text:
                 text = text.replace(r["from"], r.get("to", ""))
         return text
 
-    # ---------------- 全文搜索 ----------------
-    # FTS5 自带的分词器（unicode61）把连续的中文当成**一个** token，
-    # 因为 CJK 在 Unicode 里都是「字母」，中间没有分隔符。结果就是搜「重点」
-    # 匹配不上「老师说这个是重点」——整句是一个 token。
-    # 不想引第三方分词器（jieba 之类），所以入库和查询时都把中文**逐字拆开**，
-    # 英文和数字保持整词。查询时用引号变成短语查询，保证字的顺序连续。
+    # ---------------- full-text search ----------------
+    # FTS5's built-in tokenizer (unicode61) treats a run of Chinese as **one** token,
+    # because CJK characters are all "letters" in Unicode with no separators between them. The result is that searching for one term
+    # fails to match a sentence containing it -- the whole sentence is a single token.
+    # We don't want to pull in a third-party tokenizer (jieba and the like), so both on insert and on query we split Chinese **character by character**,
+    # keeping English and digits as whole words. On query we wrap it in quotes to make it a phrase query, guaranteeing the characters stay in order.
     @staticmethod
     def _tok(text):
         out = []
@@ -147,7 +149,7 @@ class Library:
         return con
 
     def reindex(self, sessions_lines):
-        """sessions_lines: 迭代 (sid, mtime, [line...])。只重建变过的课时。"""
+        """sessions_lines: iterate over (sid, mtime, [line...]). Only rebuild sessions that changed."""
         con = self._db()
         done = {r[0]: r[1] for r in con.execute("SELECT sid, mtime FROM indexed")}
         n_new = 0
@@ -171,8 +173,8 @@ class Library:
         q = (q or "").strip()
         if not q:
             return [], 0
-        # 查询也逐字拆开，再包成短语查询——这样「重点」只匹配「重」紧跟「点」，
-        # 不会把「重新讲一下要点」这种拆开都命中的句子捞出来。
+        # The query is also split character by character and wrapped as a phrase query -- this way a term only matches when its characters are adjacent,
+        # and won't dredge up sentences where the characters happen to appear scattered apart.
         toks = self._tok(q)
         if not toks:
             return [], 0
@@ -191,7 +193,7 @@ class Library:
         return [{"sid": r[0], "line_id": r[1], "ts": r[2], "start": r[3],
                  "speaker": r[4], "kind": r[5] or None, "text": r[6]} for r in rows], total
 
-    # ---------------- 板书截图 ----------------
+    # ---------------- whiteboard screenshots ----------------
     def shots_dir(self, sid):
         return os.path.join(self.root, os.path.basename(sid), "shots")
 

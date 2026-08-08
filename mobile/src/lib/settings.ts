@@ -1,9 +1,9 @@
 /**
- * 本地设置项(localStorage)——AI 默认开关 / 拾音灵敏度 / 深浅色主题。
- * 都是纯前端持久化,不走后端。
+ * Local settings (localStorage) — AI default toggles / mic sensitivity / light-dark theme.
+ * All pure front-end persistence, no backend involved.
  */
 
-/* ---------------- AI 处理默认开关 ---------------- */
+/* ---------------- AI processing default toggles ---------------- */
 export const AI_DEFAULT_KEYS = {
   aiCorrect: 'eeclass_default_aiCorrect',
   smartSeg: 'eeclass_default_smartSeg',
@@ -12,7 +12,7 @@ export const AI_DEFAULT_KEYS = {
 
 export type AiDefaultKey = keyof typeof AI_DEFAULT_KEYS;
 
-/** 读取某个 AI 默认开关。未设置时默认开(true)。 */
+/** Read a given AI default toggle. Defaults to on (true) when unset. */
 export function getAiDefault(key: AiDefaultKey): boolean {
   if (typeof window === 'undefined') return true;
   const v = localStorage.getItem(AI_DEFAULT_KEYS[key]);
@@ -25,13 +25,13 @@ export function setAiDefault(key: AiDefaultKey, on: boolean): void {
   localStorage.setItem(AI_DEFAULT_KEYS[key], on ? '1' : '0');
 }
 
-/* ---------------- 拾音灵敏度(输入增益)---------------- */
+/* ---------------- Mic sensitivity (input gain) ---------------- */
 const MIC_GAIN_KEY = 'eeclass_mic_gain';
 export const MIC_GAIN_MIN = 0.5;
 export const MIC_GAIN_MAX = 3.0;
 export const MIC_GAIN_DEFAULT = 1.0;
 
-/** 读取拾音增益,默认 1.0,并夹在 [0.5, 3.0]。 */
+/** Read the mic gain, default 1.0, clamped to [0.5, 3.0]. */
 export function getMicGain(): number {
   if (typeof window === 'undefined') return MIC_GAIN_DEFAULT;
   const raw = localStorage.getItem(MIC_GAIN_KEY);
@@ -46,7 +46,7 @@ export function setMicGain(n: number): void {
   localStorage.setItem(MIC_GAIN_KEY, String(clamped));
 }
 
-/* ---------------- 深浅色主题 ---------------- */
+/* ---------------- Light/dark theme ---------------- */
 const THEME_KEY = 'eeclass_theme';
 export type Theme = 'light' | 'dark' | 'auto';
 
@@ -66,7 +66,7 @@ function resolveTheme(t: Theme): 'light' | 'dark' {
   return t;
 }
 
-/** 把当前(或指定)主题写到 <html data-theme>。 */
+/** Write the current (or specified) theme to <html data-theme>. */
 export function applyTheme(t: Theme = getTheme()): void {
   if (typeof document === 'undefined') return;
   document.documentElement.setAttribute('data-theme', resolveTheme(t));
@@ -78,7 +78,7 @@ export function setTheme(t: Theme): void {
 }
 
 let mqlBound = false;
-/** 启动时调用:应用已存主题,并在「跟随系统」时监听系统深浅色变化。 */
+/** Call on startup: apply the saved theme and, when set to "follow system", listen for system light/dark changes. */
 export function initTheme(): void {
   if (typeof window === 'undefined') return;
   applyTheme();

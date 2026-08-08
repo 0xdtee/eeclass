@@ -1,6 +1,6 @@
 /**
- * 课程库：课程分组、术语表、纠错表、跨课搜索、板书截图、复习（闪卡/自测/追问）。
- * 全部走本机服务，没有任何 mock。
+ * Course library: course grouping, glossary, correction table, cross-course search, blackboard screenshots, review (flashcards/self-test/follow-up).
+ * Everything goes through the local service, with no mocks at all.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { SERVICE_ORIGIN, getToken, authFailed } from '@/hooks/useLiveCaption';
@@ -78,15 +78,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export const audioUrl = (sid: string) =>
   `${SERVICE_ORIGIN}/api/audio/${encodeURIComponent(sid)}?token=${encodeURIComponent(getToken())}`;
 
-/** 下载原始录音:带 download=文件名,让服务端/OSS 以附件形式回传(跨源也能按指定名下载)。 */
+/** Download the original recording: with download=filename, the server/OSS returns it as an attachment (so it downloads under the given name even cross-origin). */
 export const audioDownloadUrl = (sid: string, filename: string) =>
   `${audioUrl(sid)}&download=${encodeURIComponent(filename)}`;
 
 export const shotUrl = (url: string) => SERVICE_ORIGIN + url;
 
 /**
- * 上传前压缩：手机原图动辄好几 MB，传上去慢、存起来也浪费。
- * 最长边压到 1600，JPEG 质量 0.8，一张板书通常 200KB 以内。
+ * Compress before upload: phone originals are easily several MB — slow to upload and wasteful to store.
+ * Longest edge scaled down to 1600, JPEG quality 0.8; a blackboard shot is usually under 200KB.
  */
 export function compressImage(file: File, maxSide = 1600, quality = 0.8): Promise<string> {
   return new Promise((resolve, reject) => {

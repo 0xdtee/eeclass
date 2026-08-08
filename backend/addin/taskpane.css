@@ -86,7 +86,7 @@ footer { margin-top: 12px; font-size: 11px; color: var(--muted); word-break: bre
 #notice { margin-top: 4px; min-height: 16px; }
 #notice.err { color: var(--danger); }
 
-/* 流式后端的中途结果：还会被改写，视觉上和定稿区分开 */
+/* Interim results from the streaming backend: still subject to rewriting, visually distinguished from finalized text */
 .ln.partial {
   color: #6b7280;
   font-style: italic;

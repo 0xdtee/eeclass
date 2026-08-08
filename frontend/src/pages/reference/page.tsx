@@ -44,7 +44,7 @@ export default function ReferencePage() {
     [school, course]
   );
 
-  // 换学校:自动选中该校第一门课(若当前课这所学校没有)
+  // Switch school: auto-select that school's first course (if the current course doesn't belong to it)
   useEffect(() => {
     if (!school) return;
     if (!school.items.some((i) => i.course === course)) {
@@ -85,7 +85,7 @@ export default function ReferencePage() {
         </div>
       </nav>
 
-      {/* 学校选择器 */}
+      {/* School selector */}
       {schools.length > 0 && (
         <div className="border-b border-background-200 bg-background-50">
           <div className="max-w-6xl mx-auto px-6 flex items-center gap-2 overflow-x-auto py-2.5">
@@ -104,7 +104,7 @@ export default function ReferencePage() {
       )}
 
       <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col md:flex-row gap-5 items-start">
-        {/* 左:该校课程列表 */}
+        {/* Left: this school's course list */}
         <div className="w-full md:w-64 flex-shrink-0 space-y-4">
           {grouped.map((c) => (
             <div key={c.name}>
@@ -127,7 +127,7 @@ export default function ReferencePage() {
           ))}
         </div>
 
-        {/* 右:官方 PDF 预览 */}
+        {/* Right: official PDF preview */}
         <div className="flex-1 min-w-0 w-full">
           {loading ? (
             <div className="flex items-center justify-center py-24"><div className="w-7 h-7 border-2 border-accent-500 border-t-transparent rounded-full animate-spin"></div></div>

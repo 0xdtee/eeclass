@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""离线自检：拿一个音频文件当作"麦克风输入"，把整条管线跑一遍。
+"""Offline self-test: take an audio file as the \"microphone input\" and run the whole pipeline once.
 
-验证 VAD 分句、说话人聚类、识别、划重点、分段逻辑是否都正常，
-不需要开麦，也不需要 Word。装完之后先跑这个，能省很多排查时间。
+Verifies that VAD segmentation, speaker clustering, recognition, key-point marking, and paragraph logic all work,
+without needing a mic or Word. Run this first after installation to save a lot of troubleshooting time.
 
-用法：
-    python selftest.py <音频文件> [--seconds 120]
+Usage:
+    python selftest.py <audio-file> [--seconds 120]
 """
 import argparse
 import json

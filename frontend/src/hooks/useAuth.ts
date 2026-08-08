@@ -1,9 +1,9 @@
 /**
- * 真账号鉴权，接后端 /api/register /api/login /api/me /api/logout。
+ * Real account authentication, talking to the backend /api/register /api/login /api/me /api/logout.
  *
- * 登录/注册成功后，后端发的「会话令牌」通过 setToken() 存进
- * live_caption_token —— 于是现有所有 API 请求(X-Token 头)和 /ws(?token=)
- * 自动带上它，登录即鉴权，别人注册登录后就能连服务看实时转写。
+ * After a successful login/register, the "session token" issued by the backend is stored via setToken() into
+ * live_caption_token — so all existing API requests (X-Token header) and /ws (?token=)
+ * automatically carry it; logging in authenticates you, and anyone who registers and logs in can connect to the service and see live transcription.
  */
 import { useState, useCallback, useEffect } from 'react';
 import { SERVICE_ORIGIN, getToken, setToken } from '@/hooks/useLiveCaption';
@@ -46,9 +46,9 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(storedUser);
   const [loading, setLoading] = useState(true);
 
-  // 启动时拿本地令牌跟后端核对一次。
-  // 只有后端**明确说令牌失效(401/403)**才登出;网络抖动 / 服务器暂时连不上(重启中、
-  // 证书、断网)一律**保留本地登录态**——否则每次导航都重新校验,一抖就被误登出。
+  // On startup, verify the local token against the backend once.
+  // Only log out when the backend **explicitly says the token is invalid (401/403)**; on network jitter / server temporarily unreachable (restarting,
+  // certificate, offline) always **keep the local logged-in state** — otherwise every navigation re-validates and a single hiccup wrongly logs you out.
   useEffect(() => {
     const t = getToken();
     if (!t) {
@@ -63,15 +63,15 @@ export function useAuth() {
           setUser(j.user);
           localStorage.setItem(USER_KEY, JSON.stringify(j.user));
         } else if (r.status === 401 || r.status === 403) {
-          // 令牌真的失效了 → 清干净,登出
+          // The token really is invalid → clear everything and log out
           setToken('');
           localStorage.removeItem(USER_KEY);
           setUser(null);
         }
-        // 其它状态码(5xx/服务重启中):保留本地登录态,什么都不做
+        // Other status codes (5xx/service restarting): keep the local logged-in state, do nothing
       })
       .catch(() => {
-        // 网络错误(断网/证书/连不上):保留本地登录态,绝不因此登出
+        // Network error (offline/certificate/unreachable): keep the local logged-in state, never log out because of it
       })
       .finally(() => setLoading(false));
   }, []);
@@ -80,7 +80,7 @@ export function useAuth() {
     setToken(j.token);
     localStorage.setItem(USER_KEY, JSON.stringify(j.user));
     setUser(j.user);
-    // 登录/注册成功后,立刻按这个账号从服务器拉标签和设置(先清掉上一个账号的本地缓存)
+    // After a successful login/register, immediately fetch this account's tags and settings from the server (clearing the previous account's local cache first)
     void hydrateTagsFromServer();
     void hydrateSettingsFromServer();
     return j.user;
@@ -92,7 +92,7 @@ export function useAuth() {
     [accept]
   );
 
-  // 注册第一步:给邮箱发验证码
+  // Registration step one: send a verification code to the email
   const sendRegisterCode = useCallback(
     (email: string) => post<{ ok: boolean }>('/api/register/code', { email }),
     []
@@ -108,12 +108,12 @@ export function useAuth() {
     try {
       await post('/api/logout', {});
     } catch {
-      /* 网络不通也要本地登出 */
+      /* Log out locally even if the network is down */
     }
     setToken('');
     localStorage.removeItem(USER_KEY);
     setUser(null);
-    clearTagsForLogout();       // 清掉本地标签缓存,下个账号不会看到这个账号的
+    clearTagsForLogout();       // Clear the local tag cache so the next account won't see this account's
     clearSettingsForLogout();
   }, []);
 

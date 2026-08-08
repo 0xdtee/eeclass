@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import './i18n'
 import { createRoot } from 'react-dom/client'
-// 字体与图标全部本地打包,不依赖任何 CDN(离线/内网也能正常显示)
+// Fonts and icons are all bundled locally, no CDN dependency (works offline/on intranet)
 import 'remixicon/fonts/remixicon.css'
 import 'katex/dist/katex.min.css'
 import '@fontsource/inter/300.css'

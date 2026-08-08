@@ -3,9 +3,9 @@ import type { CSSProperties } from 'react';
 import { useGuide, nextGuide, prevGuide, endGuide } from '@/hooks/useGuide';
 
 /**
- * 逐步引导层:高亮当前步要点的真实按钮 + 箭头指向 + 步骤文字。
- * 点高亮的按钮(真实操作照常生效)或卡片上的「下一步」即前进。
- * 找不到目标元素(还没渲染/在别的状态里)时退回底部居中提示,不挡操作。
+ * Step-by-step guide layer: highlights the real button for the current step + arrow pointer + step text.
+ * Advance by clicking the highlighted button (the real action still works as usual) or "Next" on the card.
+ * When the target element can't be found (not yet rendered/in a different state), fall back to a bottom-centered hint that doesn't block interaction.
  */
 export default function GuideOverlay() {
   const g = useGuide();
@@ -13,7 +13,7 @@ export default function GuideOverlay() {
 
   const sel = g.active ? (g.targets[g.index] || '') : '';
 
-  // 定位目标元素并持续跟踪(元素可能刚导航过来还没渲染,或位置会变)
+  // Locate the target element and keep tracking it (it may not be rendered yet right after navigation, or its position may change)
   useEffect(() => {
     if (!g.active) { setRect(null); return; }
     const update = () => {
@@ -41,7 +41,7 @@ export default function GuideOverlay() {
     };
   }, [g.active, g.index, sel]);
 
-  // 点中高亮的目标 → 真实操作生效后自动进入下一步
+  // Clicking the highlighted target → automatically advance to the next step after the real action takes effect
   useEffect(() => {
     if (!g.active || !sel) return;
     const onClick = (e: MouseEvent) => {
@@ -62,7 +62,7 @@ export default function GuideOverlay() {
   const text = g.steps[g.index];
   const CARD_H = 148;
 
-  // 卡片定位:有目标就贴着它(下方优先),没目标就底部居中
+  // Card placement: hug the target if there is one (below preferred), otherwise bottom-centered
   let card: CSSProperties;
   let arrow: 'up' | 'down' | null = null;
   let arrowLeft = 0;
@@ -73,17 +73,17 @@ export default function GuideOverlay() {
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
     if (spaceBelow >= CARD_H + 20) {
-      // 元素下方放得下:卡片在下,箭头朝上
+      // Fits below the element: card below, arrow pointing up
       card = { position: 'fixed', top: rect.bottom + 14, left, width: w };
       arrow = 'up';
       arrowLeft = Math.max(16, Math.min(rect.left + rect.width / 2 - left - 6, w - 28));
     } else if (spaceAbove >= CARD_H + 20) {
-      // 上方放得下:卡片在上,箭头朝下
+      // Fits above: card above, arrow pointing down
       card = { position: 'fixed', top: rect.top - CARD_H - 14, left, width: w };
       arrow = 'down';
       arrowLeft = Math.max(16, Math.min(rect.left + rect.width / 2 - left - 6, w - 28));
     } else {
-      // 元素太高、上下都放不下:固定到底部居中,不画箭头(靠高亮圈指示),绝不越界
+      // Element too tall, fits neither above nor below: pin to bottom-center, no arrow (the highlight ring indicates it), never overflow
       card = { position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', width: w };
     }
   } else {
@@ -93,7 +93,7 @@ export default function GuideOverlay() {
 
   return (
     <>
-      {/* 高亮圈(box-shadow 挖洞把周围压暗);pointer-events:none 让点击穿透到真实按钮 */}
+      {/* Highlight ring (box-shadow cuts a hole and dims the surroundings); pointer-events:none lets clicks pass through to the real button */}
       {rect ? (
         <div
           style={{
@@ -107,9 +107,9 @@ export default function GuideOverlay() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.42)', pointerEvents: 'none', zIndex: 9998 }} />
       )}
 
-      {/* 提示卡 */}
+      {/* Hint card */}
       <div style={{ ...card, zIndex: 9999 }} className="bg-foreground-900 text-background-50 rounded-2xl shadow-2xl ring-1 ring-black/20 px-4 py-3">
-        {/* 箭头 */}
+        {/* Arrow */}
         {arrow === 'up' && (
           <div style={{ position: 'absolute', top: -7, left: arrowLeft, width: 14, height: 14, background: 'inherit' }}
             className="bg-foreground-900 rotate-45 rounded-sm" />

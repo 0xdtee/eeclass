@@ -1,6 +1,6 @@
 /**
- * 导出 Word 文档(.doc)—— 文字可编辑、中文正常、无需第三方库。
- * 用 Word 能正确渲染的内联样式 + 单元格表格做出封面、分区标题、编号卡片、色块高亮。
+ * Export a Word document (.doc) — text is editable, Chinese renders fine, no third-party library needed.
+ * Uses inline styles that Word renders correctly + cell tables to build the cover, section headings, numbered cards, and color-block highlights.
  */
 
 export interface WordLine {
@@ -22,7 +22,7 @@ export interface WordDoc {
 const esc = (s: string) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
-const ACCENT = '#4f46e5';   // 靛蓝
+const ACCENT = '#4f46e5';   // Indigo
 const parseCorr = (c: string): [string, string] | null => {
   const m = (c || '').match(/听成[\s"'“”「『]*(.+?)[\s"'“”」』]*应为[\s"'“”「『]*(.+?)(?:["'“”」』]|[，,。；;、]|$)/);
   if (!m) return null;
@@ -31,7 +31,7 @@ const parseCorr = (c: string): [string, string] | null => {
   return a && b && a !== b ? [a, b] : null;
 };
 
-/** 分区标题:左侧色条 + 标题 */
+/** Section heading: left color bar + title */
 function section(title: string): string {
   return `<p style="margin:22pt 0 8pt;padding-left:10px;border-left:4px solid ${ACCENT};font-size:14pt;font-weight:bold;color:#1f2937;">${esc(title)}</p>`;
 }
@@ -39,14 +39,14 @@ function section(title: string): string {
 function bodyHtml(doc: WordDoc): string {
   let h = '';
 
-  // 封面头:标题 + 副标题,底部一条 accent 分隔线
+  // Cover header: title + subtitle, with an accent divider line at the bottom
   h += `<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
     <tr><td style="border-bottom:2.5px solid ${ACCENT};padding-bottom:8pt;">
       <p style="margin:0;font-size:22pt;font-weight:bold;color:#111827;letter-spacing:0.5px;">${esc(doc.title)}</p>
       ${doc.subtitle ? `<p style="margin:6pt 0 0;font-size:10pt;color:#6b7280;">${esc(doc.subtitle)}</p>` : ''}
     </td></tr></table>`;
 
-  // 课堂摘要:浅灰底色块(用单元格表格,Word 才认 padding+背景)
+  // Class summary: light-gray background block (using a cell table, since only then does Word honor padding+background)
   if (doc.summary) {
     h += section('课堂摘要');
     h += `<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
@@ -55,7 +55,7 @@ function bodyHtml(doc: WordDoc): string {
       </td></tr></table>`;
   }
 
-  // 重点知识点:编号圆点 + 内容,逐条卡片
+  // Key knowledge points: numbered dot + content, one card each
   const pts = doc.keyPoints ?? [];
   if (pts.length) {
     h += section('重点知识点');
@@ -71,7 +71,7 @@ function bodyHtml(doc: WordDoc): string {
     });
   }
 
-  // 识别可能听错:琥珀色块,X → Y
+  // Possibly misheard by recognition: amber block, X → Y
   const corr = (doc.corrections ?? []).map(parseCorr).filter(Boolean) as [string, string][];
   if (corr.length) {
     h += section('识别可能听错(仅供参考)');
@@ -85,7 +85,7 @@ function bodyHtml(doc: WordDoc): string {
     h += `</td></tr></table>`;
   }
 
-  // 课堂转写全文:时间戳(灰)+ 说话人(accent)+ 内容,重点/定义句加底色
+  // Full class transcript: timestamp (gray) + speaker (accent) + content, with a background color on key/definition sentences
   const lines = doc.lines ?? [];
   if (lines.length) {
     h += section('课堂转写全文');
@@ -99,7 +99,7 @@ function bodyHtml(doc: WordDoc): string {
     });
   }
 
-  // 页脚
+  // Footer
   h += `<p style="margin-top:26pt;padding-top:8pt;border-top:1px solid #e5e7eb;font-size:8.5pt;color:#9ca3af;text-align:center;">
     由「课堂实时字幕」自动生成</p>`;
   return h;

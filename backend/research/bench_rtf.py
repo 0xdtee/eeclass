@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""系统压测:各 ASR 后端的模型加载时间、单路实时率(RTF)、以及并发扩展性
-(N 路同时转写时的最坏 RTF,用来估单机能撑几路实时)。纯 CPU。
+"""System stress test: each ASR backend's model load time, single-stream real-time factor (RTF),
+and concurrency scaling (worst-case RTF when N streams transcribe at once, used to estimate how many
+real-time streams one machine can sustain). Pure CPU.
 
-RTF = 解码耗时 / 音频时长;<1 才能实时。并发时看最慢那一路的 RTF。
+RTF = decode time / audio duration; must be <1 for real time. Under concurrency, look at the RTF of the slowest stream.
 
-用法: ../.venv/bin/python research/bench_rtf.py
+Usage: ../.venv/bin/python research/bench_rtf.py
 """
 import json, os, sys, time, threading
 import numpy as np, soundfile as sf
@@ -30,14 +31,14 @@ def bench_backend(name, audio):
     cfg["asr"]["backend"] = name
     b = make_backend(cfg)
     load_s = b.load()
-    b.transcribe(audio)                       # 预热
-    # 单路 RTF(取 3 次中位)
+    b.transcribe(audio)                       # warm-up
+    # single-stream RTF (median of 3 runs)
     ts = []
     for _ in range(3):
         t0 = time.time(); b.transcribe(audio); ts.append(time.time() - t0)
     ts.sort()
     rtf1 = ts[1] / DUR_S
-    # 并发:N 路同时解码,记最慢一路的耗时
+    # concurrency: decode N streams at once, record the time of the slowest one
     conc = {}
     for n in CONC:
         times = [0.0] * n
@@ -47,7 +48,7 @@ def bench_backend(name, audio):
         t0 = time.time()
         for t in thrs: t.start()
         for t in thrs: t.join()
-        conc[n] = max(times) / DUR_S          # 最坏 RTF@N
+        conc[n] = max(times) / DUR_S          # worst-case RTF@N
     return load_s, rtf1, conc
 
 
@@ -64,7 +65,7 @@ def main():
         except Exception as e:
             print(f"{name:<12} 失败: {e}")
             continue
-        # 可撑实时路数 ≈ 最大的 N 使 RTF@N < 1
+        # sustainable real-time streams ≈ the largest N such that RTF@N < 1
         cap = max([n for n in CONC if conc[n] < 1.0], default=0)
         cap_s = f"≥{cap}" if cap == max(CONC) else str(cap)
         row = [name, f"{load_s:.2f}", f"{rtf1:.3f}"] + [f"{conc[n]:.3f}" for n in CONC] + [cap_s]

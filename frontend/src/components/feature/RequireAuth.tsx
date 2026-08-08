@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
-/** 包住需要登录才能看的页面：没登录就跳去 /login。 */
+/** Wraps pages that require login: redirects to /login when not authenticated. */
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
 

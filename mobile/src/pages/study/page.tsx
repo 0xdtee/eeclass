@@ -12,7 +12,7 @@ export default function StudyPage() {
   const [sid, setSid] = useState<string>(params.get('sid') || '');
   const [mode, setMode] = useState<Mode>('flashcards');
 
-  // 有会话列表且没选中时,默认选第一节
+  // When there's a session list and none is selected, default to the first one
   useEffect(() => {
     if (!sid && sessions.length > 0) setSid(sessions[0].sid);
   }, [sessions, sid]);
@@ -33,7 +33,7 @@ export default function StudyPage() {
       </div>
 
       <div className="px-5 md:px-8 pb-24 md:pb-8 max-w-5xl">
-        {/* 选课 */}
+        {/* Course picker */}
         <div className="mb-4">
           <label className="text-xs text-foreground-500">选择课时</label>
           {sessLoading ? (
@@ -53,7 +53,7 @@ export default function StudyPage() {
           )}
         </div>
 
-        {/* 模式切换 */}
+        {/* Mode switch */}
         <div className="grid grid-cols-2 gap-3 mb-5">
           <button
             onClick={() => run('flashcards')}
@@ -93,7 +93,7 @@ export default function StudyPage() {
           </div>
         )}
 
-        {/* 未生成提示 */}
+        {/* Not-generated notice */}
         {!loading && !error && !data && (
           <div className="flex flex-col items-center py-12 text-center">
             <div className="w-16 h-16 flex items-center justify-center bg-primary-100 rounded-2xl mb-4">
@@ -105,12 +105,12 @@ export default function StudyPage() {
           </div>
         )}
 
-        {/* 闪卡 */}
+        {/* Flashcards */}
         {!loading && !error && data && mode === 'flashcards' && (
           <FlashcardDeck cards={data.flashcards} />
         )}
 
-        {/* 自测题 */}
+        {/* Self-test questions */}
         {!loading && !error && data && mode === 'quiz' && (
           <QuizList items={data.quiz} />
         )}

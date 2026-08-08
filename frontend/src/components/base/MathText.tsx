@@ -2,10 +2,10 @@ import { useMemo } from 'react';
 import katex from 'katex';
 
 /**
- * 渲染可能含 LaTeX 数学公式的文本:
- * - 行内公式用 $...$ 包裹,独立公式用 $$...$$ 包裹,交给 KaTeX 渲染;
- * - 其余部分按纯文本处理(转义 HTML、保留换行)。
- * AI(考点/模拟卷/总结)按提示会把数学式写成 LaTeX;老数据没有 $ 就原样当纯文本显示,不会出错。
+ * Renders text that may contain LaTeX math formulas:
+ * - Inline formulas wrapped in $...$, display formulas in $$...$$, rendered via KaTeX;
+ * - Everything else is treated as plain text (HTML escaped, line breaks preserved).
+ * The AI (exam points/mock papers/summaries) writes math as LaTeX per its prompt; old data without $ is shown as-is as plain text, without errors.
  */
 export default function MathText({ text, className }: { text?: string; className?: string }) {
   const html = useMemo(() => renderMath(text || ''), [text]);
@@ -34,7 +34,7 @@ function renderMath(s: string): string {
         i = end + delim.length;
         continue;
       }
-      // 未闭合的 $:当普通字符,前进一位,避免死循环
+      // Unclosed $: treat as a normal character, advance one position to avoid an infinite loop
       out.push('$');
       i += 1;
       continue;

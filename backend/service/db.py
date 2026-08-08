@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
-"""PostgreSQL 接入层：连接池 + 建表。
+"""PostgreSQL access layer: connection pool + table creation.
 
-账号、会话令牌、课堂记录的「元数据」迁到 PG；音频/板书/逐句 jsonl 这些大块
-仍留在 records/ 文件里，DB 只存元数据和文件引用（sid 就是目录名，路径可算出来）。
+Account, session token, and class-record \"metadata\" are moved to PG; large blobs like
+audio/whiteboard/per-sentence jsonl stay in records/ files, and the DB only stores metadata
+and file references (sid is the directory name, so the path can be computed).
 
-DSN 只从环境变量 EECLASS_DB_DSN 读，缺省本地 unix socket（peer 认证，无密码）：
+The DSN is read only from the EECLASS_DB_DSN environment variable, defaulting to a local unix
+socket (peer authentication, no password):
     postgresql:///eeclass
-绝不把带口令的 DSN 写进任何提交的文件。
+Never write a DSN containing a password into any committed file.
 
-连接用 psycopg(v3) 的连接池 psycopg_pool；装不上池就退回「每次开一个短连接」的
-工厂，行为一致（这些调用都很稀疏：登录鉴权 + 停止录音时写一行，短暂阻塞没关系）。
+Connections use psycopg(v3)'s psycopg_pool connection pool; if the pool can't be installed it
+falls back to an \"open a short-lived connection each time\" factory with identical behavior
+(these calls are all sparse: login auth + writing one row when recording stops, so brief blocking is fine).
 """
 import atexit
 import os
@@ -17,10 +20,10 @@ import threading
 
 import psycopg
 
-try:                                   # 有池用池
+try:                                   # use the pool if there is one
     from psycopg_pool import ConnectionPool
     _HAVE_POOL = True
-except Exception:                      # 没池就退回短连接工厂
+except Exception:                      # no pool: fall back to the short-connection factory
     ConnectionPool = None
     _HAVE_POOL = False
 
@@ -34,7 +37,7 @@ _pool_lock = threading.Lock()
 
 
 def get_pool():
-    """惰性建连接池；没有 psycopg_pool 时返回 None（调用方走短连接）。"""
+    """Lazily build the connection pool; returns None when psycopg_pool is absent (callers use short-lived connections)."""
     global _pool
     if not _HAVE_POOL:
         return None
@@ -48,7 +51,7 @@ def get_pool():
 
 
 def close_pool():
-    """进程退出时清掉池的后台线程，避免 'couldn't stop thread' 噪音。"""
+    """Clean up the pool's background thread at process exit, avoiding 'couldn't stop thread' noise."""
     global _pool
     if _pool is not None:
         try:
@@ -59,7 +62,7 @@ def close_pool():
 
 
 class _ConnCtx:
-    """统一的连接上下文管理器：池里借 / 或临时开一个短连接，退出时归还/关闭。"""
+    """Unified connection context manager: borrow from the pool / or open a temporary short-lived connection, returning/closing it on exit."""
 
     def __init__(self):
         self._pool = get_pool()
@@ -75,9 +78,9 @@ class _ConnCtx:
         return self._conn
 
     def __exit__(self, exc_type, exc, tb):
-        if self._cm is not None:                 # 池：交还给池（池会按异常提交/回滚）
+        if self._cm is not None:                 # pool: hand back to the pool (which commits/rolls back based on exceptions)
             return self._cm.__exit__(exc_type, exc, tb)
-        try:                                     # 短连接：自己提交/回滚再关
+        try:                                     # short connection: commit/rollback ourselves, then close
             if exc_type is None:
                 self._conn.commit()
             else:
@@ -88,7 +91,7 @@ class _ConnCtx:
 
 
 def connection():
-    """`with connection() as conn:` —— 池或短连接，二选一，接口一致。"""
+    """`with connection() as conn:` -- pool or short-lived connection, either one, same interface."""
     return _ConnCtx()
 
 
@@ -144,7 +147,7 @@ _schema_lock = threading.Lock()
 
 
 def init_schema(force: bool = False):
-    """幂等建表。启动时可每次调用；模块级 guard 保证只真正执行一次。"""
+    """Idempotent table creation. Safe to call on every startup; a module-level guard ensures it truly runs only once."""
     global _schema_done
     if _schema_done and not force:
         return

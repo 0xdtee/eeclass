@@ -69,10 +69,10 @@
   --font-label: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* ===== 深色主题 =====
-   只改 CSS 变量的 L(亮度)——背景 50→950 由暗到亮(50 是最深的底),
-   前景 50→950 由暗到亮(900 接近纯白当正文),强调/主色随之提亮以保证对比。
-   页面里所有颜色都走 oklch(var(--xxx)),所以只需覆盖变量值即可整体切换。 */
+/* ===== Dark theme =====
+   Only the L (lightness) of the CSS variables changes — background 50→950 goes dark to light (50 is the deepest base),
+   foreground 50→950 goes dark to light (900 is near-white for body text), accent/primary brighten accordingly to keep contrast.
+   Every color on the page uses oklch(var(--xxx)), so overriding the variable values is enough to switch the whole theme. */
 :root[data-theme="dark"] {
   --background-50: 0.20 0.008 95;
   --background-100: 0.24 0.009 95;
@@ -159,13 +159,13 @@ body {
   pointer-events: none;
 }
 
-/* ===== 原生 App 观感(保守版:不改 body 滚动模型,避免点击/滚动异常)===== */
-/* 网页根背景 = App 浅色,消除顶部/底部安全区露出的 WebView 黑底 */
+/* ===== Native app look and feel (conservative: don't touch the body scroll model, to avoid tap/scroll glitches) ===== */
+/* Root web background = app light color, eliminating the WebView's black base showing through the top/bottom safe areas */
 html {
   background-color: oklch(var(--background-50));
   -webkit-text-size-adjust: 100%;
 }
-/* 去点击高亮、长按放大镜;输入框仍可正常选中输入 */
+/* Remove tap highlight and long-press magnifier; input fields can still be selected and typed into normally */
 * {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -175,8 +175,8 @@ input, textarea, [contenteditable="true"] {
   user-select: text;
   -webkit-touch-callout: default;
 }
-/* 隐藏滚动条(iOS 原生列表也无可见滚动条)*/
+/* Hide scrollbars (native iOS lists have no visible scrollbar either) */
 ::-webkit-scrollbar { width: 0; height: 0; display: none; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
-/* 顶部安全区留白工具类(按需使用)*/
+/* Utility class for top safe-area padding (use as needed) */
 .safe-top { padding-top: env(safe-area-inset-top); }

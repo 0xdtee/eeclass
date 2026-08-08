@@ -10,9 +10,9 @@ export default function AnimatedNumber({ value, suffix = '', duration = 1200 }: 
   const [display, setDisplay] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const [visible, setVisible] = useState(false);
-  const fromRef = useRef(0);   // 动画起点(上次显示值),保证连续不跳变
+  const fromRef = useRef(0);   // Animation start point (last shown value), keeps it continuous without jumps
 
-  // 进入视口后标记可见(触发一次即可)
+  // Mark visible once it enters the viewport (triggering once is enough)
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -24,8 +24,8 @@ export default function AnimatedNumber({ value, suffix = '', duration = 1200 }: 
     return () => ob.disconnect();
   }, []);
 
-  // 可见后:value 每次变化都从当前值动画到新值。
-  // 关键修复:数据是异步加载的(先 0 后 14),value 变了必须重新动画,不能只跑一次。
+  // Once visible: every time value changes, animate from the current value to the new one.
+  // Key fix: data loads asynchronously (0 first, then 14), so when value changes we must re-animate, not run only once.
   useEffect(() => {
     if (!visible) return;
     const from = fromRef.current;

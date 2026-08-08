@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""用户账号 + 会话令牌（后端已迁到 PostgreSQL）。
+"""User accounts + session tokens (backend now migrated to PostgreSQL).
 
-原来服务只有一个全局令牌（token.txt），谁拿到都一样。加账号后：
-  · 注册/登录，后端发一个「会话令牌」(session token)，前端拿它当访问令牌用；
-  · check_token 认「全局令牌」或「任一有效会话令牌」，所以登录即鉴权——
-    别人只要注册登录，就能连服务看实时转写，不用把口令抄来抄去。
+The service originally had a single global token (token.txt) that was the same for everyone. With accounts added:
+  · On register/login the backend issues a "session token", and the frontend uses it as its access token;
+  · check_token accepts either the "global token" or "any valid session token", so logging in also authenticates—
+    anyone who registers and logs in can connect to the service and watch the live transcript, no need to copy passphrases around.
 
-密码只存 pbkdf2 派生值（标准库 hashlib，不引额外依赖），绝不存明文。
-账号存 accounts 表、会话存 auth_sessions 表（PG），DSN 从环境变量读；
-以前落 records/users.json、sessions.json，迁移脚本 migrate_to_db.py 一次性导入。
+Passwords are stored only as pbkdf2 derived values (stdlib hashlib, no extra dependencies), never in plaintext.
+Accounts live in the accounts table and sessions in the auth_sessions table (PG), with the DSN read from an environment variable;
+the old versions wrote records/users.json and sessions.json, which the migrate_to_db.py script imports once.
 
-对外方法签名、行为、以及抛出的中文报错都跟文件版一模一样，server.py 里的调用不用改。
-方法保持同步（callers 都是同步写法）：鉴权类调用很稀疏，短暂阻塞可接受，别改成 async。
+The public method signatures, behavior, and the Chinese error messages raised are all identical to the file-based version, so callers in server.py need no changes.
+Methods stay synchronous (all callers are written synchronously): auth calls are sparse and brief blocking is acceptable, so don't convert them to async.
 """
 import hashlib
 import os
@@ -21,7 +21,7 @@ import time
 import db
 
 _ITERS = 200_000
-_SESSION_TTL = 30 * 86400          # 会话 30 天过期
+_SESSION_TTL = 30 * 86400          # sessions expire after 30 days
 
 
 def _hash_pw(pw: str, salt: bytes = None) -> str:
@@ -42,7 +42,7 @@ def _verify_pw(pw: str, stored: str) -> bool:
 
 class Accounts:
     def __init__(self, dir_: str):
-        # dir_ 保留做兼容/备份路径用；数据现在落 PG。构造时确保表已建好。
+        # dir_ is kept for compatibility/backup paths; data now lives in PG. Ensure the tables exist at construction time.
         self.dir = dir_
         try:
             os.makedirs(dir_, exist_ok=True)
@@ -54,7 +54,7 @@ class Accounts:
     def _norm(email: str) -> str:
         return (email or "").strip().lower()
 
-    # ---------- 对外 ----------
+    # ---------- public ----------
     def register(self, email, name, password, role=None):
         email = self._norm(email)
         if not email or "@" not in email:
@@ -105,7 +105,7 @@ class Accounts:
         return token, self.public_user(email)
 
     def session_user(self, token):
-        """令牌 -> 用户信息；无效或过期返回 None。"""
+        """token -> user info; returns None if invalid or expired."""
         if not token:
             return None
         with db.connection() as conn:

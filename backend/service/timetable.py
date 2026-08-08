@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""课表截图识别:RapidOCR 读图 → 按 x 坐标分列(最左=时间/节次,其余=周一..周日)
-→ 交给 DeepSeek 还原成结构化课程列表。纯本地 OCR,不把图片发出去。
-另有云端通道 extract_via_qwen(阿里云百炼 Qwen-VL),按 ocr.provider 分流。"""
+"""Timetable screenshot recognition: RapidOCR reads the image → split into columns by x coordinate (leftmost = time/period, the rest = Mon..Sun)
+→ hand off to DeepSeek to reconstruct a structured course list. Purely local OCR; images are never sent out.
+There is also a cloud channel extract_via_qwen (Alibaba Cloud Bailian Qwen-VL), dispatched by ocr.provider."""
 import json
 import os
 
@@ -45,7 +45,7 @@ _VISION_SYSTEM = (
 
 
 def extract_via_qwen(image_bytes, ocr_cfg):
-    """阿里云百炼 Qwen-VL 视觉大模型:直接看图 → 结构化课程。图片会上传到阿里云。"""
+    """Alibaba Cloud Bailian Qwen-VL vision model: looks at the image directly → structured courses. Images are uploaded to Alibaba Cloud."""
     import base64
     import json as _json
     import urllib.request
@@ -99,8 +99,8 @@ def _clean_result(courses, anchor):
 
 
 def _structure_from_tokens(toks, ds, width=800):
-    """toks: [(cx, cy, text)]。按 x 聚类成列(时间列 + 周一~周日)→ 拼成文本 → DeepSeek 结构化。
-    本地 RapidOCR 和 阿里云传统 OCR 都用它,只是 tokens 来源不同。"""
+    """toks: [(cx, cy, text)]. Cluster into columns by x (time column + Mon~Sun) → assemble into text → structure with DeepSeek.
+    Used by both local RapidOCR and Alibaba Cloud's traditional OCR; only the token source differs."""
     toks = [t for t in toks if t[2]]
     if not toks:
         return {"courses": [], "note": "没识别到文字"}
@@ -137,8 +137,8 @@ def _structure_from_tokens(toks, ds, width=800):
 
 
 def extract_via_aliyun_ocr(image_bytes, ocr_cfg, ds):
-    """阿里云传统「文字识别 OCR·通用高精版」(AK/SK):云端只出文字+坐标,再交给 DeepSeek 还原结构。
-    图片会上传到阿里云。"""
+    """Alibaba Cloud's traditional \"Text Recognition OCR - General High-Precision\" (AK/SK): the cloud returns only text + coordinates, then DeepSeek reconstructs the structure.
+    Images are uploaded to Alibaba Cloud."""
     import io
     import json as _json
     from alibabacloud_ocr_api20210707.client import Client
@@ -152,13 +152,13 @@ def extract_via_aliyun_ocr(image_bytes, ocr_cfg, ds):
     conf = open_api_models.Config(access_key_id=ak, access_key_secret=sk)
     conf.endpoint = ocr_cfg.get("endpoint", "ocr-api.cn-hangzhou.aliyuncs.com")
     client = Client(conf)
-    # 走「OCR统一识别」RecognizeAllText,type=Advanced(通用高精版);output_coordinate 拿文字坐标做分列
+    # use "unified OCR" RecognizeAllText, type=Advanced (general high-precision); output_coordinate gets text coordinates for column splitting
     req = models.RecognizeAllTextRequest(
         body=io.BytesIO(image_bytes),
         type=ocr_cfg.get("type", "Advanced"),
         output_coordinate="points")
     resp = client.recognize_all_text_with_options(req, util_models.RuntimeOptions())
-    data = resp.body.data   # SDK 已解析成对象
+    data = resp.body.data   # the SDK has already parsed it into an object
     toks = []
     for sub in (data.sub_images or []):
         bi = getattr(sub, "block_info", None)
@@ -180,18 +180,18 @@ def extract_via_aliyun_ocr(image_bytes, ocr_cfg, ds):
 
 
 def extract_timetable(image_bytes, ds, cfg=None):
-    """按配置分流:
-      ocr.provider='aliyun'     → 云端 Qwen-VL 视觉大模型(直接看图)
-      ocr.provider='aliyun_ocr' → 云端 传统OCR(文字识别高精版)+ DeepSeek 结构化
-      其它/默认                  → 本地 RapidOCR + DeepSeek
-    返回 {'courses':[...], 'anchor_monday':...}。"""
+    """Dispatch by configuration:
+      ocr.provider='aliyun'     → cloud Qwen-VL vision model (looks at the image directly)
+      ocr.provider='aliyun_ocr' → cloud traditional OCR (high-precision text recognition) + DeepSeek structuring
+      other/default             → local RapidOCR + DeepSeek
+    Returns {'courses':[...], 'anchor_monday':...}."""
     ocr_cfg = ((cfg or {}).get("ocr") or {})
     provider = (ocr_cfg.get("provider") or "local").lower()
     if provider == "aliyun":
         return extract_via_qwen(image_bytes, ocr_cfg.get("aliyun") or {})
     if provider == "aliyun_ocr":
         return extract_via_aliyun_ocr(image_bytes, ocr_cfg.get("aliyun_ocr") or {}, ds)
-    # ---- 默认:本地 RapidOCR + DeepSeek ----
+    # ---- default: local RapidOCR + DeepSeek ----
     import numpy as np
     import cv2
     img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)

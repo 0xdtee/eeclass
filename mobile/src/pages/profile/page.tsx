@@ -16,20 +16,20 @@ export default function ProfilePage() {
   const [testMsg, setTestMsg] = useState('');
   const [showServerEdit, setShowServerEdit] = useState(false);
 
-  // 设置面板开关
+  // Settings panel toggles
   const [showAiDefaults, setShowAiDefaults] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [showMicGain, setShowMicGain] = useState(false);
 
-  // AI 默认开关
+  // AI default toggles
   const [aiCorrect, setAiCorrect] = useState(() => getAiDefault('aiCorrect'));
   const [smartSeg, setSmartSeg] = useState(() => getAiDefault('smartSeg'));
   const [translateEn, setTranslateEn] = useState(() => getAiDefault('translateEn'));
 
-  // 主题
+  // Theme
   const [theme, setThemeState] = useState<Theme>(() => getTheme());
 
-  // 拾音灵敏度
+  // Mic sensitivity
   const [micGain, setMicGainState] = useState<number>(() => getMicGain());
 
   const handleTest = async () => {
@@ -63,7 +63,7 @@ export default function ProfilePage() {
 
   const pickTheme = (t: Theme) => {
     setThemeState(t);
-    saveTheme(t); // 立即应用到 <html data-theme>
+    saveTheme(t); // apply immediately to <html data-theme>
   };
 
   const onMicGainChange = (v: number) => {
@@ -220,7 +220,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* AI 处理默认开关 Modal */}
+      {/* AI processing defaults toggle Modal */}
       {showAiDefaults && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40">
           <div className="bg-background-50 rounded-t-2xl md:rounded-2xl w-full max-w-sm p-5 m-0 md:m-4">
@@ -246,7 +246,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 深浅色主题 Modal */}
+      {/* Light/dark theme Modal */}
       {showTheme && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40">
           <div className="bg-background-50 rounded-t-2xl md:rounded-2xl w-full max-w-sm p-5 m-0 md:m-4">
@@ -284,7 +284,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 拾音灵敏度 Modal */}
+      {/* Mic sensitivity Modal */}
       {showMicGain && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40">
           <div className="bg-background-50 rounded-t-2xl md:rounded-2xl w-full max-w-sm p-5 m-0 md:m-4">

@@ -14,52 +14,52 @@ interface TranscriptionTabProps {
   sid: string;
   sessionTitle: string;
   onGenerateSummary: () => void;
-  /** 结束录制:停止 + 自动生成 AI 概要(在 home 层实现) */
+  /** End recording: stop + auto-generate the AI summary (implemented at the home layer) */
   onEndRecording?: () => void;
-  /** 开始录制:清掉上一节选中的存档课再开录(在 home 层实现);不传就直接 live.start */
+  /** Start recording: clear the previously selected archived session before recording (implemented at the home layer); if not passed, just call live.start */
   onStartRecording?: (o: Parameters<ReturnType<typeof useLiveCaption>['start']>[0]) => void;
-  /** 学科标签(课程大纲名),录音行里可勾选,给纠错当上下文 */
+  /** Subject tags (syllabus names), checkable in the recording row, used as context for correction */
   subjectTags?: string[];
-  /** 从主界面「开始录音」进来时:自动弹出命名框 */
+  /** When arriving via the main 「开始录音」: auto-open the naming box */
   autoStartNaming?: boolean;
-  /** 从课表点进来时预填的课名 */
+  /** Course name prefilled when arriving from the timetable */
   initialCourseName?: string;
-  /** 课堂笔记 */
+  /** Class notes */
   note?: string;
   noteStatus?: '' | 'saving' | 'saved';
   canNote?: boolean;
   onNoteChange?: (text: string) => void;
   isGenerating: boolean;
-  /** 连接由页面层持有：切标签页会卸载本组件，连接不能跟着断，否则已出的字幕就没了 */
+  /** The connection is held by the page layer: switching tabs unmounts this component, and the connection must not drop with it, or the captions already shown would be lost */
   live: ReturnType<typeof useLiveCaption>;
   historyLines: TranscriptLine[];
   shots: Shot[];
   courses: Course[];
   onEditLine: (lineId: number, text: string) => Promise<void>;
-  /** 手动把某句标为 重点/取消(历史记录里逐句标,持久保存) */
+  /** Manually mark/unmark a line as a highlight (marked line-by-line in history, persisted) */
   onMarkLine?: (lineId: number, kind: 'key' | 'define' | null) => void;
-  /** 录制后改说话人名字(按 speaker_id,这个人的每句都改) */
+  /** Rename a speaker after recording (by speaker_id, changing every line from that person) */
   onRenameSpeaker?: (speakerId: number, name: string) => void | Promise<void>;
   onProposeCorrection?: (from: string, to: string) => void;
   onShoot?: (file: File) => Promise<void>;
   onDeleteShot?: (shotId: string) => void;
   onNoteShot?: (shotId: string, note: string) => void;
   canEdit: boolean;
-  /** 把 seek 能力交给页面，闪卡/搜索结果也要用 */
+  /** Expose the seek capability to the page; flashcards/search results need it too */
   playerRef: React.RefObject<AudioPlayerHandle | null>;
-  /** 搜索跳转过来时要滚动并高亮的那一句 */
+  /** The line to scroll to and highlight when arriving from a search jump */
   focusLineId?: number | null;
 }
 
-/** 重点=黄，定义=浅绿，和写进 Word 的配色保持一致 */
-// 用「马克笔」渐变高亮:只铺文字下沿那段,避开 PingFang 字体 em 盒上方的留白,
-// 否则纯色铺满整个行盒会让底色看着"偏上"、和文字对不齐。box-decoration-clone 让换行后每行都各自高亮。
+/** Highlight = yellow, definition = light green, matching the colors written into Word */
+// Use a 「马克笔」 gradient highlight: cover only the lower edge of the text, avoiding the whitespace above PingFang's em box,
+// otherwise a solid fill over the whole line box makes the background look "too high" and misaligned with the text. box-decoration-clone makes each wrapped line highlight on its own.
 const KIND_STYLE: Record<string, string> = {
   key: 'bg-[linear-gradient(transparent_20%,#fef08a_20%)] box-decoration-clone px-0.5',
   define: 'bg-[linear-gradient(transparent_20%,#bbf7d0_20%)] box-decoration-clone px-0.5',
 };
 
-/** 判断这次编辑是不是只换了一个词——是的话可以提议加进纠错表 */
+/** Determine whether this edit changed just a single word -- if so, we can suggest adding it to the correction table */
 function singleWordDiff(before: string, after: string): [string, string] | null {
   if (!before || !after || before === after) return null;
   let i = 0;
@@ -87,15 +87,15 @@ export default function TranscriptionTab({
   const [saveError, setSaveError] = useState('');
   const [curTime, setCurTime] = useState(0);
   const [shotsOnly, setShotsOnly] = useState(false);
-  const [editSpk, setEditSpk] = useState<number | null>(null);   // 正在改名的说话人 id
+  const [editSpk, setEditSpk] = useState<number | null>(null);   // id of the speaker being renamed
   const [spkDraft, setSpkDraft] = useState('');
 
   const commitSpeaker = (id: number) => {
     const name = spkDraft.trim();
     if (name) {
-      if (live.running) live.rename(id, name);   // 录制中:走 WS,实时改
-      else void onRenameSpeaker?.(id, name);     // 录制后:走 REST,持久改
-      // 两条路服务端都会把这个人的声纹+名字存进本账号声纹库,以后自动认
+      if (live.running) live.rename(id, name);   // While recording: via WS, changed in real time
+      else void onRenameSpeaker?.(id, name);     // After recording: via REST, persisted
+      // Either way the server stores this person's voiceprint + name in this account's voiceprint library, to recognize them automatically later
     }
     setEditSpk(null);
     setSpkDraft('');
@@ -107,8 +107,8 @@ export default function TranscriptionTab({
     text: l.text, kind: l.kind, new_para: l.new_para,
     start: l.start, end: l.end, translation: l.translation,
   } as TranscriptLine));
-  // 续录:老转写 + 本次新说的接起来一起显示(sid==正在录的这节 且有历史时);
-  // 新录一节时 historyLines 为空,自然只剩 live。
+  // Continued recording: show the old transcript + what's newly said, joined together (when sid == the session being recorded and history exists);
+  // For a fresh session historyLines is empty, so only live remains.
   const lines: TranscriptLine[] = !isLive
     ? historyLines
     : (sid && sid === live.liveSid && historyLines.length
@@ -118,7 +118,7 @@ export default function TranscriptionTab({
           })()
         : liveMapped);
 
-  // 说话人清单:录制中来自实时统计;录制后(可编辑的历史课)从各句里按 speaker_id 去重取出。
+  // Speaker list: during recording from real-time stats; after recording (an editable past session) deduped out of the lines by speaker_id.
   const speakerRows = useMemo(() => {
     if (live.running) {
       return live.status.speakers.map((s) => ({ id: s.id, name: s.name, seconds: s.seconds as number | undefined }));
@@ -133,7 +133,7 @@ export default function TranscriptionTab({
 
   const showPlayer = !isLive && !!sid && lines.length > 0;
 
-  /** 正在播的是哪一句 */
+  /** Which line is currently playing */
   const playingId = useMemo(() => {
     if (!showPlayer || curTime <= 0) return null;
     const hit = lines.find(
@@ -147,13 +147,13 @@ export default function TranscriptionTab({
     boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight });
   }, [live.lines, live.partial, follow, isLive]);
 
-  // 跟着播放滚动
+  // Scroll along with playback
   useEffect(() => {
     if (!playingId || isLive) return;
     document.getElementById(`ln-${playingId}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [playingId, isLive]);
 
-  // 搜索结果跳过来
+  // Arrived from a search result
   useEffect(() => {
     if (!focusLineId) return;
     const el = document.getElementById(`ln-${focusLineId}`);
@@ -182,7 +182,7 @@ export default function TranscriptionTab({
     }
   };
 
-  /** 把截图按时间插进转写流：返回该在这一句之前插哪些图 */
+  /** Insert screenshots into the transcript stream by time: returns which images go before this line */
   const shotsBefore = (l: TranscriptLine, prev: TranscriptLine | undefined) =>
     shots.filter((s) => s.at <= (l.start ?? 0) && s.at > (prev?.start ?? -1));
 
@@ -228,8 +228,8 @@ export default function TranscriptionTab({
         </div>
       )}
 
-      {/* 说话人:点名字即可改名——录制中、录制后都能改。改过一次后,这个人的声纹会记进你自己的
-          声纹库,以后再录到同一个人会自动用这个名字。 */}
+      {/* Speaker: click the name to rename -- works both during and after recording. Once changed, this person's voiceprint is stored in your own
+          voiceprint library, so recording the same person again automatically uses this name. */}
       {speakerRows.length > 0 && (
         <div className="bg-background-50 border border-background-200 rounded-xl px-4 py-3 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-foreground-400 flex items-center gap-1 mr-1">
@@ -376,7 +376,7 @@ export default function TranscriptionTab({
                           </span>
                         ) : (
                           <>
-                            {/* 点原文 → 跳转录音到这一句 */}
+                            {/* Click the text -> seek the recording to this line */}
                             <span
                               onClick={() => { if (showPlayer) playerRef.current?.seek(l.start ?? 0); }}
                               className={`text-sm leading-relaxed text-foreground-700 ${
@@ -386,7 +386,7 @@ export default function TranscriptionTab({
                             >
                               {l.text}
                             </span>
-                            {/* 「修改」按钮 → 才进入逐句编辑 */}
+                            {/* The 「修改」 button -> only then enter line-by-line editing */}
                             {canEdit && (
                               <button
                                 onClick={() => { setEditingId(l.id); setDraft(l.text); }}
@@ -409,7 +409,7 @@ export default function TranscriptionTab({
                     </div>
                   );
                 })}
-                {/* 最后一句之后拍的板书(直播中刚拍的)——立即显示,不用等下一句 */}
+                {/* Board photos taken after the last line (just taken during the live session) -- shown immediately, no need to wait for the next line */}
                 {(() => {
                   const lastStart = lines.length ? (lines[lines.length - 1].start ?? 0) : -1;
                   const trailing = shots.filter((s) => s.at > lastStart);

@@ -104,7 +104,7 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
     setQuery('');
     setShowResults(false);
     setSelectedIdx(-1);
-    navigate(`/course?sid=${encodeURIComponent(id)}`);   // 打开搜到的那节课,而不是空白新录音页
+    navigate(`/course?sid=${encodeURIComponent(id)}`);   // Open the matched session, not a blank new-recording page
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

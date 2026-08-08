@@ -1,7 +1,7 @@
 /**
- * 录音回放条。识别有错字时能立刻听原声核对,这是复习时最常用的动作。
- * forwardRef 暴露 seek(),转写里点句子/时间戳可跳到对应录音位置。
- * 进度条 max 优先用已知时长(durationHint),元数据没读到也能拖;播一段自动暂停其他段。
+ * Audio playback bar. When a transcript has typos, you can instantly listen to the original to verify — the most common review action.
+ * forwardRef exposes seek(); clicking a sentence/timestamp in the transcript jumps to the matching audio position.
+ * The progress bar's max prefers the known duration (durationHint), so it stays draggable even if metadata isn't loaded; playing one segment auto-pauses the others.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
@@ -12,9 +12,9 @@ export interface AudioPlayerHandle {
 interface AudioPlayerProps {
   src: string;
   onTime?: (t: number) => void;
-  /** 已知时长(秒);元数据没读到时用它渲染进度条,保证可拖 */
+  /** Known duration (seconds); used to render the progress bar when metadata isn't loaded, keeping it draggable */
   durationHint?: number;
-  /** 传了就用内联样式(列表里),不传就用转写页顶部的 sticky 样式 */
+  /** If provided, use inline styles (in lists); otherwise use the sticky style at the top of the transcript page */
   className?: string;
 }
 
@@ -65,7 +65,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
       onTimeUpdate={(e) => { setCur(e.currentTarget.currentTime); onTime?.(e.currentTarget.currentTime); }}
       onPlay={() => {
         setPlaying(true);
-        // 同一时刻只放一段:开始播放时暂停页面上其他所有 audio
+        // Only one segment plays at a time: pause all other audio on the page when starting playback
         document.querySelectorAll('audio').forEach((a) => { if (a !== el.current) a.pause(); });
       }}
       onPause={() => setPlaying(false)}
@@ -112,7 +112,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
     </div>
   );
 
-  // 传了 className = 列表里的内联样式;否则 = 转写页顶部 sticky 播放条
+  // className passed = inline style in a list; otherwise = sticky player bar at the top of the transcript page
   const wrap = className
     ? `flex items-center bg-background-100 rounded-full px-3 py-1.5 ${className}`
     : 'sticky top-14 z-20 -mx-6 px-6 py-2.5 bg-background-50/95 backdrop-blur-sm border-b border-background-200';

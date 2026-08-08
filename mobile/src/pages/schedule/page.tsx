@@ -32,7 +32,7 @@ export default function SchedulePage() {
     return () => { alive = false; };
   }, []);
 
-  // 按日期分组并排序
+  // Group by date and sort
   const grouped = useMemo(() => {
     const byDate = new Map<string, ScheduleEvent[]>();
     for (const ev of events) {

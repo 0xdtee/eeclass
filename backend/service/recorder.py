@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
-"""课堂记录落盘。
+"""Persist classroom records to disk.
 
-每节课一个目录：records\2026-07-27_1405_高等数学\
-    transcript.jsonl   逐句结构化记录（时间/说话人/文本/重点标记/置信度）
-    transcript.md      人读的版本，重点句用 **粗体** 标出
-    audio.wav          原始音频（16k 单声道，一小时约 110MB，可在配置里关）
-    meta.json          设备、模型、说话人统计
+One directory per class session: records\2026-07-27_1405_Advanced-Math\
+    transcript.jsonl   per-utterance structured record (time/speaker/text/key-point flag/confidence)
+    transcript.md      human-readable version, key sentences marked in **bold**
+    audio.wav          raw audio (16k mono, ~110MB per hour, can be disabled in config)
+    meta.json          device, model, and speaker stats
 
-jsonl 是给课后二次处理用的结构化输入；md 是给人随手翻的。
-写入都是即时 flush —— 万一 Word 崩了或者电脑没电，已经讲过的内容不会丢。
+jsonl is the structured input for post-class processing; md is for people to skim.
+Every write is flushed immediately -- if Word crashes or the machine loses power, nothing already spoken is lost.
 """
 import json
 import os
 import time
 
 import numpy as np
-import soundfile as sf   # 注意：本机 torchaudio.save 有问题，一律用 soundfile
+import soundfile as sf   # Note: torchaudio.save is broken on this machine, always use soundfile
 
 
 class Recorder:
     def __init__(self, root, title=None, save_wav=True, existing_dir=None):
-        # existing_dir 非空 = 续录:接着这节课已有的 transcript/audio 往下写(不新建目录)
+        # existing_dir non-empty = resume: append to this session's existing transcript/audio (no new dir)
         append = bool(existing_dir)
         if append:
             self.dir = existing_dir
@@ -44,7 +44,7 @@ class Recorder:
         if save_wav:
             apath = os.path.join(self.dir, "audio.wav")
             if append and os.path.exists(apath):
-                # 追加到已有 wav 末尾(r+ 打开后 seek 到结尾),失败就不录这次音频、保住旧音频
+                # Append to the end of the existing wav (open r+ then seek to end); on failure skip this recording and keep the old audio
                 try:
                     self.wav = sf.SoundFile(apath, mode="r+")
                     self.wav.seek(0, 2)

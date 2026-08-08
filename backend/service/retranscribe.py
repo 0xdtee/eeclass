@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""课后高精度重转写。
+"""High-accuracy re-transcription after class.
 
-上课时为了跟上实时，用的是 small 模型（本机实测 RTF 0.37，够快但会有错别字）。
-课后没有实时压力了，就用 large-v3-turbo 把存下来的 audio.wav 重跑一遍，
-说话人和分段沿用课上已经分好的结果，只把文字换成更准的版本。
+During class the small model is used to keep up in real time (measured RTF 0.37 here, fast enough but with some typos).
+After class there's no real-time pressure, so large-v3-turbo re-runs the saved audio.wav,
+reusing the speakers and segmentation already produced in class and only swapping the text for a more accurate version.
 
-一小时的课大约要跑 1.5-2 小时（RTF 1.86），建议睡前挂着。
+An hour-long class takes about 1.5-2 hours (RTF 1.86); best left running overnight.
 
-用法：
-    python retranscribe.py                     # 处理最新一节课
-    python retranscribe.py "..\records\2026-07-27_1405_高等数学"
-    python retranscribe.py --model medium      # 想更准还可以用 medium
+Usage:
+    python retranscribe.py                     # process the latest class
+    python retranscribe.py \"..\\records\\2026-07-27_1405_Advanced-Math\"
+    python retranscribe.py --model medium      # use medium for even better accuracy
 """
 import argparse
 import json

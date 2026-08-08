@@ -4,7 +4,7 @@ import { useSessions } from '@/hooks/useRecords';
 import { apiFetch, getServerUrl, getToken } from '@/lib/api';
 import BackButton from '@/components/feature/BackButton';
 
-// ── 类型(对齐后端 /api/course/* 返回) ──
+// ── Types (aligned with backend /api/course/* responses) ──
 interface CourseSummary {
   summary: string;
   key_points: string[];
@@ -60,13 +60,13 @@ const PIE = ['#f87171', '#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '
 const baseName = (t: string) =>
   (t || '').replace(/\s*第\s*\d+\s*[课讲节]\s*$/, '').replace(/\s*[（(]\s*\d+\s*[）)]\s*$/, '').trim();
 
-// 后端 /api/audio/{sid} 直接回传原始 audio.wav,跨源 <audio> 只能用 token 查询参数。
+// Backend /api/audio/{sid} returns the raw audio.wav directly; cross-origin <audio> can only use a token query param.
 const audioUrl = (sid: string) =>
   `${getServerUrl()}/api/audio/${encodeURIComponent(sid)}?token=${encodeURIComponent(getToken())}`;
 const audioDownloadUrl = (sid: string, filename: string) =>
   `${audioUrl(sid)}&download=${encodeURIComponent(filename)}`;
 
-// 考点名和总结模块的相关度:共有的汉字个数
+// Relevance between an exam-point name and a summary section: count of shared Chinese characters
 function overlapScore(a: string, b: string): number {
   const isCJK = (c: string) => /[一-鿿]/.test(c);
   const sa = new Set(Array.from(a || '').filter(isCJK));
@@ -75,7 +75,7 @@ function overlapScore(a: string, b: string): number {
   return n;
 }
 
-/* ---- SVG 饼图(切片上带考点名 + 百分比)---- */
+/* ---- SVG pie chart (slices labeled with exam-point name + percentage) ---- */
 function Pie({ values, labels, selected, onSelect }: { values: number[]; labels: string[]; selected: number; onSelect: (i: number) => void }) {
   const total = values.reduce((s, v) => s + Math.max(0, v), 0) || 1;
   const cx = 100, cy = 100, r = 92;
@@ -188,7 +188,7 @@ export default function CourseDetailPage() {
 
   useEffect(() => { void loadTab(tab); /* eslint-disable-next-line */ }, [tab, name]);
 
-  // 从考点详情点"查看总结相关模块":切到总结页 → 加载好 → 定位并高亮最相关的章节
+  // From exam-point detail, clicking "查看总结相关模块": switch to summary tab → load → locate and highlight the most relevant section
   useEffect(() => {
     if (tab !== 'summary' || !jumpTarget) return;
     if (jumpTarget === handledJumpRef.current) return;
@@ -207,7 +207,7 @@ export default function CourseDetailPage() {
     return () => clearTimeout(clr);
   }, [tab, jumpTarget, summary, loadTab]);
 
-  // 没录音时的"纯AI一键生成"占位
+  // Placeholder for the "纯AI一键生成" (pure-AI one-click) option when there is no recording
   const NoTranscriptAI = ({ kind, onGen }: { kind: string; onGen: () => void }) => (
     <div className="flex flex-col items-center justify-center py-14 text-center">
       <div className="w-16 h-16 flex items-center justify-center bg-accent-100 rounded-2xl mb-4">
@@ -230,7 +230,7 @@ export default function CourseDetailPage() {
 
   return (
     <div className="min-h-full bg-background-50">
-      {/* 顶栏 */}
+      {/* Top bar */}
       <div className="sticky top-0 z-30 bg-background-50 border-b border-background-200 px-5 pt-4 pb-3">
         <BackButton />
         <div className="flex items-start justify-between gap-3">
@@ -249,7 +249,7 @@ export default function CourseDetailPage() {
           )}
         </div>
 
-        {/* Tabs(横向可滚动) */}
+        {/* Tabs (horizontally scrollable) */}
         <div className="flex items-center gap-1 mt-3 overflow-x-auto no-scrollbar -mx-1 px-1">
           {TABS.map((t) => (
             <button
@@ -272,7 +272,7 @@ export default function CourseDetailPage() {
           </div>
         )}
 
-        {/* ===== 课程总结 ===== */}
+        {/* ===== Course summary ===== */}
         {tab === 'summary' && summary?.no_transcript && !loading && (
           <NoTranscriptAI kind="课程总结" onGen={() => void loadTab('summary', { aiOnly: true })} />
         )}
@@ -309,7 +309,7 @@ export default function CourseDetailPage() {
           </div>
         ))}
 
-        {/* ===== 录音集合 ===== */}
+        {/* ===== Recordings ===== */}
         {tab === 'audio' && (
           courseSessions.length === 0 ? (
             <p className="text-sm text-foreground-400 py-14 text-center">这门课还没有录音。</p>
@@ -341,7 +341,7 @@ export default function CourseDetailPage() {
           )
         )}
 
-        {/* ===== 考点推测(饼图)===== */}
+        {/* ===== Exam-point prediction (pie chart) ===== */}
         {tab === 'exam' && exam?.no_transcript && !loading && (
           <NoTranscriptAI kind="考点" onGen={() => void loadTab('exam', { aiOnly: true })} />
         )}
@@ -406,7 +406,7 @@ export default function CourseDetailPage() {
           </div>
         ))}
 
-        {/* ===== 模拟试卷 ===== */}
+        {/* ===== Mock exam ===== */}
         {tab === 'mock' && mock?.no_transcript && !loading && (
           <NoTranscriptAI kind="模拟试卷" onGen={() => void loadTab('mock', { aiOnly: true })} />
         )}

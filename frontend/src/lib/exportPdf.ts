@@ -1,10 +1,11 @@
 /**
- * 导出 PDF —— 直接生成 .pdf 文件下载(不弹打印对话框)。
+ * Export PDF —— directly generates a .pdf file for download (no print dialog).
  *
- * 做法:把内容渲染到一个离屏 div,用 html2canvas 截成图,再用 jsPDF 按 A4 分页拼成
- * PDF 并 save() 下载。中文用系统字体渲染成图,显示正常,无需内嵌几 MB 的中文字体。
- * 代价:PDF 里的文字是图片、不可选中;换来的是"一键下载"、跨平台一致。
- * (jspdf / html2canvas 动态导入,单独打包,不拖累主包体积。)
+ * How: render the content into an offscreen div, capture it as an image with html2canvas, then
+ * assemble an A4-paginated PDF with jsPDF and save() to download. Chinese is rendered to an image via
+ * system fonts, displays fine, and needs no embedded multi-MB Chinese font.
+ * Trade-off: text in the PDF is an image and not selectable; in return you get "one-click download" and cross-platform consistency.
+ * (jspdf / html2canvas are dynamically imported and bundled separately, so they don't bloat the main bundle.)
  */
 
 export interface PdfLine {
@@ -60,9 +61,9 @@ const PDF_STYLE = `<style>
     .pdfroot .divider { border-top:1px solid #e5e7eb; margin:32px 0 8px; }
   </style>`;
 
-/** 一节课的正文(不含 style / pdfroot 外壳),供单个/批量拼装。 */
+/** Body of a single class (without the style / pdfroot wrapper), for single/batch assembly. */
 function docBody(doc: PdfDoc): string {
-  // html2canvas 对行内背景按 line-height 铺,所以高亮用 inline-block + 紧凑行高贴住文字。
+  // html2canvas fills inline backgrounds by line-height, so highlights use inline-block + tight line-height to hug the text.
   const kindStyle: Record<string, string> = {
     key: 'display:inline-block;line-height:1.2;padding:0 2px;border-radius:2px;background:#fef08a;',
     define: 'display:inline-block;line-height:1.2;padding:0 2px;border-radius:2px;background:#bbf7d0;',
@@ -75,7 +76,7 @@ function docBody(doc: PdfDoc): string {
         `<span class="txt" style="${kindStyle[l.kind ?? ''] ?? ''}">${esc(l.text)}</span></div>`
     )
     .join('');
-  // 去重(有时 AI 会给出重复的知识点),再用朴素「N.」编号
+  // Deduplicate (the AI sometimes returns repeated points), then number plainly with "N."
   const seenKp = new Set<string>();
   const points = (doc.keyPoints ?? [])
     .map((p) => (p ?? '').trim())
@@ -105,18 +106,18 @@ function contentHtml(doc: PdfDoc): string {
   return `${PDF_STYLE}<div class="pdfroot">${docBody(doc)}<div class="foot">由「课堂实时字幕」自动生成</div></div>`;
 }
 
-/** 批量:每节课各出一个 PDF,打包成 zip 下载(不再拼成一个)。 */
+/** Batch: one PDF per class, packaged into a zip for download (no longer merged into one). */
 export async function exportPdfBatch(docs: PdfDoc[], title = '批量导出'): Promise<void> {
   if (!docs.length) return;
-  if (docs.length === 1) return exportPdf(docs[0]);   // 只有一节就直接下 PDF,不打包
+  if (docs.length === 1) return exportPdf(docs[0]);   // Just one class: download the PDF directly, no zip
   const [{ default: JSZip }, { makeSessionPdf }] = await Promise.all([import('jszip'), import('./vectorPdf')]);
   const zip = new JSZip();
   const used = new Set<string>();
   for (const doc of docs) {
-    const bytes = await makeSessionPdf(doc);   // 矢量 PDF
+    const bytes = await makeSessionPdf(doc);   // Vector PDF
     const base = (doc.title || '课程').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || '课程';
     let name = base, k = 2;
-    while (used.has(name)) name = `${base}(${k++})`;   // 防重名
+    while (used.has(name)) name = `${base}(${k++})`;   // Avoid name collisions
     used.add(name);
     zip.file(`${name}.pdf`, bytes);
   }
@@ -129,18 +130,18 @@ export async function exportPdfBatch(docs: PdfDoc[], title = '批量导出'): Pr
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // 延迟撤销:点击后马上撤销会让部分浏览器(尤其 Safari)取消下载
+  // Delayed revoke: revoking immediately after the click makes some browsers (especially Safari) cancel the download
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/** 核心:把一段(含内联样式的)HTML 在隔离 iframe 里渲染成 jsPDF 对象(多页 A4)。
- * 短文档整张 scale 3 高清;超长文档逐页高清渲染(每页只截一页高的内容),都清晰、都不越界。 */
+/** Core: render a piece of (inline-styled) HTML into a jsPDF object inside an isolated iframe (multi-page A4).
+ * Short docs render as one image at scale 3; very long docs render page by page at high resolution (each capture is one page tall), all crisp and none clipped. */
 async function buildPdf(innerHtml: string) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import('html2canvas'),
     import('jspdf'),
   ]);
-  // 隔离 iframe:里面不加载应用的 Tailwind,避免 oklch() 让 html2canvas 崩。
+  // Isolated iframe: doesn't load the app's Tailwind, avoiding oklch() crashing html2canvas.
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;left:-99999px;top:0;width:794px;height:10px;border:0';
   document.body.appendChild(iframe);
@@ -154,26 +155,26 @@ async function buildPdf(innerHtml: string) {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
 
     const contentH = idoc.body.scrollHeight || 1000;
-    // 整张渲染:短文档 scale 3 清晰;内容越高 scale 越低,把 canvas 钳在浏览器上限内(避免空白/卡死)。
+    // Whole-image render: short docs are crisp at scale 3; the taller the content the lower the scale, clamping the canvas within the browser's limit (avoids blanks/hangs).
     const render = (cap: number) => {
       const scale = Math.min(3, cap / contentH);
       return html2canvas(idoc.body, { scale, backgroundColor: '#ffffff', useCORS: true, width: 794, windowWidth: 794 });
     };
-    let canvas = await render(16000);          // 先尽量清晰
-    if (!canvas.height) canvas = await render(8000);   // 超浏览器画布上限就降级重试,别卡死
+    let canvas = await render(16000);          // Aim for the crispest first
+    if (!canvas.height) canvas = await render(8000);   // Over the browser canvas limit: retry at lower quality instead of hanging
     if (!canvas.height) throw new Error('渲染失败,内容可能过大——请少选几节');
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 10;
     const imgW = pageW - margin * 2;
-    const usableH = pageH - margin * 2;                 // 每页内容毫米高
+    const usableH = pageH - margin * 2;                 // Content height per page, in mm
     const cw = canvas.width;
-    const usedScale = cw / 794;                         // 实际用的缩放
+    const usedScale = cw / 794;                         // The scale actually used
     const pxPerMmCss = 794 / imgW;                      // CSS px / mm
-    const pageMaxCss = usableH * pxPerMmCss;            // 一页最多放多少 CSS px 高
+    const pageMaxCss = usableH * pxPerMmCss;            // Max CSS px height that fits on one page
 
-    // 收集"安全断点"(各块元素底边,CSS px)——只在句子/块之间断页,不切断句子。
+    // Collect "safe break points" (bottom edge of each block element, CSS px) — only break pages between sentences/blocks, never mid-sentence.
     const bt = idoc.body.getBoundingClientRect().top;
     const pts = new Set<number>([0, contentH]);
     idoc.body.querySelectorAll('.cover, h2, .summary, .kp, .corr, .ci, .ln, .foot, .divider').forEach((el) => {
@@ -186,7 +187,7 @@ async function buildPdf(innerHtml: string) {
     let yCss = 0, first = true;
     while (yCss < contentH - 1) {
       const limit = yCss + pageMaxCss;
-      // 这一页放到 (yCss, limit] 内最靠后的断点;某个块比一页还高时才硬切在 limit。
+      // Place this page at the last break point within (yCss, limit]; only hard-cut at limit when a block is taller than a page.
       let end = 0;
       for (const p of breaks) { if (p > yCss + 4 && p <= limit) end = p; }
       if (!end) end = Math.min(limit, contentH);
@@ -212,13 +213,13 @@ async function buildPdf(innerHtml: string) {
   }
 }
 
-/** 渲染并下载 PDF。 */
+/** Render and download the PDF. */
 export async function renderPdf(title: string, innerHtml: string): Promise<void> {
   const pdf = await buildPdf(innerHtml);
   pdf.save(`${(title || '文档').replace(/[\\/:*?"<>|]/g, '_')}.pdf`);
 }
 
-/** 渲染成 PDF Blob(用于页面内嵌预览,不下载)。 */
+/** Render to a PDF Blob (for inline in-page preview, no download). */
 export async function buildPdfBlob(innerHtml: string): Promise<Blob> {
   const pdf = await buildPdf(innerHtml);
   return pdf.output('blob') as Blob;
@@ -226,7 +227,7 @@ export async function buildPdfBlob(innerHtml: string): Promise<Blob> {
 
 export async function exportPdf(doc: PdfDoc): Promise<void> {
   const { makeSessionPdf } = await import('./vectorPdf');
-  const bytes = await makeSessionPdf(doc);   // 矢量 PDF(清晰、可选中)
+  const bytes = await makeSessionPdf(doc);   // Vector PDF (crisp, selectable)
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
   const a = document.createElement('a');
   a.href = url;

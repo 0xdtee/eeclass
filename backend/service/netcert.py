@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""给局域网访问用的自签证书。
+"""Self-signed certificate for LAN access.
 
-为什么非要 HTTPS：**浏览器只在安全上下文里给麦克风权限**。手机上用
-http://192.168.x.x 打开页面，getUserMedia 直接不可用，连弹窗都不会有。
+Why HTTPS is required: **browsers only grant microphone permission in a secure context**. Opening the page on a phone via
+http://192.168.x.x makes getUserMedia flat-out unavailable—you don't even get a prompt.
 
-而原来那张 office-addin 开发证书只签了 localhost，手机访问内网 IP 会域名不匹配。
-所以这里自己签一张，SAN 里带上 localhost、127.0.0.1 和本机所有内网 IPv4。
-本机 IP 变了（换 WiFi、插网线）会自动重签。
+And the original office-addin dev certificate was only signed for localhost, so accessing the LAN IP from a phone causes a hostname mismatch.
+So here we sign our own, with the SAN listing localhost, 127.0.0.1, and all of this machine's LAN IPv4 addresses.
+It re-signs automatically when the machine's IP changes (switching WiFi, plugging in Ethernet).
 """
 import datetime
 import ipaddress
@@ -20,14 +20,14 @@ SANS_FILE = os.path.join(CERT_DIR, "sans.txt")
 
 
 def lan_ips():
-    """本机的内网 IPv4。"""
+    """This machine's LAN IPv4 addresses."""
     ips = set()
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             ips.add(info[4][0])
     except Exception:
         pass
-    # 上面在某些网络下拿不全，再用一次「连出去看看用的哪张网卡」
+    # the above misses some on certain networks, so use the "dial out and see which interface it uses" trick once more
     for probe in ("10.255.255.255", "192.168.1.1", "8.8.8.8"):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -46,7 +46,7 @@ def _sans_signature(ips):
 
 
 def ensure_cert():
-    """返回 (crt, key, ips)。IP 变了会重签。"""
+    """Returns (crt, key, ips). Re-signs when the IP changes."""
     ips = lan_ips()
     sig = _sans_signature(ips)
     if os.path.exists(CRT) and os.path.exists(KEY) and os.path.exists(SANS_FILE):
