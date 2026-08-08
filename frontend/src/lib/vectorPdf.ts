@@ -1,18 +1,24 @@
 /**
- * 矢量 PDF:pdf-lib + 内嵌中文字体(HarmonyOS Sans SC Medium,已裁到 GB2312 ≈1.8MB)。
- * 文字锐利、可选中/搜索,任意长度都清晰,分页在行之间(不切断句子)。
+ * Vector PDF: pdf-lib + an embedded CJK font (HarmonyOS Sans SC Medium).
+ * Text is crisp, selectable and searchable at any length; page breaks fall
+ * between lines so sentences are never cut in half.
  *
- * 注意:这里用 subset:false 整份嵌入字体,不用 pdf-lib 的 subset:true。
- * 因为 pdf-lib(@pdf-lib/fontkit)的子集器对本字体有 bug,会把大部分字形嵌成空白,
- * 只嵌完整字体才能正确出字。字体本身已裁到 GB2312,pdf-lib 会再做 Flate 压缩(≈1.27MB/份)。
+ * We ship the full (un-resubsetted) font and let pdf-lib subset it (subset:true).
+ * Two pdf-lib bugs forced this combination:
+ *   - subset:true on a font we pre-subset with fontTools/hb-subset renders most
+ *     glyphs blank (its fontkit subsetter mishandles re-subsetted glyf tables).
+ *   - subset:false emits wrong CID widths for some narrow glyphs (e.g. the colon
+ *     renders full-width), which pushed the speaker name on top of the timestamp.
+ * Only "pristine font + subset:true" renders both glyphs and widths correctly.
+ * pdf-lib embeds just the used glyphs, so each output PDF stays tiny.
  */
 import { PDFDocument, PDFFont, PDFPage, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import type { PdfDoc } from './exportPdf';
 
 const A4 = { w: 595.28, h: 841.89 };   // pt
-const M = 42;                           // 页边距
-const CW = A4.w - M * 2;                // 内容宽
+const M = 42;                           // page margin
+const CW = A4.w - M * 2;                // content width
 const INDIGO = rgb(0.31, 0.27, 0.9);
 const GRAY = rgb(0.6, 0.62, 0.66);
 const DARK = rgb(0.11, 0.13, 0.16);
@@ -23,7 +29,7 @@ const RULE = rgb(0.9, 0.9, 0.92);
 let fontBytesCache: ArrayBuffer | null = null;
 async function loadFontBytes(): Promise<ArrayBuffer> {
   if (fontBytesCache) return fontBytesCache;
-  const base = import.meta.env.BASE_URL.replace(/\/+$/, '');   // 去掉结尾斜杠,自己补一个,避免 /appcjk.ttf
+  const base = import.meta.env.BASE_URL.replace(/\/+$/, '');   // strip trailing slash, add our own, so we never build /appcjk.ttf
   const r = await fetch(`${base}/cjk.ttf`);
   if (!r.ok) throw new Error('字体加载失败');
   fontBytesCache = await r.arrayBuffer();
@@ -38,7 +44,8 @@ const parseCorr = (c: string): [string, string] | null => {
   return a && b && a !== b ? [a, b] : null;
 };
 
-// 去掉字体里多半没有字形的字符(emoji/杂符/变体选择符),箭头转成 ->,避免 pdf-lib 报缺字形。
+// Drop characters the font likely has no glyph for (emoji / misc symbols / variation
+// selectors); convert arrows to "->". Avoids pdf-lib throwing on a missing glyph.
 function safe(s: string): string {
   return String(s ?? '')
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{2190}-\u{21FF}]/gu, (m) => (m === '→' ? '->' : ''))
@@ -55,7 +62,7 @@ function need(ctx: Ctx, h: number) {
   if (ctx.y - h < M) addPage(ctx);
 }
 
-// 按宽度把文本折行(中文按字符断行);\n 作为强制换行
+// Wrap text to a max width (CJK breaks per character); "\n" is a hard line break.
 function wrap(font: PDFFont, text: string, size: number, maxW: number): string[] {
   const out: string[] = [];
   for (const para of safe(text).split('\n')) {
@@ -74,7 +81,7 @@ function wrap(font: PDFFont, text: string, size: number, maxW: number): string[]
   return out;
 }
 
-// 画一段(可折行、可跨页)文字;x 是相对左边距的缩进
+// Draw a paragraph (wraps, may span pages); x is the indent relative to the left margin.
 function para(ctx: Ctx, text: string, size: number, color = DARK, indent = 0, gapAfter = 0) {
   const x = M + indent;
   const maxW = CW - indent;
@@ -91,14 +98,14 @@ function h2(ctx: Ctx, title: string) {
   ctx.y -= 14;
   need(ctx, 26);
   ctx.y -= 15;
-  // 小色条
+  // small color bar
   ctx.page.drawRectangle({ x: M, y: ctx.y - 1, width: 3, height: 13, color: INDIGO });
   ctx.page.drawText(safe(title), { x: M + 9, y: ctx.y, size: 12.5, font: ctx.font, color: INDIGO });
   ctx.y -= 6;
 }
 
 function renderDoc(ctx: Ctx, doc: PdfDoc) {
-  // 封面
+  // cover
   need(ctx, 40);
   ctx.y -= 22;
   ctx.page.drawText(safe(doc.title || '课程'), { x: M, y: ctx.y, size: 19, font: ctx.font, color: rgb(0.07, 0.09, 0.15) });
@@ -118,7 +125,7 @@ function renderDoc(ctx: Ctx, doc: PdfDoc) {
   if (lines.length) {
     h2(ctx, '课堂转写全文');
     for (const l of lines) {
-      // 元行:时间戳(灰)+ 说话人(靛蓝)
+      // meta row: timestamp (gray) + speaker (indigo)
       need(ctx, 12);
       ctx.y -= 12;
       const ts = safe(l.ts || '');
@@ -126,21 +133,21 @@ function renderDoc(ctx: Ctx, doc: PdfDoc) {
       const tsW = ctx.font.widthOfTextAtSize(ts + '  ', 8.5);
       if (l.speaker) ctx.page.drawText(safe(l.speaker), { x: M + tsW, y: ctx.y, size: 8.5, font: ctx.font, color: INDIGO });
       ctx.y -= 2;
-      // 正文(缩进折行)
+      // body (indented, wraps)
       para(ctx, l.text || '', 10.5, DARK, 12, 4);
     }
   }
 
-  // 页脚(当前页底部)
+  // footer (bottom of the current page)
   ctx.page.drawText('由「课堂实时字幕」生成', { x: M, y: M - 18, size: 8, font: ctx.font, color: GRAY });
 }
 
-/** 生成一节课的矢量 PDF 字节。 */
+/** Build the vector PDF bytes for one session. */
 export async function makeSessionPdf(doc: PdfDoc): Promise<Uint8Array> {
   const bytes = await loadFontBytes();
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(bytes, { subset: false });  // 整份嵌入:pdf-lib 子集器对本字体会出空字
+  const font = await pdf.embedFont(bytes, { subset: true });   // subset:true on the pristine font: correct glyphs + widths, tiny output
   const ctx: Ctx = { pdf, page: pdf.addPage([A4.w, A4.h]), y: A4.h - M, font };
   renderDoc(ctx, doc);
   return pdf.save();
