@@ -481,6 +481,7 @@ export const EN: Record<string, string> = {
   "方言": "Dialect",
   "无需复杂配置，注册即用，让技术真正为教学服务。": "No complex setup — sign up and go, putting technology truly at the service of teaching.",
   "日": "Sun",
+  "日@@view": "Day",
   "日期": "Date",
   "易错": "Common Mistakes",
   "星期{w}": "{w}",

@@ -288,7 +288,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                       : 'text-foreground-400 hover:text-foreground-600'
                   }`}
                 >
-                  {mode === 'year' ? t('年') : mode === 'month' ? t('月') : mode === 'week' ? t('周') : t('日')}
+                  {mode === 'year' ? t('年') : mode === 'month' ? t('月') : mode === 'week' ? t('周') : t('日', undefined, 'view')}
                 </button>
               ))}
             </div>

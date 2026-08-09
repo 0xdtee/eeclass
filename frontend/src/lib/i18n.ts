@@ -75,10 +75,16 @@ function interpolate(str: string, vars?: Record<string, string | number>): strin
   return str.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
 
-/** Translate a Simplified-Chinese UI string to the current language. */
-export function t(zh: string, vars?: Record<string, string | number>): string {
+/**
+ * Translate a Simplified-Chinese UI string to the current language.
+ * `ctx` disambiguates homographs that share one Simplified source but need different English (e.g. the
+ * calendar "日" is "Sun" as a weekday header but "Day" as a view toggle -> t('日', undefined, 'view')).
+ * The Chinese output ignores ctx; only the English lookup uses the `zh@@ctx` key (falling back to `zh`).
+ */
+export function t(zh: string, vars?: Record<string, string | number>, ctx?: string): string {
   if (lang === 'en') {
-    return interpolate(EN[zh] ?? zh, vars);
+    const key = ctx ? `${zh}@@${ctx}` : zh;
+    return interpolate(EN[key] ?? EN[zh] ?? zh, vars);
   }
   if (lang === 'zh-Hant' && s2t) {
     return interpolate(s2t(zh), vars);
