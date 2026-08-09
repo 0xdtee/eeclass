@@ -21,7 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useTagsStore } from '@/hooks/useTagsStore';
 import type { Tag } from '@/hooks/useTagsStore';
-import { sessions } from '@/mocks/courseData';
+import { useRecords } from '@/hooks/useRecords';
 
 /* ───────── color config ───────── */
 const COLOR_OPTIONS = [
@@ -32,10 +32,6 @@ const COLOR_OPTIONS = [
 
 function getColorConfig(color: string) {
   return COLOR_OPTIONS.find((c) => c.value === color) ?? COLOR_OPTIONS[0];
-}
-
-function getSessionCount(tagId: string): number {
-  return sessions.filter((s) => s.tags.includes(tagId)).length;
 }
 
 /* ───────── types ───────── */
@@ -262,6 +258,9 @@ function TagRowContent({
 /* ───────── Main Page ───────── */
 export default function TagsPage() {
   const { tags, addTag, updateTag, deleteTag, reorderTag, reorderAll } = useTagsStore();
+  const { sessions } = useRecords();   // real recordings; each carries its tag names in s.tags
+  // A tag's lesson count = number of real recordings tagged with this tag's name (tags are stored by label, not id)
+  const countFor = (label: string) => sessions.filter((s) => (s.tags ?? []).includes(label)).length;
 
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -461,7 +460,7 @@ export default function TagsPage() {
                     isEditing={editing?.id === tag.id}
                     editingState={editing}
                     isDeleteConfirm={deleteConfirm === tag.id}
-                    sessionCount={getSessionCount(tag.id)}
+                    sessionCount={countFor(tag.label)}
                     editInputRef={editInputRef}
                     onStartEdit={handleStartEdit}
                     onSaveEdit={handleSaveEdit}
@@ -489,7 +488,7 @@ export default function TagsPage() {
                       isEditing={false}
                       editingState={null}
                       isDeleteConfirm={false}
-                      sessionCount={getSessionCount(activeTag.id)}
+                      sessionCount={countFor(activeTag.label)}
                       editInputRef={editInputRef}
                       onStartEdit={() => {}}
                       onSaveEdit={() => {}}
