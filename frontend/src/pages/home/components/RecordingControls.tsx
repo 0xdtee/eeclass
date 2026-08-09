@@ -334,9 +334,9 @@ export default function RecordingControls({
             </div>
 
             <div className="relative inline-flex">
-              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu')} className={selCls} title={isAdmin ? '普通话/英语·上海话=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别' : '普通话/英语=云端普通话/英语识别;上海话=云端吴语识别,自动转普通话'}>
+              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu')} className={selCls} title={isAdmin ? '普通话/英语·方言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别' : '普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话'}>
                 <option value="aliyun">普通话/英语</option>
-                <option value="aliyun_wu">上海话</option>
+                <option value="aliyun_wu">方言</option>
                 {isAdmin && (
                   <>
                     <option value="sensevoice">🎯 SenseVoice</option>
