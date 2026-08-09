@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/base/Modal';
 import { audioUrl, audioDownloadUrl } from '@/hooks/useLibrary';
 import AudioPlayer from '@/components/feature/AudioPlayer';
+import { useT } from '@/lib/i18n';
 
 interface SessionItem {
   id: string;
@@ -20,6 +21,7 @@ interface AudioListModalProps {
 }
 
 export default function AudioListModal({ isOpen, onClose, sessions }: AudioListModalProps) {
+  const t = useT();
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
   const filtered = sessions.filter(
@@ -27,7 +29,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="录音回放" width="max-w-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('录音回放')} width="max-w-2xl">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
         {/* Top stats + search */}
         <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
@@ -36,8 +38,8 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
               <i className="ri-mic-line text-primary-600"></i>
             </div>
             <div>
-              <p className="text-xs text-foreground-400">共有录音</p>
-              <p className="text-lg font-bold text-foreground-900">{sessions.length} 段</p>
+              <p className="text-xs text-foreground-400">{t('共有录音')}</p>
+              <p className="text-lg font-bold text-foreground-900">{t('{n} 段', { n: sessions.length })}</p>
             </div>
           </div>
           <div className="relative">
@@ -48,7 +50,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索课程…"
+              placeholder={t('搜索课程…')}
               className="h-8 pl-8 pr-3 w-44 bg-background-100 border border-background-200 rounded-lg text-xs text-foreground-700 placeholder:text-foreground-300 focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-100 transition-all"
             />
           </div>
@@ -56,7 +58,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
 
         <div className="flex items-center gap-2 px-1 mb-3">
           <i className="ri-information-line text-foreground-300 text-xs"></i>
-          <p className="text-[11px] text-foreground-300">点播放条即可听这节课的原始录音;可拖动进度、变速。</p>
+          <p className="text-[11px] text-foreground-300">{t('点播放条即可听这节课的原始录音;可拖动进度、变速。')}</p>
         </div>
 
         {/* Recording list */}
@@ -67,7 +69,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                 <i className="ri-mic-off-line text-foreground-300 text-xl"></i>
               </div>
               <p className="text-sm text-foreground-400">
-                {sessions.length === 0 ? '还没有录音。去录一节课吧。' : '未找到匹配的课程'}
+                {sessions.length === 0 ? t('还没有录音。去录一节课吧。') : t('未找到匹配的课程')}
               </p>
             </div>
           ) : (
@@ -95,19 +97,19 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                     <button
                       onClick={() => { onClose(); navigate('/course?sid=' + encodeURIComponent(s.id)); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap flex-shrink-0"
-                      title="查看这节课的转写全文"
+                      title={t('查看这节课的转写全文')}
                     >
                       <i className="ri-file-text-line"></i>
-                      查看转写
+                      {t('查看转写')}
                     </button>
                     {/* Export recording: download the raw audio.wav directly */}
                     <a
                       href={audioDownloadUrl(s.id, `${(s.title || '录音').replace(/[\\/:*?"<>|]/g, '_')}.wav`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-100 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-200 cursor-pointer whitespace-nowrap flex-shrink-0"
-                      title="下载这节课的原始录音"
+                      title={t('下载这节课的原始录音')}
                     >
                       <i className="ri-download-2-line"></i>
-                      导出录音
+                      {t('导出录音')}
                     </a>
                   </div>
                   {/* Raw recording: custom player, progress bar rendered from the known duration and always draggable; playing one segment auto-stops the others */}

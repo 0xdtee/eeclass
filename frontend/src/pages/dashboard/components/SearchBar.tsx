@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useT } from '@/lib/i18n';
 
 interface SessionData {
   id: string;
@@ -43,6 +44,7 @@ function getHighlightedSnippet(text: string, query: string, maxLen: number = 80)
 }
 
 export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
+  const t = useT();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<SearchMode>('all');
@@ -164,7 +166,7 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
             }}
             className="flex items-center gap-1.5 h-11 px-4 bg-background-100 border border-background-200 border-r-0 rounded-l-xl text-xs font-medium text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap"
           >
-            {currentModeLabel}
+            {t(currentModeLabel)}
             <div className="w-3.5 h-3.5 flex items-center justify-center">
               {showModeDropdown ? (
                 <i className="ri-arrow-up-s-line text-foreground-400"></i>
@@ -191,7 +193,7 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
                       : 'text-foreground-600 hover:bg-background-100'
                   }`}
                 >
-                  {opt.label}
+                  {t(opt.label)}
                 </button>
               ))}
             </div>
@@ -216,7 +218,7 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
               if (query.trim()) setShowResults(true);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={`搜索课时记录 — ${currentModeLabel}`}
+            placeholder={t('搜索课时记录 — {mode}', { mode: t(currentModeLabel) })}
             className="w-full h-11 pl-10 pr-10 bg-background-100 border border-background-200 rounded-r-xl text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all"
           />
           {query && (
@@ -243,15 +245,15 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
               <div className="w-12 h-12 mx-auto flex items-center justify-center bg-background-100 rounded-full mb-3">
                 <i className="ri-search-line text-foreground-300 text-xl"></i>
               </div>
-              <p className="text-sm text-foreground-400">未找到匹配的课时记录</p>
-              <p className="text-xs text-foreground-300 mt-1">试试换个关键词或切换搜索模式</p>
+              <p className="text-sm text-foreground-400">{t('未找到匹配的课时记录')}</p>
+              <p className="text-xs text-foreground-300 mt-1">{t('试试换个关键词或切换搜索模式')}</p>
             </div>
           ) : (
             <>
               <div className="px-5 py-3 border-b border-background-100">
                 <p className="text-xs text-foreground-400">
-                  找到 <span className="font-semibold text-foreground-600">{results.length}</span> 条结果
-                  {results.length >= 20 && <span className="text-foreground-300">（仅显示前20条）</span>}
+                  {t('找到')} <span className="font-semibold text-foreground-600">{results.length}</span> {t('条结果')}
+                  {results.length >= 20 && <span className="text-foreground-300">{t('（仅显示前20条）')}</span>}
                 </p>
               </div>
               <div className="py-1">
@@ -273,7 +275,7 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
                       <div className="flex items-center gap-2 mb-1.5">
                         {snippet.field && (
                           <span className="px-1.5 py-0.5 bg-accent-100 text-accent-700 rounded text-[10px] font-medium whitespace-nowrap">
-                            {snippet.field}
+                            {t(snippet.field)}
                           </span>
                         )}
                         <p className="text-xs text-foreground-500 truncate">{snippet.text}</p>

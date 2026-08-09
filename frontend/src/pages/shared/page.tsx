@@ -8,6 +8,7 @@ import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
 import { fmtDuration } from '@/hooks/useRecords';
 import type { TranscriptLine } from '@/hooks/useRecords';
 import { exportWord } from '@/lib/exportWord';
+import { useT } from '@/lib/i18n';
 
 const KIND_STYLE: Record<string, string> = {
   key: 'bg-[linear-gradient(transparent_20%,#fef08a_20%)] box-decoration-clone px-0.5',
@@ -25,6 +26,7 @@ export default function SharedPage() {
   const { key = '' } = useParams();
   const [data, setData] = useState<Shared | null>(null);
   const [error, setError] = useState('');
+  const t = useT();
 
   useEffect(() => {
     fetch(`${SERVICE_ORIGIN}/api/shared/${encodeURIComponent(key)}`)
@@ -37,7 +39,7 @@ export default function SharedPage() {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [key]);
 
-  const title = data?.meta?.title || data?.sid?.replace(/^\d{4}-\d{2}-\d{2}_\d{4}_?/, '') || '课堂记录';
+  const title = data?.meta?.title || data?.sid?.replace(/^\d{4}-\d{2}-\d{2}_\d{4}_?/, '') || t('课堂记录');
 
   if (error) {
     return (
@@ -46,7 +48,7 @@ export default function SharedPage() {
           <i className="ri-link-unlink text-foreground-300 text-3xl"></i>
           <p className="text-sm text-foreground-600 mt-3">{error}</p>
           <p className="text-xs text-foreground-400 mt-2">
-            链接可能已被停止共享，或者你没和分享者在同一个 WiFi。
+            {t('链接可能已被停止共享，或者你没和分享者在同一个 WiFi。')}
           </p>
         </div>
       </div>
@@ -72,7 +74,7 @@ export default function SharedPage() {
             <div className="min-w-0">
               <h1 className="text-sm font-semibold text-foreground-900 truncate">{title}</h1>
               <p className="text-xs text-foreground-400">
-                {data.lines.length} 句 · {fmtDuration(data.meta?.duration_s)} · 只读共享
+                {data.lines.length} {t('句')} · {fmtDuration(data.meta?.duration_s)} · {t('只读共享')}
               </p>
             </div>
           </div>
@@ -81,16 +83,16 @@ export default function SharedPage() {
               onClick={() =>
                 void exportWord({
                   title,
-                  subtitle: `${data.lines.length} 句 · ${fmtDuration(data.meta?.duration_s)}`,
+                  subtitle: `${data.lines.length} ${t('句')} · ${fmtDuration(data.meta?.duration_s)}`,
                   lines: data.lines.map((l) => ({
                     ts: l.ts, speaker: l.speaker, text: l.text, kind: l.kind,
                   })),
-                }).catch(() => alert('导出 Word 失败,请重试'))
+                }).catch(() => alert(t('导出 Word 失败,请重试')))
               }
               className="flex items-center gap-1.5 px-3 py-2 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap"
             >
               <i className="ri-file-word-2-line"></i>
-              导出 Word
+              {t('导出 Word')}
             </button>
           )}
         </div>
@@ -108,7 +110,7 @@ export default function SharedPage() {
             </div>
           ))}
           {data.lines.length === 0 && (
-            <p className="text-sm text-foreground-400 italic">这节课没有转写内容</p>
+            <p className="text-sm text-foreground-400 italic">{t('这节课没有转写内容')}</p>
           )}
         </div>
       </div>

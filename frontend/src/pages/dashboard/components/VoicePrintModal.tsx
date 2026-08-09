@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import Modal from '@/components/base/Modal';
 import { useRecords, type VoiceCluster } from '@/hooks/useRecords';
 import { audioUrl } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 /** Voice tagging / voiceprint library: lists voices from past recordings (the same person already merged into one entry); preview, then label them;
  *  future recordings of the same voiceprint automatically use that identity. */
 export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const t = useT();
   const records = useRecords();
   const [clusters, setClusters] = useState<VoiceCluster[]>([]);
   const [recognized, setRecognized] = useState<{ name: string; count: number }[]>([]);
@@ -77,23 +79,23 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
   const shortSid = (sid: string) => sid.replace(/^\d{4}-\d{2}-\d{2}_\d{4}_/, '');
 
   return (
-    <Modal isOpen={isOpen} onClose={() => { stopAudio(); onClose(); }} title="语音标记 · 声纹库" width="max-w-lg">
+    <Modal isOpen={isOpen} onClose={() => { stopAudio(); onClose(); }} title={t('语音标记 · 声纹库')} width="max-w-lg">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto">
         <p className="text-xs text-foreground-400 leading-relaxed">
-          从你过去的录音里提取出每个人的声音。试听后给他打个名字,存进声纹库;之后录到<b>相同声纹</b>的人,会自动用这个名字记录。同一个人可能出现在多节课里,<b>标一次即可</b>,其余会自动识别。
+          {t('从你过去的录音里提取出每个人的声音。试听后给他打个名字,存进声纹库;之后录到')}<b>{t('相同声纹')}</b>{t('的人,会自动用这个名字记录。同一个人可能出现在多节课里,')}<b>{t('标一次即可')}</b>{t(',其余会自动识别。')}
         </p>
 
         {/* Voiceprint library */}
         <div>
-          <p className="text-xs font-semibold text-foreground-500 mb-1.5">声纹库({library.length})</p>
+          <p className="text-xs font-semibold text-foreground-500 mb-1.5">{t('声纹库({n})', { n: library.length })}</p>
           {library.length === 0 ? (
-            <p className="text-xs text-foreground-300">还没标记过声音。下面选一个试听、打标签。</p>
+            <p className="text-xs text-foreground-300">{t('还没标记过声音。下面选一个试听、打标签。')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {library.map((v) => (
                 <span key={v.id} className="flex items-center gap-1 pl-2.5 pr-1 py-1 bg-accent-100 text-accent-700 rounded-full text-xs font-medium">
                   <i className="ri-user-voice-line"></i>{v.name}
-                  <button onClick={() => void del(v.id)} disabled={busy === v.id} className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent-200 cursor-pointer" title="从库里删除">
+                  <button onClick={() => void del(v.id)} disabled={busy === v.id} className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent-200 cursor-pointer" title={t('从库里删除')}>
                     <i className="ri-close-line text-[11px]"></i>
                   </button>
                 </span>
@@ -105,7 +107,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10">
             <div className="w-6 h-6 border-2 border-accent-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs text-foreground-400">正在从录音里提取声音…(首次较慢)</p>
+            <p className="text-xs text-foreground-400">{t('正在从录音里提取声音…(首次较慢)')}</p>
           </div>
         ) : err ? (
           <p className="text-xs text-red-600"><i className="ri-error-warning-line mr-1"></i>{err}</p>
@@ -113,9 +115,9 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
           <>
             {/* Pending: the same person already merged into one entry */}
             <div>
-              <p className="text-xs font-semibold text-foreground-500 mb-1.5">待标记的人({clusters.length})</p>
+              <p className="text-xs font-semibold text-foreground-500 mb-1.5">{t('待标记的人({n})', { n: clusters.length })}</p>
               {clusters.length === 0 ? (
-                <p className="text-xs text-foreground-300">没有待标记的声音了。</p>
+                <p className="text-xs text-foreground-300">{t('没有待标记的声音了。')}</p>
               ) : (
                 <div className="space-y-2">
                   {clusters.map((v) => {
@@ -125,21 +127,21 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
                         <button
                           onClick={() => preview(v)}
                           className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full cursor-pointer ${playing === key ? 'bg-accent-500 text-background-50' : 'bg-background-100 text-foreground-600 hover:bg-background-200'}`}
-                          title="试听 5 秒"
+                          title={t('试听 5 秒')}
                         >
                           <i className={playing === key ? 'ri-stop-fill' : 'ri-play-fill'}></i>
                         </button>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-foreground-700 truncate">{v.name || '某人'} · 共 {v.seconds}s</p>
+                          <p className="text-xs text-foreground-700 truncate">{v.name || t('某人')} · {t('共 {s}s', { s: v.seconds })}</p>
                           <p className="text-[11px] text-foreground-400 truncate">
-                            出现在 {v.sessions} 节课 · {v.count} 段
+                            {t('出现在 {sessions} 节课 · {count} 段', { sessions: v.sessions, count: v.count })}
                           </p>
                         </div>
                         <input
                           value={names[key] || ''}
                           onChange={(e) => setNames((n) => ({ ...n, [key]: e.target.value }))}
                           onKeyDown={(e) => { if (e.key === 'Enter') void label(v); }}
-                          placeholder="他是谁?"
+                          placeholder={t('他是谁?')}
                           className="w-24 text-xs px-2.5 py-1.5 rounded-lg border border-background-200 bg-background-100 focus:outline-none focus:border-accent-400"
                         />
                         <button
@@ -147,7 +149,7 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
                           disabled={!(names[key] || '').trim() || busy === key}
                           className="px-3 py-1.5 bg-accent-500 text-background-50 rounded-full text-xs font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                         >
-                          {busy === key ? '…' : '标记'}
+                          {busy === key ? '…' : t('标记')}
                         </button>
                       </div>
                     );
@@ -159,11 +161,11 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
             {/* Identified */}
             {recognized.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-foreground-500 mb-1.5">已识别</p>
+                <p className="text-xs font-semibold text-foreground-500 mb-1.5">{t('已识别')}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {recognized.map((r) => (
                     <span key={r.name} className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs">
-                      <i className="ri-checkbox-circle-line mr-1"></i>{r.name} · {r.count} 段
+                      <i className="ri-checkbox-circle-line mr-1"></i>{r.name} · {t('{n} 段', { n: r.count })}
                     </span>
                   ))}
                 </div>

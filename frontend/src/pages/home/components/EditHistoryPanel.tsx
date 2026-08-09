@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EditRecord } from '@/hooks/useRecords';
+import { useT } from '@/lib/i18n';
 
 interface EditHistoryPanelProps {
   sessionId: string;
@@ -16,6 +17,7 @@ export default function EditHistoryPanel({
   onLoad,
   onRevert,
 }: EditHistoryPanelProps) {
+  const t = useT();
   const [edits, setEdits] = useState<EditRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -52,7 +54,7 @@ export default function EditHistoryPanel({
             <div className="w-7 h-7 flex items-center justify-center">
               <i className="ri-history-line text-foreground-600"></i>
             </div>
-            <h3 className="text-sm font-semibold text-foreground-800">编辑历史</h3>
+            <h3 className="text-sm font-semibold text-foreground-800">{t('编辑历史')}</h3>
             {loading && <i className="ri-loader-4-line animate-spin text-foreground-400"></i>}
           </div>
           <button
@@ -69,9 +71,9 @@ export default function EditHistoryPanel({
           {!error && edits.length === 0 && !loading && (
             <div className="text-center py-12">
               <i className="ri-edit-line text-foreground-300 text-2xl"></i>
-              <p className="text-sm text-foreground-400 mt-3">这节课还没有改动</p>
+              <p className="text-sm text-foreground-400 mt-3">{t('这节课还没有改动')}</p>
               <p className="text-xs text-foreground-300 mt-1">
-                在转写内容里点任意一句就能修改，改动会记在这里
+                {t('在转写内容里点任意一句就能修改，改动会记在这里')}
               </p>
             </div>
           )}
@@ -94,7 +96,7 @@ export default function EditHistoryPanel({
                 className="text-xs text-accent-600 hover:text-accent-700 cursor-pointer"
               >
                 <i className="ri-arrow-go-back-line mr-1"></i>
-                恢复成改之前
+                {t('恢复成改之前')}
               </button>
             </div>
           ))}
@@ -102,7 +104,7 @@ export default function EditHistoryPanel({
 
         <div className="px-5 py-3 border-t border-background-100">
           <p className="text-xs text-foreground-400">
-            原始转写文件永远不会被覆盖，改动单独记录，随时可以回退。
+            {t('原始转写文件永远不会被覆盖，改动单独记录，随时可以回退。')}
           </p>
         </div>
       </div>

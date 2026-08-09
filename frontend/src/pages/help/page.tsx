@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DEMOS, DemoKey, HelpDemoStyles } from './demos';
 import BackButton from '@/components/feature/BackButton';
 import { startGuide } from '@/hooks/useGuide';
+import { useT } from '@/lib/i18n';
 
 type CatId = 'record' | 'ai' | 'manage' | 'account';
 
@@ -329,6 +330,7 @@ const CATEGORIES: Category[] = [
 ];
 
 export default function HelpPage() {
+  const t = useT();
   const navigate = useNavigate();
   // Store the current category in the URL (?cat=), so returning from a feature page restores the category you were viewing instead of resetting to default
   const [sp, setSp] = useSearchParams();
@@ -347,22 +349,22 @@ export default function HelpPage() {
             <i className="ri-arrow-left-line"></i>
           </BackButton>
           <h1 className="text-sm font-semibold text-foreground-900 flex items-center gap-2">
-            <i className="ri-book-2-line"></i>使用说明
+            <i className="ri-book-2-line"></i>{t('使用说明')}
           </h1>
           <button
             onClick={() => navigate('/')}
             className="ml-auto text-xs text-foreground-400 hover:text-foreground-600 flex items-center gap-1 cursor-pointer"
           >
-            <i className="ri-home-4-line"></i>回到控制台
+            <i className="ri-home-4-line"></i>{t('回到控制台')}
           </button>
         </div>
       </nav>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-5">
-          <h2 className="text-2xl font-bold text-foreground-900">功能说明书</h2>
+          <h2 className="text-2xl font-bold text-foreground-900">{t('功能说明书')}</h2>
           <p className="text-sm text-foreground-400 mt-1">
-            每个功能都配有动态演示、详细说明和操作步骤,点「前往使用」直接跳到对应页面。
+            {t('每个功能都配有动态演示、详细说明和操作步骤,点「前往使用」直接跳到对应页面。')}
           </p>
         </div>
 
@@ -380,7 +382,7 @@ export default function HelpPage() {
                 }`}
               >
                 <i className={`${c.icon} text-base`}></i>
-                <span>{c.label}</span>
+                <span>{t(c.label)}</span>
                 <span
                   className={`ml-auto text-xs ${
                     active === c.id ? 'text-background-50/80' : 'text-foreground-300'
@@ -397,9 +399,9 @@ export default function HelpPage() {
             <div className="mb-4">
               <h3 className="text-lg font-bold text-foreground-900 flex items-center gap-2">
                 <i className={`${current.icon} text-accent-500`}></i>
-                {current.label}
+                {t(current.label)}
               </h3>
-              <p className="text-xs text-foreground-400 mt-1">{current.intro}</p>
+              <p className="text-xs text-foreground-400 mt-1">{t(current.intro)}</p>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -416,8 +418,8 @@ export default function HelpPage() {
                         <i className={`${f.icon} text-lg`}></i>
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-foreground-900">{f.name}</h4>
-                        <p className="text-xs text-foreground-400 leading-relaxed mt-1">{f.desc}</p>
+                        <h4 className="text-sm font-semibold text-foreground-900">{t(f.name)}</h4>
+                        <p className="text-xs text-foreground-400 leading-relaxed mt-1">{t(f.desc)}</p>
                       </div>
                     </div>
 
@@ -433,7 +435,7 @@ export default function HelpPage() {
                       <div className="mb-3">
                         <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground-500 mb-2">
                           <i className="ri-list-ordered-2 text-accent-500"></i>
-                          操作步骤
+                          {t('操作步骤')}
                         </div>
                         <ol className="space-y-1.5">
                           {f.steps.map((s, idx) => (
@@ -441,7 +443,7 @@ export default function HelpPage() {
                               <span className="mt-px w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-accent-100 text-accent-600 text-[9px] font-bold">
                                 {idx + 1}
                               </span>
-                              <span className="text-xs text-foreground-600 leading-relaxed">{s}</span>
+                              <span className="text-xs text-foreground-600 leading-relaxed">{t(s)}</span>
                             </li>
                           ))}
                         </ol>
@@ -454,7 +456,7 @@ export default function HelpPage() {
                         onClick={() => { startGuide(f.name, f.steps, f.targets); navigate(f.route); }}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-accent-600 hover:text-accent-700 cursor-pointer"
                       >
-                        {f.cta ?? '前往使用'}
+                        {f.cta ? t(f.cta) : t('前往使用')}
                         <i className="ri-arrow-right-line"></i>
                       </button>
                     </div>

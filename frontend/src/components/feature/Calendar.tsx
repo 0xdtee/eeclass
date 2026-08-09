@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useT } from '@/lib/i18n';
 
 interface SessionRef {
   id: string;
@@ -71,6 +72,7 @@ function getColorClass(color: string, type: 'bg' | 'border' | 'text' | 'dot' | '
 }
 
 export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, onImport, onSyncShu, focusDate }: CalendarProps) {
+  const t = useT();
   const today = new Date();
   const [viewMode, setViewMode] = useState<CalendarView>('week');
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -170,16 +172,16 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   };
 
   const headerLabel = useMemo(() => {
-    if (viewMode === 'year') return `${viewYear}年`;
-    if (viewMode === 'month') return `${viewYear}年 ${MONTHS[viewMonth]}`;
+    if (viewMode === 'year') return t('{y}年', { y: viewYear });
+    if (viewMode === 'month') return t('{y}年 {m}', { y: viewYear, m: t(MONTHS[viewMonth]) });
     if (viewMode === 'week') {
       const a = weekDates[0], b = weekDates[6];
-      return `${a.getMonth() + 1}月${a.getDate()}日 - ${b.getMonth() + 1}月${b.getDate()}日`;
+      return t('{am}月{ad}日 - {bm}月{bd}日', { am: a.getMonth() + 1, ad: a.getDate(), bm: b.getMonth() + 1, bd: b.getDate() });
     }
     const d = new Date(viewYear, viewMonth, viewDay);
     const weekDay = WEEKDAYS[d.getDay()];
-    return `${viewYear}年${viewMonth + 1}月${viewDay}日 星期${weekDay}`;
-  }, [viewMode, viewYear, viewMonth, viewDay, weekDates]);
+    return t('{y}年{m}月{d}日 星期{w}', { y: viewYear, m: viewMonth + 1, d: viewDay, w: t(weekDay) });
+  }, [viewMode, viewYear, viewMonth, viewDay, weekDates, t]);
 
   const viewCount = useMemo(() => {
     if (viewMode === 'year') {
@@ -242,7 +244,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
           <div className="w-8 h-8 flex items-center justify-center">
             <i className="ri-calendar-line text-accent-500 text-lg"></i>
           </div>
-          <h3 className="text-sm font-semibold text-foreground-800">课程日历</h3>
+          <h3 className="text-sm font-semibold text-foreground-800">{t('课程日历')}</h3>
         </div>
 
         <div className="flex items-center gap-3">
@@ -252,7 +254,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
               className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
             >
               <i className="ri-add-line"></i>
-              新建课时
+              {t('新建课时')}
             </button>
             {onImport && (
               <button
@@ -260,7 +262,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap border border-background-200"
               >
                 <i className="ri-file-upload-line"></i>
-                导入文档
+                {t('导入文档')}
               </button>
             )}
             {onSyncShu && (
@@ -269,7 +271,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap border border-background-200"
               >
                 <i className="ri-graduation-cap-line"></i>
-                同步上大课表
+                {t('同步上大课表')}
               </button>
             )}
           </div>
@@ -286,7 +288,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                       : 'text-foreground-400 hover:text-foreground-600'
                   }`}
                 >
-                  {mode === 'year' ? '年' : mode === 'month' ? '月' : mode === 'week' ? '周' : '日'}
+                  {mode === 'year' ? t('年') : mode === 'month' ? t('月') : mode === 'week' ? t('周') : t('日')}
                 </button>
               ))}
             </div>
@@ -296,7 +298,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                 onClick={goToday}
                 className="px-3 py-1.5 text-xs font-medium text-accent-600 hover:bg-accent-50 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
               >
-                今天
+                {t('今天')}
               </button>
               <button
                 onClick={navigatePrev}
@@ -317,7 +319,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 
             {viewCount > 0 && (
               <span className="px-2.5 py-1 bg-accent-50 text-accent-700 text-xs font-semibold rounded-full whitespace-nowrap">
-                {viewCount} 课时
+                {t('{n} 课时', { n: viewCount })}
               </span>
             )}
           </div>
@@ -399,6 +401,7 @@ interface WeekViewProps {
 const WEEK_HEAD = ['一', '二', '三', '四', '五', '六', '日'];
 
 function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onSelectSession, onCreateSession }: WeekViewProps) {
+  const t = useT();
   const cols = weekDates.map((d) => {
     const key = formatDate(d.getFullYear(), d.getMonth(), d.getDate());
     const list = (sessionsByDate[key] ?? []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
@@ -417,7 +420,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
           <div></div>
           {cols.map((c, i) => (
             <div key={c.key} className={`text-center pb-2 ${isToday(c.d) ? '' : ''}`}>
-              <div className="text-xs text-foreground-400">周{WEEK_HEAD[i]}</div>
+              <div className="text-xs text-foreground-400">{t('周{w}', { w: t(WEEK_HEAD[i]) })}</div>
               <div className={`text-sm font-semibold mt-0.5 mx-auto w-7 h-7 flex items-center justify-center rounded-full ${
                 isToday(c.d) ? 'bg-accent-500 text-background-50' : 'text-foreground-700'
               }`}>
@@ -428,13 +431,13 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
         </div>
 
         {times.length === 0 ? (
-          <div className="py-16 text-center text-sm text-foreground-400">这一周还没有课。翻到有课的周,或导入课表。</div>
+          <div className="py-16 text-center text-sm text-foreground-400">{t('这一周还没有课。翻到有课的周,或导入课表。')}</div>
         ) : (
-          times.map((t) => (
-            <div key={t} className="grid border-t border-background-100" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
-              <div className="text-[11px] text-foreground-400 font-mono pt-2 pr-1 text-right">{t}</div>
+          times.map((time) => (
+            <div key={time} className="grid border-t border-background-100" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
+              <div className="text-[11px] text-foreground-400 font-mono pt-2 pr-1 text-right">{time}</div>
               {cols.map((c) => {
-                const cell = c.list.filter((s) => s.time === t);
+                const cell = c.list.filter((s) => s.time === time);
                 return (
                   <div key={c.key} className="min-h-[56px] p-0.5 border-l border-background-100">
                     {cell.map((s) => (
@@ -458,7 +461,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       <button
                         onClick={() => onCreateSession(c.key)}
                         className="w-full h-full min-h-[52px] rounded-md hover:bg-background-100/60 cursor-pointer"
-                        aria-label="新建"
+                        aria-label={t('新建')}
                       />
                     )}
                   </div>
@@ -493,6 +496,7 @@ function YearView({
   tagLabels, tagColorMap, onMonthClick, onDateClick, onCreateSession,
   hoveredDate, setHoveredDate,
 }: YearViewProps) {
+  const t = useT();
   const daysInMonth = (month: number) => {
     if (month === 1 && isLeapYear(viewYear)) return 29;
     return MONTH_DAYS[month];
@@ -521,7 +525,7 @@ function YearView({
               className="text-left bg-background-100/50 rounded-xl p-3 border border-background-100 hover:border-accent-200 hover:bg-background-100 transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-foreground-700">{monthLabel}</span>
+                <span className="text-xs font-semibold text-foreground-700">{t(monthLabel)}</span>
                 {count > 0 && (
                   <span className="px-1.5 py-0.5 bg-accent-100 text-accent-700 text-[10px] font-semibold rounded-full">
                     {count}
@@ -531,7 +535,7 @@ function YearView({
 
               <div className="grid grid-cols-7 gap-px">
                 {['日','一','二','三','四','五','六'].map((w) => (
-                  <span key={w} className="text-center text-[9px] text-foreground-300 leading-4">{w}</span>
+                  <span key={w} className="text-center text-[9px] text-foreground-300 leading-4">{t(w)}</span>
                 ))}
 
                 {Array.from({ length: firstDay }).map((_, i) => (
@@ -587,7 +591,7 @@ function YearView({
             ))}
             {sessionsByDate[hoveredDate].length > 3 && (
               <p className="text-[10px] text-foreground-400 pl-3">
-                还有 {sessionsByDate[hoveredDate].length - 3} 节课...
+                {t('还有 {n} 节课...', { n: sessionsByDate[hoveredDate].length - 3 })}
               </p>
             )}
           </div>
@@ -617,6 +621,7 @@ function MonthView({
   tagColorMap, onDateClick, onCreateSession,
   hoveredDate, setHoveredDate,
 }: MonthViewProps) {
+  const t = useT();
   const daysInMonth = viewMonth === 1 && isLeapYear(viewYear) ? 29 : MONTH_DAYS[viewMonth];
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
 
@@ -634,7 +639,7 @@ function MonthView({
     <div className="p-4">
       <div className="grid grid-cols-7 mb-2">
         {WEEKDAYS.map((wd) => (
-          <div key={wd} className="text-center text-xs font-medium text-foreground-400 py-1.5">{wd}</div>
+          <div key={wd} className="text-center text-xs font-medium text-foreground-400 py-1.5">{t(wd)}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -706,14 +711,14 @@ function MonthView({
                 })}
                 {daySessions.length > 2 && (
                   <span className={`text-[9px] font-medium px-1 ${textClass}`}>
-                    +{daySessions.length - 2} 更多
+                    {t('+{n} 更多', { n: daySessions.length - 2 })}
                   </span>
                 )}
               </div>
 
               {!hasSessions && (
                 <span className="absolute opacity-0 group-hover:opacity-100 text-[10px] text-foreground-300 transition-opacity bottom-1.5 right-1.5">
-                  + 新建
+                  {t('+ 新建')}
                 </span>
               )}
             </button>
@@ -742,6 +747,7 @@ function DayView({
   viewYear, viewMonth, viewDay, today,
   currentSessions, tagLabels, tagColorMap, onSelectSession, onCreateSession,
 }: DayViewProps) {
+  const t = useT();
   const isToday = viewYear === today.getFullYear() && viewMonth === today.getMonth() && viewDay === today.getDate();
   const weekDay = WEEKDAYS[new Date(viewYear, viewMonth, viewDay).getDay()];
 
@@ -783,10 +789,10 @@ function DayView({
       <div className="flex items-center justify-between mb-5">
         <div>
           <h4 className="text-base font-bold text-foreground-800">
-            {viewYear}年{viewMonth + 1}月{viewDay}日 <span className="text-sm font-normal text-foreground-400">星期{weekDay}</span>
+            {t('{y}年{m}月{d}日', { y: viewYear, m: viewMonth + 1, d: viewDay })} <span className="text-sm font-normal text-foreground-400">{t('星期{w}', { w: t(weekDay) })}</span>
           </h4>
           {isToday && (
-            <span className="inline-block mt-1 px-2 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-semibold rounded-full">今天</span>
+            <span className="inline-block mt-1 px-2 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-semibold rounded-full">{t('今天')}</span>
           )}
         </div>
         <button
@@ -794,7 +800,7 @@ function DayView({
           className="flex items-center gap-1.5 px-4 py-2 bg-accent-500 text-background-50 rounded-xl text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
         >
           <i className="ri-add-line"></i>
-          新建课时
+          {t('新建课时')}
         </button>
       </div>
 
@@ -803,12 +809,12 @@ function DayView({
           <div className="w-16 h-16 mx-auto flex items-center justify-center bg-background-100 rounded-2xl mb-3">
             <i className="ri-calendar-check-line text-foreground-300 text-2xl"></i>
           </div>
-          <p className="text-sm text-foreground-400 mb-3">当天暂无课程记录</p>
+          <p className="text-sm text-foreground-400 mb-3">{t('当天暂无课程记录')}</p>
           <button
             onClick={onCreateSession}
             className="px-4 py-2 bg-accent-500 text-background-50 rounded-xl text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
           >
-            创建课时
+            {t('创建课时')}
           </button>
         </div>
       ) : (
@@ -817,7 +823,7 @@ function DayView({
             <div key={slot.range}>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 rounded-full bg-accent-400 flex-shrink-0"></div>
-                <span className="text-xs font-medium text-foreground-400">{slot.label}</span>
+                <span className="text-xs font-medium text-foreground-400">{t(slot.label)}</span>
               </div>
               <div className="space-y-3 pl-4">
                 {slot.sessions.map((session) => {
@@ -847,7 +853,7 @@ function DayView({
                               <span className="text-xs text-foreground-400">{session.duration}</span>
                               <div className="flex items-center gap-1">
                                 <div className={`w-1 h-1 rounded-full ${dotClass}`}></div>
-                                <span className="text-xs text-foreground-400">{session.keyPoints?.length ?? 0} 个重点</span>
+                                <span className="text-xs text-foreground-400">{t('{n} 个重点', { n: session.keyPoints?.length ?? 0 })}</span>
                               </div>
                             </div>
 
@@ -871,7 +877,7 @@ function DayView({
                                 <div className="w-4 h-4 flex items-center justify-center">
                                   <i className="ri-magic-line text-[10px]"></i>
                                 </div>
-                                AI摘要
+                                {t('AI摘要')}
                               </p>
                               <p className="text-xs leading-relaxed text-foreground-600 line-clamp-4">
                                 {session.summary}
@@ -905,7 +911,7 @@ function DayView({
 
           {emptySlots.length > 0 && (
             <div className="pt-2 border-t border-background-100">
-              <p className="text-xs text-foreground-300 mb-2">空闲时段</p>
+              <p className="text-xs text-foreground-300 mb-2">{t('空闲时段')}</p>
               <div className="flex flex-wrap gap-2">
                 {emptySlots.slice(0, 4).map((slot) => (
                   <button
@@ -913,7 +919,7 @@ function DayView({
                     onClick={onCreateSession}
                     className="px-3 py-1.5 bg-background-100 rounded-lg text-xs text-foreground-400 hover:bg-accent-50 hover:text-accent-600 transition-colors cursor-pointer whitespace-nowrap"
                   >
-                    {slot.label}
+                    {t(slot.label)}
                   </button>
                 ))}
               </div>

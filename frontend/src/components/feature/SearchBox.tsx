@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SearchHit } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 interface SearchBoxProps {
   onSearch: (q: string) => Promise<{ results: SearchHit[]; total: number }>;
@@ -11,6 +12,7 @@ interface SearchBoxProps {
 }
 
 export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -107,7 +109,7 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
           className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-500 hover:text-foreground-700 hover:bg-background-200 transition-colors cursor-pointer"
-          title="搜索所有课程（按 / ）"
+          title={t('搜索所有课程（按 / ）')}
         >
           <i className="ri-search-line"></i>
         </button>
@@ -119,7 +121,7 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
               ref={inputRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="搜所有课程的转写…"
+              placeholder={t('搜所有课程的转写…')}
               className="w-52 sm:w-72 text-xs pl-8 pr-3 py-2 rounded-lg border border-background-200 bg-background-50 text-foreground-700"
             />
             {busy && (
@@ -135,13 +137,13 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
 
           {!error && hits.length === 0 && !busy && (
             <p className="p-6 text-center text-xs text-foreground-400">
-              没有找到「{q.trim()}」
+              {t('没有找到「{q}」', { q: q.trim() })}
             </p>
           )}
 
           {hits.length > 0 && (
             <p className="px-4 pt-3 pb-1 text-xs text-foreground-400">
-              共 {total} 条，显示前 {hits.length} 条
+              {t('共 {total} 条，显示前 {n} 条', { total, n: hits.length })}
             </p>
           )}
 
@@ -150,7 +152,7 @@ export default function SearchBox({ onSearch, onJump }: SearchBoxProps) {
               <div className="px-2 py-1.5 flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground-700 truncate">{g.title}</span>
                 <span className="text-xs text-foreground-400 flex-shrink-0 ml-2">
-                  {g.date} · {g.items.length} 处
+                  {g.date} · {t('{n} 处', { n: g.items.length })}
                 </span>
               </div>
               {g.items.map((h) => (

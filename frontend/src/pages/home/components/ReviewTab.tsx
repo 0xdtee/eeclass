@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AskCite, Flashcard, QuizItem } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 interface ReviewTabProps {
   sid: string;
@@ -47,6 +48,7 @@ function saveState(sid: string, s: Record<number, CardState>) {
 export default function ReviewTab({
   sid, title, hasLines, onStudy, onAsk, onSeek,
 }: ReviewTabProps) {
+  const t = useT();
   const [section, setSection] = useState<'cards' | 'quiz' | 'ask'>('cards');
 
   // ---- Flashcards ----
@@ -148,8 +150,8 @@ export default function ReviewTab({
     return (
       <div className="bg-background-50 border border-background-200 rounded-xl p-12 text-center">
         <i className="ri-book-read-line text-foreground-300 text-3xl"></i>
-        <p className="text-sm text-foreground-400 mt-3">这节课还没有转写内容</p>
-        <p className="text-xs text-foreground-300 mt-1">先录一节课，或去「历史课程」选一节已录好的</p>
+        <p className="text-sm text-foreground-400 mt-3">{t('这节课还没有转写内容')}</p>
+        <p className="text-xs text-foreground-300 mt-1">{t('先录一节课，或去「历史课程」选一节已录好的')}</p>
       </div>
     );
   }
@@ -174,7 +176,7 @@ export default function ReviewTab({
             }`}
           >
             <i className={icon}></i>
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -190,28 +192,28 @@ export default function ReviewTab({
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           {cards.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-sm text-foreground-500">让 DeepSeek 把这节课做成闪卡</p>
+              <p className="text-sm text-foreground-500">{t('让 DeepSeek 把这节课做成闪卡')}</p>
               <button
                 data-guide="make-flashcard"
                 onClick={genCards}
                 disabled={loadingCards}
                 className="mt-4 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-50"
               >
-                {loadingCards ? '生成中…（约 10 秒）' : '生成闪卡'}
+                {loadingCards ? t('生成中…（约 10 秒）') : t('生成闪卡')}
               </button>
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs text-foreground-500">
-                  第 {idx + 1} / {cards.length} 张 · 今天要复习 {dueCount} 张
+                  {t('第 {a} / {b} 张 · 今天要复习 {c} 张', { a: idx + 1, b: cards.length, c: dueCount })}
                 </span>
                 <button
                   onClick={genCards}
                   disabled={loadingCards}
                   className="text-xs text-foreground-400 hover:text-foreground-600 cursor-pointer"
                 >
-                  <i className="ri-refresh-line mr-1"></i>重新生成
+                  <i className="ri-refresh-line mr-1"></i>{t('重新生成')}
                 </button>
               </div>
 
@@ -226,26 +228,26 @@ export default function ReviewTab({
                     <p className="text-sm text-foreground-600 leading-relaxed">{card?.back}</p>
                   </>
                 )}
-                {!flipped && <p className="text-xs text-foreground-400 mt-6">点击翻面</p>}
+                {!flipped && <p className="text-xs text-foreground-400 mt-6">{t('点击翻面')}</p>}
               </div>
 
               <div className="flex items-center justify-between mt-4 gap-2">
                 <div className="flex gap-2">
                   <button onClick={() => grade('again')} className="px-4 py-2 bg-red-50 text-red-600 rounded-full text-xs font-semibold hover:bg-red-100 cursor-pointer">
-                    忘了
+                    {t('忘了')}
                   </button>
                   <button onClick={() => grade('hard')} className="px-4 py-2 bg-accent-50 text-accent-700 rounded-full text-xs font-semibold hover:bg-accent-100 cursor-pointer">
-                    有印象
+                    {t('有印象')}
                   </button>
                   <button onClick={() => grade('good')} className="px-4 py-2 bg-green-50 text-green-700 rounded-full text-xs font-semibold hover:bg-green-100 cursor-pointer">
-                    记住了
+                    {t('记住了')}
                   </button>
                 </div>
                 {card?.start ? (
                   <button
                     onClick={() => onSeek(card.start)}
                     className="flex items-center gap-1 text-xs text-foreground-400 hover:text-accent-600 cursor-pointer"
-                    title="听老师的原话"
+                    title={t('听老师的原话')}
                   >
                     <i className="ri-volume-up-line"></i>
                     {card.ts}
@@ -262,32 +264,32 @@ export default function ReviewTab({
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           {quiz.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-sm text-foreground-500">让 DeepSeek 出一套这节课的自测题</p>
+              <p className="text-sm text-foreground-500">{t('让 DeepSeek 出一套这节课的自测题')}</p>
               <button
                 data-guide="make-quiz"
                 onClick={genQuiz}
                 disabled={loadingQuiz}
                 className="mt-4 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-50"
               >
-                {loadingQuiz ? '出题中…（约 10 秒）' : '生成自测题'}
+                {loadingQuiz ? t('出题中…（约 10 秒）') : t('生成自测题')}
               </button>
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <span className="text-xs text-foreground-500">
-                  已答 {answered} / {quiz.length}
-                  {answered > 0 && ` · 对 ${right} 题`}
+                  {t('已答 {a} / {b}', { a: answered, b: quiz.length })}
+                  {answered > 0 && t(' · 对 {n} 题', { n: right })}
                 </span>
                 <div className="flex items-center gap-3">
                   {answered > 0 && right < answered && (
                     <label className="flex items-center gap-1.5 text-xs text-foreground-500 cursor-pointer">
                       <input type="checkbox" checked={wrongOnly} onChange={(e) => setWrongOnly(e.target.checked)} className="cursor-pointer" />
-                      只看错题
+                      {t('只看错题')}
                     </label>
                   )}
                   <button onClick={genQuiz} className="text-xs text-foreground-400 hover:text-foreground-600 cursor-pointer">
-                    <i className="ri-refresh-line mr-1"></i>换一套
+                    <i className="ri-refresh-line mr-1"></i>{t('换一套')}
                   </button>
                 </div>
               </div>
@@ -330,7 +332,7 @@ export default function ReviewTab({
                               onClick={() => onSeek(it.start)}
                               className="flex items-center gap-1 text-xs text-foreground-400 hover:text-accent-600 cursor-pointer flex-shrink-0"
                             >
-                              <i className="ri-volume-up-line"></i>听原话
+                              <i className="ri-volume-up-line"></i>{t('听原话')}
                             </button>
                           ) : null}
                         </div>
@@ -343,7 +345,7 @@ export default function ReviewTab({
               {answered === quiz.length && (
                 <div className="mt-6 p-4 bg-accent-50 rounded-lg text-center">
                   <p className="text-sm font-semibold text-accent-800">
-                    做完了：{right} / {quiz.length} 题正确
+                    {t('做完了：{a} / {b} 题正确', { a: right, b: quiz.length })}
                   </p>
                 </div>
               )}
@@ -358,12 +360,12 @@ export default function ReviewTab({
           <div className="min-h-[240px] max-h-[440px] overflow-y-auto space-y-4 mb-4">
             {chat.length === 0 && (
               <div className="text-center py-10">
-                <p className="text-sm text-foreground-500">拿这节课的内容问 DeepSeek</p>
+                <p className="text-sm text-foreground-500">{t('拿这节课的内容问 DeepSeek')}</p>
                 <p className="text-xs text-foreground-400 mt-2">
-                  比如「老师讲格林公式时强调了什么」「这节课有哪些是明说要考的」
+                  {t('比如「老师讲格林公式时强调了什么」「这节课有哪些是明说要考的」')}
                 </p>
                 <p className="text-xs text-foreground-300 mt-2">
-                  它只根据这节课的转写回答，没讲到的会直说没讲到
+                  {t('它只根据这节课的转写回答，没讲到的会直说没讲到')}
                 </p>
               </div>
             )}
@@ -394,7 +396,7 @@ export default function ReviewTab({
                 </div>
               </div>
             ))}
-            {asking && <p className="text-xs text-foreground-400">DeepSeek 思考中…</p>}
+            {asking && <p className="text-xs text-foreground-400">{t('DeepSeek 思考中…')}</p>}
           </div>
 
           <div className="flex items-center gap-2">
@@ -402,7 +404,7 @@ export default function ReviewTab({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void send()}
-              placeholder="问这节课的内容…"
+              placeholder={t('问这节课的内容…')}
               className="flex-1 text-sm px-3 py-2.5 rounded-lg border border-background-200 bg-background-50"
             />
             <button
@@ -410,7 +412,7 @@ export default function ReviewTab({
               disabled={asking || !q.trim()}
               className="px-4 py-2.5 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-50"
             >
-              问
+              {t('问')}
             </button>
           </div>
         </div>

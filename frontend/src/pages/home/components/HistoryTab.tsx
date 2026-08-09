@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { fmtDuration, sessionDate, sessionTitle } from '@/hooks/useRecords';
 import type { SessionMeta } from '@/hooks/useRecords';
 import type { Course } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 interface HistoryTabProps {
   sessions: SessionMeta[];
@@ -26,6 +27,7 @@ export default function HistoryTab({
   sessions, loading, error, activeSessionId, courses, assign,
   onSelectSession, onReload, onCreateCourse, onDeleteCourse, onAssign, onEditCourse, onBatchExport,
 }: HistoryTabProps) {
+  const t = useT();
   const [selected, setSelected] = useState<string>('');  // '' = all
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
@@ -82,7 +84,7 @@ export default function HistoryTab({
     <div className="space-y-4">
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-xs text-red-700">读不到本机记录：{error}</p>
+          <p className="text-xs text-red-700">{t('读不到本机记录：')}{error}</p>
         </div>
       )}
 
@@ -90,7 +92,7 @@ export default function HistoryTab({
         {/* Left: courses */}
         <div className="bg-background-50 border border-background-200 rounded-xl p-3 space-y-1 h-fit">
           <button onClick={() => setSelected('')} className={rowCls(selected === '')}>
-            全部课程
+            {t('全部课程')}
             <span className="float-right text-xs text-foreground-400">{total.n}</span>
           </button>
 
@@ -111,14 +113,14 @@ export default function HistoryTab({
                 <button
                   onClick={() => onEditCourse(c)}
                   className="w-6 h-6 flex items-center justify-center rounded hover:bg-background-200 text-foreground-500 cursor-pointer"
-                  title="术语表 / 纠错表"
+                  title={t('术语表 / 纠错表')}
                 >
                   <i className="ri-settings-3-line text-xs"></i>
                 </button>
                 <button
                   onClick={() => void onDeleteCourse(c.id)}
                   className="w-6 h-6 flex items-center justify-center rounded hover:bg-background-200 text-foreground-500 cursor-pointer"
-                  title="删除课程（不会删录音）"
+                  title={t('删除课程（不会删录音）')}
                 >
                   <i className="ri-delete-bin-line text-xs"></i>
                 </button>
@@ -128,7 +130,7 @@ export default function HistoryTab({
 
           <div onDragOver={(e) => e.preventDefault()} onDrop={() => void drop(null)}>
             <button onClick={() => setSelected(UNSORTED)} className={rowCls(selected === UNSORTED)}>
-              未分类
+              {t('未分类')}
               <span className="float-right text-xs text-foreground-400">
                 {stats[UNSORTED]?.n ?? 0}
               </span>
@@ -149,7 +151,7 @@ export default function HistoryTab({
                   }
                   if (e.key === 'Escape') setAdding(false);
                 }}
-                placeholder="课程名"
+                placeholder={t('课程名')}
                 className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded border border-background-200"
               />
               <button
@@ -161,7 +163,7 @@ export default function HistoryTab({
                 }}
                 className="px-2 py-1.5 bg-accent-500 text-background-50 rounded text-xs cursor-pointer"
               >
-                建
+                {t('建')}
               </button>
             </div>
           ) : (
@@ -169,12 +171,12 @@ export default function HistoryTab({
               onClick={() => setAdding(true)}
               className="w-full text-left px-3 py-2 text-xs text-accent-600 hover:text-accent-700 cursor-pointer"
             >
-              <i className="ri-add-line mr-1"></i>新建课程
+              <i className="ri-add-line mr-1"></i>{t('新建课程')}
             </button>
           )}
 
           <p className="px-3 pt-2 text-xs text-foreground-300 leading-relaxed">
-            把右边的课时拖到课程上就能归类
+            {t('把右边的课时拖到课程上就能归类')}
           </p>
         </div>
 
@@ -182,7 +184,7 @@ export default function HistoryTab({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs text-foreground-500">
-              {selectMode ? `已选 ${picked.size} 节` : `${shown.length} 节 · 累计 ${fmtDuration(shown.reduce((a, s) => a + (s.duration_s ?? 0), 0))}`}
+              {selectMode ? t('已选 {n} 节', { n: picked.size }) : t('{n} 节 · 累计 {dur}', { n: shown.length, dur: fmtDuration(shown.reduce((a, s) => a + (s.duration_s ?? 0), 0)) })}
             </span>
             <div className="flex items-center gap-2">
               {onBatchExport && !selectMode && (
@@ -190,7 +192,7 @@ export default function HistoryTab({
                   onClick={() => { setSelectMode(true); setPicked(new Set()); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs hover:bg-background-200 cursor-pointer"
                 >
-                  <i className="ri-file-pdf-2-line"></i>批量导出
+                  <i className="ri-file-pdf-2-line"></i>{t('批量导出')}
                 </button>
               )}
               {onBatchExport && selectMode && (
@@ -203,7 +205,7 @@ export default function HistoryTab({
                     }}
                     className="px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs hover:bg-background-200 cursor-pointer"
                   >
-                    {shown.length > 0 && shown.every((s) => picked.has(s.id)) ? '取消全选' : '全选'}
+                    {shown.length > 0 && shown.every((s) => picked.has(s.id)) ? t('取消全选') : t('全选')}
                   </button>
                   <button
                     disabled={picked.size === 0 || exporting}
@@ -214,13 +216,13 @@ export default function HistoryTab({
                     }}
                     className="px-3.5 py-1.5 bg-accent-500 text-background-50 rounded-full text-xs font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {exporting ? '导出中…' : `导出选中 PDF (${picked.size})`}
+                    {exporting ? t('导出中…') : t('导出选中 PDF ({n})', { n: picked.size })}
                   </button>
                   <button
                     onClick={() => { setSelectMode(false); setPicked(new Set()); }}
                     className="px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs hover:bg-background-200 cursor-pointer"
                   >
-                    取消
+                    {t('取消')}
                   </button>
                 </>
               )}
@@ -228,7 +230,7 @@ export default function HistoryTab({
                 onClick={onReload}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs hover:bg-background-200 cursor-pointer"
               >
-                <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`}></i>刷新
+                <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`}></i>{t('刷新')}
               </button>
             </div>
           </div>
@@ -236,7 +238,7 @@ export default function HistoryTab({
           {shown.length === 0 && !loading && (
             <div className="bg-background-50 border border-background-200 rounded-xl p-10 text-center">
               <i className="ri-inbox-line text-foreground-300 text-3xl"></i>
-              <p className="text-sm text-foreground-400 mt-3">这里还没有课时</p>
+              <p className="text-sm text-foreground-400 mt-3">{t('这里还没有课时')}</p>
             </div>
           )}
 
@@ -268,7 +270,7 @@ export default function HistoryTab({
                       {sessionTitle(s)}
                     </h4>
                     <p className="text-xs text-foreground-400 mt-1">
-                      {sessionDate(s)} · {fmtDuration(s.duration_s)} · {s.lines ?? 0} 句
+                      {sessionDate(s)} · {fmtDuration(s.duration_s)} · {t('{n} 句', { n: s.lines ?? 0 })}
                       {course && <span className="ml-2 text-accent-600">{course.name}</span>}
                     </p>
                   </div>

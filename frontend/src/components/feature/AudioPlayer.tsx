@@ -4,6 +4,7 @@
  * The progress bar's max prefers the known duration (durationHint), so it stays draggable even if metadata isn't loaded; playing one segment auto-pauses the others.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useT } from '@/lib/i18n';
 
 export interface AudioPlayerHandle {
   seek: (seconds: number, play?: boolean) => void;
@@ -31,6 +32,7 @@ const fmt = (s: number) => {
 };
 
 const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTime, durationHint = 0, className }, ref) => {
+  const t = useT();
   const el = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [cur, setCur] = useState(0);
@@ -70,7 +72,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
       }}
       onPause={() => setPlaying(false)}
       onEnded={() => { setPlaying(false); }}
-      onError={() => setError('这节课的录音文件读不到')}
+      onError={() => setError(t('这节课的录音文件读不到'))}
     />
   );
 
@@ -86,7 +88,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
           else a.pause();
         }}
         className="w-9 h-9 flex items-center justify-center rounded-full bg-primary-500 text-background-50 hover:bg-primary-600 transition-colors cursor-pointer flex-shrink-0"
-        title={playing ? '暂停' : '播放'}
+        title={playing ? t('暂停') : t('播放')}
       >
         <i className={`${playing ? 'ri-pause-fill' : 'ri-play-fill'} text-lg`}></i>
       </button>
@@ -105,7 +107,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
         value={speed}
         onChange={(e) => setSpeed(Number(e.target.value))}
         className="text-xs px-2 py-1 rounded border border-background-200 bg-background-50 text-foreground-600 cursor-pointer flex-shrink-0"
-        title="倍速"
+        title={t('倍速')}
       >
         {SPEEDS.map((s) => (<option key={s} value={s}>{s}x</option>))}
       </select>

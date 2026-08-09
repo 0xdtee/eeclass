@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useT } from '@/lib/i18n';
 
 /**
  * Collection of "animated demo" components for the help page.
@@ -128,6 +129,7 @@ function Screen({
 
 /** Speaker mini-label */
 function Speaker({ who }: { who: 'teacher' | 'student' }) {
+  const t = useT();
   const teacher = who === 'teacher';
   return (
     <span
@@ -136,7 +138,7 @@ function Speaker({ who }: { who: 'teacher' | 'student' }) {
       }`}
     >
       <i className={teacher ? 'ri-user-2-fill' : 'ri-user-3-line'} />
-      {teacher ? '老师' : '同学1'}
+      {teacher ? t('老师') : t('同学1')}
     </span>
   );
 }
@@ -153,11 +155,12 @@ const RECORD_LINES = [
 ];
 
 export function RecordDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(RECORD_LINES.length + 3, 900, reduced);
   const shown = Math.min(i, RECORD_LINES.length);
   return (
-    <Screen title="录制中 00:41" icon="ri-mic-fill" tint="red">
+    <Screen title={t('录制中 00:41')} icon="ri-mic-fill" tint="red">
       <div className="flex items-center gap-2 mb-2">
         <span
           className="hd-anim w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"
@@ -172,14 +175,14 @@ export function RecordDemo() {
             />
           ))}
         </div>
-        <span className="ml-auto text-[9px] text-foreground-400">SenseVoice · 本机</span>
+        <span className="ml-auto text-[9px] text-foreground-400">{t('SenseVoice · 本机')}</span>
       </div>
       <div className="space-y-1.5 min-h-[76px]">
         {RECORD_LINES.slice(0, shown).map((l, idx) => (
           <div key={idx} className="flex gap-1.5 text-[10px] leading-snug">
             <span className="text-foreground-300 font-mono flex-shrink-0">{l.t}</span>
             <span className="text-foreground-700">
-              {l.s}
+              {t(l.s)}
               {idx === shown - 1 && shown < RECORD_LINES.length && !reduced && (
                 <span
                   className="hd-anim inline-block w-[2px] h-[10px] bg-accent-500 ml-0.5 align-middle"
@@ -205,11 +208,12 @@ const SPEAKER_LINES: { who: 'teacher' | 'student'; s: string }[] = [
 ];
 
 export function SpeakerDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(SPEAKER_LINES.length + 3, 1000, reduced);
   const shown = Math.min(i, SPEAKER_LINES.length);
   return (
-    <Screen title="说话人区分" icon="ri-user-voice-fill">
+    <Screen title={t('说话人区分')} icon="ri-user-voice-fill">
       <div className="space-y-2 min-h-[92px]">
         {SPEAKER_LINES.slice(0, shown).map((l, idx) => (
           <div
@@ -218,13 +222,13 @@ export function SpeakerDemo() {
             style={{ transition: 'opacity .3s', opacity: 1 }}
           >
             <Speaker who={l.who} />
-            <span className="text-[10px] text-foreground-700 leading-snug pt-0.5">{l.s}</span>
+            <span className="text-[10px] text-foreground-700 leading-snug pt-0.5">{t(l.s)}</span>
           </div>
         ))}
       </div>
       <div className="mt-2 pt-2 border-t border-background-200 flex items-center gap-2 text-[9px] text-foreground-400">
         <i className="ri-fingerprint-line text-accent-500" />
-        声纹已记住 · 下次自动认出
+        {t('声纹已记住 · 下次自动认出')}
       </div>
     </Screen>
   );
@@ -235,13 +239,14 @@ export function SpeakerDemo() {
 /* ================================================================== */
 
 export function MarkDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(2, 2000, reduced);
   const marked = reduced || i >= 1;
   return (
-    <Screen title="课堂字幕" icon="ri-mark-pen-fill">
+    <Screen title={t('课堂字幕')} icon="ri-mark-pen-fill">
       <div className="space-y-1.5 text-[10px] leading-snug min-h-[86px]">
-        <div className="text-foreground-500">这一步是整道题的关键——</div>
+        <div className="text-foreground-500">{t('这一步是整道题的关键——')}</div>
         <div className="flex items-start gap-1">
           <span
             className={marked ? 'hd-anim rounded px-0.5 text-foreground-800 font-medium' : 'text-foreground-800 font-medium'}
@@ -257,7 +262,7 @@ export function MarkDemo() {
                 : undefined
             }
           >
-            期末一定会考换元积分法
+            {t('期末一定会考换元积分法')}
           </span>
           {marked && (
             <i
@@ -266,11 +271,11 @@ export function MarkDemo() {
             />
           )}
         </div>
-        <div className="text-foreground-500">大家课后一定要练熟。</div>
+        <div className="text-foreground-500">{t('大家课后一定要练熟。')}</div>
       </div>
       <div className="mt-2 flex items-center gap-1 text-[9px] text-accent-600">
         <i className="ri-mark-pen-line" />
-        点「标记重点」即把刚说的这句标黄
+        {t('点「标记重点」即把刚说的这句标黄')}
       </div>
     </Screen>
   );
@@ -281,17 +286,18 @@ export function MarkDemo() {
 /* ================================================================== */
 
 export function PhotoDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(2, 2200, reduced);
   const captured = reduced || i >= 1;
   return (
-    <Screen title="拍板书" icon="ri-camera-fill">
+    <Screen title={t('拍板书')} icon="ri-camera-fill">
       <div className="relative rounded-lg bg-foreground-900 h-[92px] overflow-hidden flex items-center justify-center">
         {/* Simulated blackboard notes */}
         <div className="text-center leading-relaxed">
           <div className="text-emerald-300 text-[11px] font-semibold">∮ P dx + Q dy</div>
           <div className="text-background-50/80 text-[10px]">= ∬ (∂Q/∂x − ∂P/∂y) dσ</div>
-          <div className="text-amber-200/80 text-[9px] mt-0.5">— 格林公式 —</div>
+          <div className="text-amber-200/80 text-[9px] mt-0.5">{t('— 格林公式 —')}</div>
         </div>
         {/* Viewfinder corners */}
         <span className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 border-accent-300/80 rounded-tl" />
@@ -308,7 +314,7 @@ export function PhotoDemo() {
       </div>
       <div className="mt-1.5 flex items-center gap-1 text-[9px] text-foreground-400">
         <i className={`ri-check-line ${captured ? 'text-emerald-500' : 'text-foreground-300'}`} />
-        已保存,对应 09:13 转写时间点
+        {t('已保存,对应 09:13 转写时间点')}
       </div>
     </Screen>
   );
@@ -319,15 +325,16 @@ export function PhotoDemo() {
 /* ================================================================== */
 
 export function CorrectionDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(4, 1100, reduced); // 0 original 1 highlight 2 corrected 3 hold
   const stage = reduced ? 2 : i;
   const wrong = stage <= 1;
   return (
-    <Screen title="AI 实时纠错" icon="ri-eraser-fill">
+    <Screen title={t('AI 实时纠错')} icon="ri-eraser-fill">
       <div className="min-h-[70px] flex flex-col justify-center">
         <div className="text-[11px] leading-relaxed text-foreground-700">
-          我们用
+          {t('我们用')}
           <span
             className="mx-0.5 rounded px-1 py-0.5 font-medium transition-all duration-500"
             style={
@@ -340,9 +347,9 @@ export function CorrectionDemo() {
                 : { color: 'oklch(var(--accent-700))', background: 'rgba(153,246,228,.6)' }
             }
           >
-            {wrong ? '格林公司' : '格林公式'}
+            {wrong ? t('格林公司') : t('格林公式')}
           </span>
-          来计算这个曲线积分。
+          {t('来计算这个曲线积分。')}
         </div>
         <div className="mt-2 flex items-center gap-1 text-[9px]">
           <i
@@ -351,7 +358,7 @@ export function CorrectionDemo() {
             }`}
           />
           <span className="text-foreground-400">
-            {wrong ? 'DeepSeek 正在校对同音错字…' : '已把「公司」纠正为「公式」'}
+            {wrong ? t('DeepSeek 正在校对同音错字…') : t('已把「公司」纠正为「公式」')}
           </span>
         </div>
       </div>
@@ -366,14 +373,15 @@ export function CorrectionDemo() {
 const FRAGMENTS = ['这个', '定理', '很', '重要', '大家', '记一下'];
 
 export function SegmentDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(3, 1300, reduced); // 0 fragments 1 merged 2 hold
   const merged = reduced || i >= 1;
   return (
-    <Screen title="AI 智能分句" icon="ri-scissors-cut-fill">
+    <Screen title={t('AI 智能分句')} icon="ri-scissors-cut-fill">
       <div className="min-h-[86px] flex flex-col justify-center gap-2">
         <div>
-          <div className="text-[9px] text-foreground-400 mb-1">ASR 碎片</div>
+          <div className="text-[9px] text-foreground-400 mb-1">{t('ASR 碎片')}</div>
           <div className="flex flex-wrap gap-1">
             {FRAGMENTS.map((f, idx) => (
               <span
@@ -384,7 +392,7 @@ export function SegmentDemo() {
                   transform: merged ? 'scale(.92)' : 'scale(1)',
                 }}
               >
-                {f}
+                {t(f)}
               </span>
             ))}
           </div>
@@ -399,7 +407,7 @@ export function SegmentDemo() {
           className="rounded-lg bg-accent-100 text-accent-800 text-[11px] px-2 py-1.5 font-medium transition-all duration-500"
           style={{ opacity: merged ? 1 : 0, transform: merged ? 'translateY(0)' : 'translateY(6px)' }}
         >
-          这个定理很重要,大家记一下。
+          {t('这个定理很重要,大家记一下。')}
         </div>
       </div>
     </Screen>
@@ -411,11 +419,12 @@ export function SegmentDemo() {
 /* ================================================================== */
 
 export function TranslateDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(3, 1400, reduced);
   const translated = reduced || i >= 1;
   return (
-    <Screen title="英文自动翻译" icon="ri-translate-2">
+    <Screen title={t('英文自动翻译')} icon="ri-translate-2">
       <div className="min-h-[74px] flex flex-col justify-center gap-2">
         <div className="flex items-start gap-1.5">
           <span className="px-1.5 py-0.5 rounded bg-primary-100 text-primary-700 text-[9px] font-semibold flex-shrink-0">
@@ -430,9 +439,9 @@ export function TranslateDemo() {
           style={{ opacity: translated ? 1 : 0, transform: translated ? 'translateY(0)' : 'translateY(8px)' }}
         >
           <span className="px-1.5 py-0.5 rounded bg-accent-100 text-accent-700 text-[9px] font-semibold flex-shrink-0">
-            中
+            {t('中')}
           </span>
-          <span className="text-[11px] text-accent-800 leading-snug">导数刻画的是变化的快慢。</span>
+          <span className="text-[11px] text-accent-800 leading-snug">{t('导数刻画的是变化的快慢。')}</span>
         </div>
       </div>
     </Screen>
@@ -450,14 +459,15 @@ const SUMMARY_POINTS = [
 ];
 
 export function SummaryDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(SUMMARY_POINTS.length + 3, 850, reduced);
   const shown = Math.min(i, SUMMARY_POINTS.length);
   return (
-    <Screen title="AI 课程概要" icon="ri-magic-fill">
+    <Screen title={t('AI 课程概要')} icon="ri-magic-fill">
       <div className="text-[10px] font-semibold text-foreground-800 mb-1.5 flex items-center gap-1">
         <i className="ri-sparkling-2-line text-accent-500" />
-        本节要点
+        {t('本节要点')}
       </div>
       <div className="space-y-1.5 min-h-[76px]">
         {SUMMARY_POINTS.slice(0, shown).map((p, idx) => (
@@ -465,12 +475,12 @@ export function SummaryDemo() {
             <span className="mt-[3px] w-3.5 h-3.5 rounded-full bg-accent-100 text-accent-600 text-[8px] flex items-center justify-center flex-shrink-0 font-bold">
               {idx + 1}
             </span>
-            <span className="text-[10px] text-foreground-600 leading-snug">{p}</span>
+            <span className="text-[10px] text-foreground-600 leading-snug">{t(p)}</span>
           </div>
         ))}
         {shown < SUMMARY_POINTS.length && !reduced && (
           <div className="flex items-center gap-1 text-[9px] text-foreground-300">
-            <i className="ri-loader-4-line" /> AI 整理中…
+            <i className="ri-loader-4-line" /> {t('AI 整理中…')}
           </div>
         )}
       </div>
@@ -483,9 +493,10 @@ export function SummaryDemo() {
 /* ================================================================== */
 
 export function FlashcardDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   return (
-    <Screen title="复习闪卡" icon="ri-book-read-fill">
+    <Screen title={t('复习闪卡')} icon="ri-book-read-fill">
       <div className="flex items-center justify-center min-h-[92px]" style={{ perspective: '600px' }}>
         <div
           className="hd-anim relative w-[150px] h-[80px]"
@@ -499,9 +510,9 @@ export function FlashcardDemo() {
             className="absolute inset-0 rounded-xl bg-background-50 border border-background-200 flex flex-col items-center justify-center px-2"
             style={{ backfaceVisibility: 'hidden' }}
           >
-            <span className="text-[9px] text-accent-600 font-semibold mb-1">问</span>
+            <span className="text-[9px] text-accent-600 font-semibold mb-1">{t('问')}</span>
             <span className="text-[10px] text-foreground-700 text-center leading-snug">
-              格林公式成立的前提是?
+              {t('格林公式成立的前提是?')}
             </span>
           </div>
           {/* Back: answer */}
@@ -509,13 +520,13 @@ export function FlashcardDemo() {
             className="absolute inset-0 rounded-xl bg-accent-500 text-background-50 flex flex-col items-center justify-center px-2"
             style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
           >
-            <span className="text-[9px] font-semibold mb-1 opacity-80">答</span>
-            <span className="text-[10px] text-center leading-snug">闭区域 + 曲线取正向</span>
+            <span className="text-[9px] font-semibold mb-1 opacity-80">{t('答')}</span>
+            <span className="text-[10px] text-center leading-snug">{t('闭区域 + 曲线取正向')}</span>
           </div>
         </div>
       </div>
       <div className="mt-1 text-center text-[9px] text-foreground-400">
-        <i className="ri-time-line mr-0.5" />艾宾浩斯排期 · 明天再复习
+        <i className="ri-time-line mr-0.5" />{t('艾宾浩斯排期 · 明天再复习')}
       </div>
     </Screen>
   );
@@ -526,12 +537,13 @@ export function FlashcardDemo() {
 /* ================================================================== */
 
 export function CourseSummaryDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(4, 900, reduced); // 3 sessions merged in one by one + hold
   const merged = Math.min(i, 3);
   const lessons = ['第 3 讲 · 曲线积分', '第 4 讲 · 格林公式', '第 5 讲 · 曲面积分'];
   return (
-    <Screen title="课程大总结" icon="ri-file-text-fill">
+    <Screen title={t('课程大总结')} icon="ri-file-text-fill">
       <div className="flex gap-2 min-h-[92px]">
         <div className="flex flex-col gap-1 w-[46%]">
           {lessons.map((l, idx) => (
@@ -541,7 +553,7 @@ export function CourseSummaryDemo() {
               style={{ opacity: idx < merged ? 0.4 : 1 }}
             >
               <i className="ri-file-3-line text-foreground-300" />
-              {l}
+              {t(l)}
             </div>
           ))}
         </div>
@@ -550,17 +562,17 @@ export function CourseSummaryDemo() {
         </div>
         <div className="flex-1 rounded-lg bg-accent-100 border border-accent-200 p-2">
           <div className="text-[9px] font-semibold text-accent-700 mb-1 flex items-center gap-1">
-            <i className="ri-booklet-fill" />整门课总结
+            <i className="ri-booklet-fill" />{t('整门课总结')}
           </div>
           <div className="space-y-1">
-            {['积分学脉络贯通', '公式间的联系', '高频考点汇总'].map((t, idx) => (
+            {['积分学脉络贯通', '公式间的联系', '高频考点汇总'].map((txt, idx) => (
               <div
                 key={idx}
                 className="text-[9px] text-accent-800 flex items-center gap-1 transition-all duration-500"
                 style={{ opacity: idx < merged ? 1 : 0.15 }}
               >
                 <i className="ri-checkbox-circle-fill text-[9px]" />
-                {t}
+                {t(txt)}
               </div>
             ))}
           </div>
@@ -582,6 +594,7 @@ const EXAM_SEGMENTS = [
 ];
 
 export function ExamPieDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(EXAM_SEGMENTS.length + 3, 700, reduced);
   const shown = Math.min(i, EXAM_SEGMENTS.length);
@@ -594,7 +607,7 @@ export function ExamPieDemo() {
   });
 
   return (
-    <Screen title="考点推测" icon="ri-pie-chart-2-fill">
+    <Screen title={t('考点推测')} icon="ri-pie-chart-2-fill">
       <div className="flex items-center gap-3 min-h-[92px]">
         <svg viewBox="0 0 60 60" className="w-[70px] h-[70px] flex-shrink-0">
           {arcs.map((a, idx) => (
@@ -626,7 +639,7 @@ export function ExamPieDemo() {
               style={{ opacity: a.visible ? 1 : 0.2 }}
             >
               <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: a.color }} />
-              <span className="text-foreground-600 truncate">{a.label}</span>
+              <span className="text-foreground-600 truncate">{t(a.label)}</span>
               <span className="ml-auto font-semibold text-foreground-800">{a.pct}%</span>
             </div>
           ))}
@@ -644,6 +657,7 @@ const QUIZ_OPTIONS = ['牛顿-莱布尼茨公式', '格林公式', '斯托克斯
 const QUIZ_ANSWER = 1;
 
 export function QuizDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   // scan the 4 options, stop on the correct one, then hold
   const total = QUIZ_OPTIONS.length + 4;
@@ -653,9 +667,9 @@ export function QuizDemo() {
   const settled = reduced || i >= QUIZ_OPTIONS.length;
 
   return (
-    <Screen title="模拟试卷 · 第 2 题" icon="ri-file-list-3-fill">
+    <Screen title={t('模拟试卷 · 第 2 题')} icon="ri-file-list-3-fill">
       <div className="text-[10px] text-foreground-700 mb-1.5 leading-snug">
-        平面闭区域上的曲线积分,常用哪个公式化为二重积分?
+        {t('平面闭区域上的曲线积分,常用哪个公式化为二重积分?')}
       </div>
       <div className="space-y-1">
         {QUIZ_OPTIONS.map((opt, idx) => {
@@ -690,7 +704,7 @@ export function QuizDemo() {
                 {correct ? '✓' : String.fromCharCode(65 + idx)}
               </span>
               <span className={correct ? 'text-emerald-700 font-medium' : 'text-foreground-600'}>
-                {opt}
+                {t(opt)}
               </span>
             </div>
           );
@@ -712,30 +726,31 @@ const TAGS = [
 ];
 
 export function TagDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(TAGS.length + 3, 750, reduced);
   const shown = Math.min(i, TAGS.length);
   return (
-    <Screen title="标签管理" icon="ri-price-tag-3-fill">
+    <Screen title={t('标签管理')} icon="ri-price-tag-3-fill">
       <div className="min-h-[86px]">
-        <div className="text-[9px] text-foreground-400 mb-1.5">给这节课打标签</div>
+        <div className="text-[9px] text-foreground-400 mb-1.5">{t('给这节课打标签')}</div>
         <div className="flex flex-wrap gap-1.5">
-          {TAGS.slice(0, shown).map((t, idx) => (
+          {TAGS.slice(0, shown).map((tag, idx) => (
             <span
               key={idx}
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
               style={{
-                background: `color-mix(in oklch, ${t.color} 18%, transparent)`,
-                color: t.color,
+                background: `color-mix(in oklch, ${tag.color} 18%, transparent)`,
+                color: tag.color,
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: t.color }} />
-              {t.name}
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: tag.color }} />
+              {t(tag.name)}
             </span>
           ))}
           {shown < TAGS.length && (
             <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] border border-dashed border-background-300 text-foreground-400">
-              <i className="ri-add-line" />添加
+              <i className="ri-add-line" />{t('添加')}
             </span>
           )}
         </div>
@@ -749,11 +764,12 @@ export function TagDemo() {
 /* ================================================================== */
 
 export function ReferenceDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(2, 2000, reduced);
   const checked = reduced || i >= 1;
   return (
-    <Screen title="参考资料 · 高等数学" icon="ri-booklet-fill">
+    <Screen title={t('参考资料 · 高等数学')} icon="ri-booklet-fill">
       <div className="space-y-1.5 min-h-[70px]">
         {['高等数学教学大纲.pdf', '同济第七版 · 第十一章'].map((f, idx) => (
           <div
@@ -761,7 +777,7 @@ export function ReferenceDemo() {
             className="flex items-center gap-1.5 px-1.5 py-1 rounded-md bg-background-50 border border-background-200"
           >
             <i className="ri-file-pdf-2-line text-red-400 text-xs" />
-            <span className="text-[10px] text-foreground-600 truncate">{f}</span>
+            <span className="text-[10px] text-foreground-600 truncate">{t(f)}</span>
             {idx === 0 && (
               <span
                 className="ml-auto w-3.5 h-3.5 rounded border flex items-center justify-center text-[8px] transition-all duration-300 flex-shrink-0"
@@ -782,7 +798,7 @@ export function ReferenceDemo() {
         style={{ color: checked ? 'oklch(var(--accent-600))' : 'oklch(var(--foreground-300))' }}
       >
         <i className="ri-link" />
-        {checked ? '已作为 AI 纠错上下文,识别更准' : '勾选学科即可作为上下文'}
+        {checked ? t('已作为 AI 纠错上下文,识别更准') : t('勾选学科即可作为上下文')}
       </div>
     </Screen>
   );
@@ -793,28 +809,29 @@ export function ReferenceDemo() {
 /* ================================================================== */
 
 export function ShareDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(3, 1500, reduced); // 0 按钮 1 生成中 2 链接
   const stage = reduced ? 2 : i;
   return (
-    <Screen title="共享课程" icon="ri-share-forward-fill">
+    <Screen title={t('共享课程')} icon="ri-share-forward-fill">
       <div className="min-h-[74px] flex flex-col justify-center gap-2">
         {stage === 0 ? (
           <button className="mx-auto inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-500 text-background-50 text-[10px] font-semibold">
-            <i className="ri-link" />生成分享链接
+            <i className="ri-link" />{t('生成分享链接')}
           </button>
         ) : (
           <div className="relative overflow-hidden rounded-lg border border-background-200 bg-background-50 px-2 py-1.5 flex items-center gap-1.5">
             <i className="ri-link text-accent-500 text-xs flex-shrink-0" />
             <span className="text-[10px] text-foreground-600 truncate font-mono">
-              {stage === 1 ? '生成中…' : 'eeclass.app/s/9fx2a1'}
+              {stage === 1 ? t('生成中…') : 'eeclass.app/s/9fx2a1'}
             </span>
             <span
               className={`ml-auto text-[9px] font-semibold flex-shrink-0 ${
                 stage === 2 ? 'text-accent-600' : 'text-foreground-300'
               }`}
             >
-              {stage === 2 ? '复制' : ''}
+              {stage === 2 ? t('复制') : ''}
             </span>
             {stage === 1 && !reduced && (
               <span
@@ -825,7 +842,7 @@ export function ShareDemo() {
           </div>
         )}
         <div className="flex items-center gap-1 text-[9px] text-foreground-400">
-          <i className="ri-eye-line" />对方无需登录即可只读查看 · 可随时撤销
+          <i className="ri-eye-line" />{t('对方无需登录即可只读查看 · 可随时撤销')}
         </div>
       </div>
     </Screen>
@@ -842,6 +859,7 @@ const HISTORY_ROWS = [
 ];
 
 export function HistoryDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const query = '格林';
   const i = useCycle(query.length + 5, 450, reduced);
@@ -850,7 +868,7 @@ export function HistoryDemo() {
   const rowsShown = doneTyping ? (typed.includes('格林') ? 1 : HISTORY_ROWS.length) : 0;
 
   return (
-    <Screen title="历史课程" icon="ri-history-fill">
+    <Screen title={t('历史课程')} icon="ri-history-fill">
       <div className="flex items-center gap-1.5 rounded-lg border border-background-200 bg-background-50 px-2 py-1 mb-2">
         <i className="ri-search-line text-foreground-400 text-xs" />
         <span className="text-[10px] text-foreground-700">
@@ -870,7 +888,7 @@ export function HistoryDemo() {
             className="flex items-center gap-2 px-1.5 py-1 rounded-md hover:bg-background-100 border border-background-200 bg-background-50"
           >
             <span className="text-[9px] font-mono text-foreground-400">{r.d}</span>
-            <span className="text-[10px] text-foreground-700 truncate">{r.t}</span>
+            <span className="text-[10px] text-foreground-700 truncate">{t(r.t)}</span>
             <span className="ml-auto flex items-center gap-1 text-[9px] text-foreground-300">
               <i className="ri-file-word-2-line" />
               <i className="ri-file-pdf-2-line" />
@@ -889,17 +907,18 @@ export function HistoryDemo() {
 const TOGGLES = ['实时纠错', '智能分句', '英文翻译', '结束自动生成概要'];
 
 export function ToggleDemo() {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const i = useCycle(TOGGLES.length + 3, 650, reduced);
   const onCount = Math.min(i, TOGGLES.length);
   return (
-    <Screen title="AI 处理默认项" icon="ri-sparkling-fill">
+    <Screen title={t('AI 处理默认项')} icon="ri-sparkling-fill">
       <div className="space-y-1.5 min-h-[92px]">
         {TOGGLES.map((label, idx) => {
           const on = reduced || idx < onCount;
           return (
             <div key={idx} className="flex items-center gap-2">
-              <span className="text-[10px] text-foreground-600">{label}</span>
+              <span className="text-[10px] text-foreground-600">{t(label)}</span>
               <span
                 className="ml-auto relative w-7 h-4 rounded-full transition-colors duration-300 flex-shrink-0"
                 style={{ background: on ? 'oklch(var(--accent-500))' : 'oklch(var(--background-300))' }}

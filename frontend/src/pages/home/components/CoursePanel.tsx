@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '@/components/base/Modal';
 import type { Correction, Course } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 interface CoursePanelProps {
   course: Course | null;
@@ -15,6 +16,7 @@ interface CoursePanelProps {
 }
 
 export default function CoursePanel({ course, isOpen, onClose, onSave }: CoursePanelProps) {
+  const t = useT();
   const [name, setName] = useState('');
   const [hotwords, setHotwords] = useState('');
   const [rules, setRules] = useState<Correction[]>([]);
@@ -48,10 +50,10 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="课程设置" width="max-w-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('课程设置')} width="max-w-2xl">
       <div className="space-y-5">
         <label className="block">
-          <span className="text-xs font-semibold text-foreground-600">课程名称</span>
+          <span className="text-xs font-semibold text-foreground-600">{t('课程名称')}</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -60,34 +62,34 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
         </label>
 
         <label className="block">
-          <span className="text-xs font-semibold text-foreground-600">专业术语表</span>
+          <span className="text-xs font-semibold text-foreground-600">{t('专业术语表')}</span>
           <p className="text-xs text-foreground-400 mt-1">
-            空格分隔。识别时会优先往这些词上靠——「格林公式」「傅里叶」这种词不加进来很容易听错。
+            {t('空格分隔。识别时会优先往这些词上靠——「格林公式」「傅里叶」这种词不加进来很容易听错。')}
           </p>
           <textarea
             value={hotwords}
             onChange={(e) => setHotwords(e.target.value)}
             rows={3}
-            placeholder="格林公式 高斯公式 散度 旋度 单连通区域"
+            placeholder={t('格林公式 高斯公式 散度 旋度 单连通区域')}
             className="mt-1.5 w-full text-sm px-3 py-2 rounded-lg border border-background-200 bg-background-50"
           />
         </label>
 
         <div>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground-600">常见错字纠正</span>
+            <span className="text-xs font-semibold text-foreground-600">{t('常见错字纠正')}</span>
             <button
               onClick={() => setRules((r) => [...r, { from: '', to: '', enabled: true }])}
               className="text-xs text-accent-600 hover:text-accent-700 cursor-pointer"
             >
-              <i className="ri-add-line mr-0.5"></i>加一条
+              <i className="ri-add-line mr-0.5"></i>{t('加一条')}
             </button>
           </div>
-          <p className="text-xs text-foreground-400 mt-1">识别完立刻替换，写进文档和记录的都是纠正后的。</p>
+          <p className="text-xs text-foreground-400 mt-1">{t('识别完立刻替换，写进文档和记录的都是纠正后的。')}</p>
 
           <div className="mt-2 space-y-2">
             {rules.length === 0 && (
-              <p className="text-xs text-foreground-300 py-3 text-center">还没有纠错规则</p>
+              <p className="text-xs text-foreground-300 py-3 text-center">{t('还没有纠错规则')}</p>
             )}
             {rules.map((r, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -96,7 +98,7 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
                   onChange={(e) =>
                     setRules((rs) => rs.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))
                   }
-                  placeholder="听成了"
+                  placeholder={t('听成了')}
                   className="flex-1 text-sm px-2.5 py-1.5 rounded border border-background-200 bg-background-50"
                 />
                 <i className="ri-arrow-right-line text-foreground-400"></i>
@@ -105,7 +107,7 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
                   onChange={(e) =>
                     setRules((rs) => rs.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))
                   }
-                  placeholder="应该是"
+                  placeholder={t('应该是')}
                   className="flex-1 text-sm px-2.5 py-1.5 rounded border border-background-200 bg-background-50"
                 />
                 <label className="flex items-center gap-1 text-xs text-foreground-500 cursor-pointer">
@@ -117,7 +119,7 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
                     }
                     className="cursor-pointer"
                   />
-                  启用
+                  {t('启用')}
                 </label>
                 <button
                   onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
@@ -137,14 +139,14 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
             onClick={onClose}
             className="px-4 py-2 bg-background-100 text-foreground-600 rounded-full text-sm cursor-pointer"
           >
-            取消
+            {t('取消')}
           </button>
           <button
             onClick={() => void save()}
             disabled={busy}
             className="px-5 py-2 bg-primary-500 text-background-50 rounded-full text-sm font-semibold cursor-pointer disabled:opacity-50"
           >
-            {busy ? '保存中…' : '保存'}
+            {busy ? t('保存中…') : t('保存')}
           </button>
         </div>
       </div>

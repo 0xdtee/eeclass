@@ -19,6 +19,7 @@ import { compressImage, useLibrary } from '@/hooks/useLibrary';
 import type { Course, Shot } from '@/hooks/useLibrary';
 import { exportWord } from '@/lib/exportWord';
 import { exportPdf, exportPdfBatch, type PdfDoc } from '@/lib/exportPdf';
+import { useT } from '@/lib/i18n';
 
 const tabs = [
   { id: 'transcription', label: '实时转写', icon: 'ri-mic-line' },
@@ -28,6 +29,7 @@ const tabs = [
 ];
 
 export default function HomePage() {
+  const t = useT();
   const [activeTab, setActiveTab] = useState('transcription');
   const [activeSessionId, setActiveSessionId] = useState('');
   const [showSharePanel, setShowSharePanel] = useState(false);
@@ -87,10 +89,10 @@ export default function HomePage() {
   );
   // While live-recording, prefer showing the recording state rather than "not started" (new users have no saved sessions)
   const title = live.running
-    ? '正在录制…'
+    ? t('正在录制…')
     : activeSession
       ? sessionTitle(activeSession)
-      : '未开始录制';
+      : t('未开始录制');
 
 
   // On switching sessions, load the transcript and board photos
@@ -172,8 +174,8 @@ export default function HomePage() {
 
   // Batch export: combine the selected sessions into a single PDF (each with summary + highlights + possible mishearings + full transcript)
   const handleBatchExport = useCallback(async (ids: string[]) => {
-    if (!ids.length) { say('先勾选要导出的课时'); return; }
-    say(`正在导出 ${ids.length} 节…`);
+    if (!ids.length) { say(t('先勾选要导出的课时')); return; }
+    say(t('正在导出 {n} 节…', { n: ids.length }));
     try {
       const docs: PdfDoc[] = [];
       for (const id of ids) {
@@ -192,9 +194,9 @@ export default function HomePage() {
         });
       }
       await exportPdfBatch(docs, `批量导出 ${docs.length} 节`);
-      say(`已导出 ${docs.length} 节`);
+      say(t('已导出 {n} 节', { n: docs.length }));
     } catch (e) {
-      say('导出失败:' + (e instanceof Error ? e.message : String(e)));
+      say(t('导出失败:') + (e instanceof Error ? e.message : String(e)));
     }
   }, [records, say]);
 
@@ -243,7 +245,7 @@ export default function HomePage() {
   // Generate the summary from the given transcript lines + session sid (decoupled from "which session is being viewed", to avoid the summary landing on the wrong session)
   const generateSummaryFor = useCallback(async (lines: TranscriptLine[], sid: string | null) => {
     if (lines.length === 0) {
-      setSummaryError('这节课还没有转写内容');
+      setSummaryError(t('这节课还没有转写内容'));
       setActiveTab('summary');
       return;
     }
@@ -305,14 +307,14 @@ export default function HomePage() {
 
   // The 「保存摘要」 button: save once manually and show a notice
   const handleSaveSummary = useCallback(async () => {
-    if (!activeSessionId) { say('这节课还没保存,先停止录音'); return; }
-    if (!summary) { say('还没有摘要可保存'); return; }
+    if (!activeSessionId) { say(t('这节课还没保存,先停止录音')); return; }
+    if (!summary) { say(t('还没有摘要可保存')); return; }
     try {
       await records.saveSummary(activeSessionId, { summary, key_points: keyPoints, corrections, applied: appliedCorrections });
       await records.reload();
-      say('摘要已保存');
+      say(t('摘要已保存'));
     } catch (e) {
-      say('保存失败:' + (e instanceof Error ? e.message : String(e)));
+      say(t('保存失败:') + (e instanceof Error ? e.message : String(e)));
     }
   }, [activeSessionId, summary, keyPoints, corrections, appliedCorrections, records, say]);
 
@@ -346,7 +348,7 @@ export default function HomePage() {
   // otherwise record a new session and clear the previous one's leftovers to avoid mixing sessions.
   const handleStartRecording = useCallback((o: Parameters<typeof live.start>[0]) => {
     if (activeSessionId && activeSession) {
-      say('接着这节课继续录音');
+      say(t('接着这节课继续录音'));
       void live.start({ ...o, appendSid: activeSessionId });
       return;
     }
@@ -371,7 +373,7 @@ export default function HomePage() {
     (format: 'word' | 'pdf', opts?: { summary?: boolean; corrections?: boolean; transcript?: boolean }) => {
       // Export only the summary by default; include 「可能错误」 and 「原文」 only when checked
       const o = opts ?? { summary: true, corrections: false, transcript: false };
-      if (!o.summary && !o.corrections && !o.transcript) { say('请至少勾选一项导出内容'); return; }
+      if (!o.summary && !o.corrections && !o.transcript) { say(t('请至少勾选一项导出内容')); return; }
       const doc = {
         title,
         subtitle: activeSession
@@ -388,16 +390,16 @@ export default function HomePage() {
           : undefined,
       };
       const label = format === 'pdf' ? 'PDF' : 'Word';
-      say(`正在生成 ${label}…`);
+      say(t('正在生成 {label}…', { label }));
       const run = format === 'pdf' ? exportPdf(doc) : exportWord(doc);
-      void run.catch((e) => say(`导出 ${label} 失败:` + (e instanceof Error ? e.message : String(e))));
+      void run.catch((e) => say(t('导出 {label} 失败:', { label }) + (e instanceof Error ? e.message : String(e))));
     },
     [title, activeSession, viewLines, summary, keyPoints, corrections, say]
   );
 
   const handleEditLine = useCallback(
     async (lineId: number, text: string) => {
-      if (!activeSessionId) throw new Error('这节课还没保存，先停止录音');
+      if (!activeSessionId) throw new Error(t('这节课还没保存，先停止录音'));
       await records.editLine(activeSessionId, lineId, text);
       const j = await records.loadTranscript(activeSessionId);
       setHistLines(j.lines);
@@ -422,7 +424,7 @@ export default function HomePage() {
       const r = await records.renameSpeaker(activeSessionId, speakerId, name);
       setHistLines((prev) => prev.map((l) => (l.speaker_id === speakerId ? { ...l, speaker: name } : l)));
       const n = (r as { propagated_sessions?: number }).propagated_sessions ?? 0;
-      if (name && n >= 1) say(`已把「${name}」同步到过去 ${n} 节课里的同一个人`);
+      if (name && n >= 1) say(t('已把「{name}」同步到过去 {n} 节课里的同一个人', { name, n }));
     },
     [activeSessionId, records, say]
   );
@@ -433,15 +435,15 @@ export default function HomePage() {
       const cid = lib.assign[activeSessionId];
       const course = lib.courses.find((c) => c.id === cid);
       if (!course) {
-        say(`以后想自动把「${from}」改成「${to}」，先把这节课归到某门课程下`);
+        say(t('以后想自动把「{from}」改成「{to}」，先把这节课归到某门课程下', { from, to }));
         return;
       }
       if ((course.corrections ?? []).some((r) => r.from === from)) return;
-      if (!window.confirm(`以后自动把「${from}」改成「${to}」？（加进「${course.name}」的纠错表）`)) return;
+      if (!window.confirm(t('以后自动把「{from}」改成「{to}」？（加进「{name}」的纠错表）', { from, to, name: course.name }))) return;
       await lib.updateCourse(course.id, {
         corrections: [...(course.corrections ?? []), { from, to, enabled: true }],
       });
-      say(`已加入「${course.name}」的纠错表`);
+      say(t('已加入「{name}」的纠错表', { name: course.name }));
     },
     [lib, activeSessionId, say]
   );
@@ -449,7 +451,7 @@ export default function HomePage() {
   /** Apply a correction: replace every 「from」 in the current transcript with 「to」 and persist */
   const handleApplyCorrection = useCallback(
     async (from: string, to: string, raw?: string) => {
-      if (!activeSessionId) { say('这节课还没保存,先停止录音再纠错'); return; }
+      if (!activeSessionId) { say(t('这节课还没保存,先停止录音再纠错')); return; }
       if (!from || !to) return;
       try {
         // Match against the server's latest transcript (authoritative, unaffected by whether live or history is currently shown)
@@ -462,7 +464,7 @@ export default function HomePage() {
         const affected = [...byId.values()].filter((l) => l.text.includes(from));
         if (affected.length === 0) {
           if (raw) setAppliedCorrections((prev) => (prev.includes(raw) ? prev : [...prev, raw]));
-          say(`转写里没找到「${from}」(可能已自动纠正)`);
+          say(t('转写里没找到「{from}」(可能已自动纠正)', { from }));
           return;
         }
         for (const l of affected) {
@@ -472,9 +474,9 @@ export default function HomePage() {
         setHistLines(j.lines);
         if (raw) setAppliedCorrections((prev) => (prev.includes(raw) ? prev : [...prev, raw]));
         void records.learnTerm(to);   // Personalized feedback: learn the correct term so future sessions are corrected automatically
-        say(`已把 ${affected.length} 处「${from}」改为「${to}」`);
+        say(t('已把 {n} 处「{from}」改为「{to}」', { n: affected.length, from, to }));
       } catch (e) {
-        say('替换失败:' + (e instanceof Error ? e.message : String(e)));
+        say(t('替换失败:') + (e instanceof Error ? e.message : String(e)));
       }
     },
     [activeSessionId, records, say]
@@ -482,12 +484,12 @@ export default function HomePage() {
 
   /** Replace all at once: apply every pending replacement to each line of the latest transcript (writing each line only once, to avoid overwriting), marking them all as replaced */
   const handleApplyAllCorrections = useCallback(async () => {
-    if (!activeSessionId) { say('这节课还没保存,先停止录音再纠错'); return; }
+    if (!activeSessionId) { say(t('这节课还没保存,先停止录音再纠错')); return; }
     const pending = corrections.filter((c) => !appliedCorrections.includes(c));
     const pairs = pending
       .map((raw) => ({ raw, p: parseCorrection(raw) }))
       .filter((x): x is { raw: string; p: { from: string; to: string } } => !!x.p);
-    if (pairs.length === 0) { say('没有可替换的项'); return; }
+    if (pairs.length === 0) { say(t('没有可替换的项')); return; }
     try {
       const j0 = await records.loadTranscript(activeSessionId);
       const byId = new Map<number, TranscriptLine>();
@@ -503,9 +505,9 @@ export default function HomePage() {
       setHistLines(j.lines);
       setAppliedCorrections((prev) => Array.from(new Set([...prev, ...pending])));
       pairs.forEach(({ p }) => void records.learnTerm(p.to));   // Personalized feedback: learn all the corrected terms
-      say(changed > 0 ? `已一键替换 ${changed} 行` : '转写里没找到这些词(可能已替换)');
+      say(changed > 0 ? t('已一键替换 {n} 行', { n: changed }) : t('转写里没找到这些词(可能已替换)'));
     } catch (e) {
-      say('替换失败:' + (e instanceof Error ? e.message : String(e)));
+      say(t('替换失败:') + (e instanceof Error ? e.message : String(e)));
     }
   }, [activeSessionId, corrections, appliedCorrections, records, say]);
 
@@ -513,7 +515,7 @@ export default function HomePage() {
   const handleShoot = useCallback(
     async (file: File) => {
       const sid = live.liveSid || activeSessionId;
-      if (!sid) throw new Error('还没开始录音');
+      if (!sid) throw new Error(t('还没开始录音'));
       const dataUrl = await compressImage(file);
       const shot = await lib.addShot(sid, live.status.elapsed || 0, dataUrl);
       // The session currently being viewed is the one just photographed (live: sid=liveSid; history: sid=activeSessionId) -> put it on screen immediately
@@ -536,7 +538,7 @@ export default function HomePage() {
           <div className="flex items-center gap-3 min-w-0">
             <BackButton className="flex items-center gap-1 h-8 px-3 rounded-lg bg-background-100 hover:bg-background-200 text-foreground-600 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">
               <i className="ri-arrow-left-line"></i>
-              <span className="hidden sm:inline text-xs font-medium">返回</span>
+              <span className="hidden sm:inline text-xs font-medium">{t('返回')}</span>
             </BackButton>
             <div className="w-8 h-8 flex items-center justify-center bg-accent-100 rounded-lg flex-shrink-0">
               <i className="ri-book-open-line text-accent-600"></i>
@@ -563,21 +565,21 @@ export default function HomePage() {
               onClick={() => handleExport('word')}
               disabled={viewLines.length === 0}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-500 hover:text-foreground-700 hover:bg-background-200 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              title="导出 Word(摘要)"
+              title={t('导出 Word(摘要)')}
             >
               <i className="ri-file-word-2-line"></i>
             </button>
             <button
               onClick={() => setShowEditHistory(true)}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-500 hover:text-foreground-700 hover:bg-background-200 transition-colors cursor-pointer"
-              title="编辑历史"
+              title={t('编辑历史')}
             >
               <i className="ri-history-line"></i>
             </button>
             <button
               onClick={() => setShowSharePanel(true)}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-500 hover:text-foreground-700 hover:bg-background-200 transition-colors cursor-pointer"
-              title="共享设置"
+              title={t('共享设置')}
             >
               <i className="ri-share-line"></i>
             </button>
@@ -590,17 +592,17 @@ export default function HomePage() {
           <div className="mb-5 flex items-center justify-between gap-3 flex-wrap bg-green-50 border border-green-200 rounded-xl px-4 py-3">
             <div className="flex items-center gap-2 text-sm text-green-800">
               <i className="ri-checkbox-circle-fill text-green-500 text-lg"></i>
-              <span>这节课已保存,并生成了 AI 概要。在主界面「最近课时」能找到它。</span>
+              <span>{t('这节课已保存,并生成了 AI 概要。在主界面「最近课时」能找到它。')}</span>
             </div>
             <div className="flex items-center gap-2">
               <BackButton className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap">
-                <i className="ri-home-4-line"></i>返回
+                <i className="ri-home-4-line"></i>{t('返回')}
               </BackButton>
               <button
                 onClick={() => setJustEnded(false)}
                 className="px-3 py-2 text-sm text-foreground-500 hover:text-foreground-700 cursor-pointer whitespace-nowrap"
               >
-                留在这
+                {t('留在这')}
               </button>
             </div>
           </div>
@@ -611,13 +613,13 @@ export default function HomePage() {
             <h2 className="text-base font-semibold text-foreground-900">{title}</h2>
             <p className="text-xs text-foreground-400 mt-0.5">
               {live.running
-                ? '正在录制…'
+                ? t('正在录制…')
                 : activeSession
-                  ? `${sessionDate(activeSession)} · ${viewLines.length} 句`
-                  : '还没有录制记录'}
+                  ? `${sessionDate(activeSession)} · ${t('{n} 句', { n: viewLines.length })}`
+                  : t('还没有录制记录')}
             </p>
           </div>
-          <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+          <Tabs tabs={tabs.map((tb) => ({ ...tb, label: t(tb.label) }))} activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
 
         {activeTab === 'transcription' && (

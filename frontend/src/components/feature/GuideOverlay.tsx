@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useGuide, nextGuide, prevGuide, endGuide } from '@/hooks/useGuide';
+import { useT } from '@/lib/i18n';
 
 /**
  * Step-by-step guide layer: highlights the real button for the current step + arrow pointer + step text.
@@ -8,6 +9,7 @@ import { useGuide, nextGuide, prevGuide, endGuide } from '@/hooks/useGuide';
  * When the target element can't be found (not yet rendered/in a different state), fall back to a bottom-centered hint that doesn't block interaction.
  */
 export default function GuideOverlay() {
+  const t = useT();
   const g = useGuide();
   const [rect, setRect] = useState<DOMRect | null>(null);
 
@@ -122,14 +124,14 @@ export default function GuideOverlay() {
         <div className="flex items-center gap-2 mb-1.5">
           <i className="ri-cursor-line text-accent-300"></i>
           <span className="text-xs font-semibold truncate">{g.title}</span>
-          <span className="ml-auto text-[11px] text-background-50/60 whitespace-nowrap">第 {g.index + 1}/{total} 步</span>
-          <button onClick={endGuide} className="ml-1 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-background-50/10 cursor-pointer" title="退出引导">
+          <span className="ml-auto text-[11px] text-background-50/60 whitespace-nowrap">{t('第 {n}/{total} 步', { n: g.index + 1, total })}</span>
+          <button onClick={endGuide} className="ml-1 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-background-50/10 cursor-pointer" title={t('退出引导')}>
             <i className="ri-close-line text-background-50/70"></i>
           </button>
         </div>
 
         <p className="text-sm leading-relaxed text-background-50/95 mb-1">{text}</p>
-        {rect && <p className="text-[11px] text-accent-300 mb-2.5">↑ 点上面高亮的按钮,或点「下一步」</p>}
+        {rect && <p className="text-[11px] text-accent-300 mb-2.5">{t('↑ 点上面高亮的按钮,或点「下一步」')}</p>}
         {!rect && <div className="mb-2.5" />}
 
         <div className="flex items-center gap-2">
@@ -141,11 +143,11 @@ export default function GuideOverlay() {
           <div className="ml-auto flex items-center gap-2">
             {!first && (
               <button onClick={prevGuide} className="px-3 py-1.5 rounded-full text-xs font-medium bg-background-50/10 text-background-50/90 hover:bg-background-50/20 cursor-pointer">
-                上一步
+                {t('上一步')}
               </button>
             )}
             <button onClick={nextGuide} className="px-4 py-1.5 rounded-full text-xs font-semibold bg-accent-500 text-white hover:bg-accent-600 cursor-pointer">
-              {last ? '完成' : '下一步'}
+              {last ? t('完成') : t('下一步')}
             </button>
           </div>
         </div>

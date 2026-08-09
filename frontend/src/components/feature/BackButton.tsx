@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useT } from '@/lib/i18n';
 
 interface BackButtonProps {
   className?: string;
@@ -9,6 +10,7 @@ interface BackButtonProps {
 // Unified back button: tap = go to previous page (or home if no history); long-press ≥500ms = go home.
 export default function BackButton({ className, children }: BackButtonProps) {
   const navigate = useNavigate();
+  const t = useT();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
 
@@ -53,7 +55,7 @@ export default function BackButton({ className, children }: BackButtonProps) {
       onTouchEnd={endPress}
       onTouchCancel={endPress}
       className={`select-none ${className ?? ''}`}
-      title="轻点返回上一页,长按回主界面"
+      title={t('轻点返回上一页,长按回主界面')}
     >
       {children ?? <i className="ri-arrow-left-line" />}
     </button>

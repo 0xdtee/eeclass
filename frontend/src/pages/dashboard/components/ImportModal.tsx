@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import Modal from '@/components/base/Modal';
 import type { ScheduleCourse } from '@/hooks/useRecords';
+import { useT } from '@/lib/i18n';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ type Stage = 'upload' | 'parsing' | 'courses' | 'review' | 'error';
 const DAY = ['一', '二', '三', '四', '五', '六', '日'];
 
 export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage, onConfirmCourses }: ImportModalProps) {
+  const t = useT();
   const [stage, setStage] = useState<Stage>('upload');
   const [errorMsg, setErrorMsg] = useState('');
   const [fileName, setFileName] = useState('');
@@ -61,19 +63,19 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
       const dataUrl: string = await new Promise((res, rej) => {
         const r = new FileReader();
         r.onload = () => res(r.result as string);
-        r.onerror = () => rej(new Error('读图失败'));
+        r.onerror = () => rej(new Error(t('读图失败')));
         r.readAsDataURL(file);
       });
       const out = await onImportImage(dataUrl);
       if (out.error) { setErrorMsg(out.error); setStage('error'); return; }
       const cs = out.courses ?? [];
-      if (cs.length === 0) { setErrorMsg('没在图里识别到课程,换张更清晰的课表截图试试'); setStage('error'); return; }
+      if (cs.length === 0) { setErrorMsg(t('没在图里识别到课程,换张更清晰的课表截图试试')); setStage('error'); return; }
       setCourses(cs);
       setPicked(cs.map(() => true));
       setAnchorMonday(out.anchor_monday || '');
       setStage('courses');
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : '识别失败');
+      setErrorMsg(e instanceof Error ? e.message : t('识别失败'));
       setStage('error');
     }
   }, [onImportImage]);
@@ -85,14 +87,14 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
     try {
       const buffer = await file.arrayBuffer();
       const text = ext === 'docx' ? await parseDocx(buffer) : await parsePdf(buffer);
-      if (!text.trim()) { setErrorMsg('未能从文件中提取到文字'); setStage('error'); return; }
+      if (!text.trim()) { setErrorMsg(t('未能从文件中提取到文字')); setStage('error'); return; }
       setParsedContent(text);
       setTitle(file.name.replace(/\.(docx|pdf)$/i, ''));
       const t = new Date();
       setDate(`${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`);
       setStage('review');
     } catch {
-      setErrorMsg('文件解析失败'); setStage('error');
+      setErrorMsg(t('文件解析失败')); setStage('error');
     }
   }, []);
 
@@ -103,7 +105,7 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
     } else if (ext === 'docx' || ext === 'pdf') {
       void handleDoc(file, ext);
     } else {
-      setErrorMsg('支持课表截图(png/jpg)、或 .docx / .pdf 文档'); setStage('error');
+      setErrorMsg(t('支持课表截图(png/jpg)、或 .docx / .pdf 文档')); setStage('error');
     }
   }, [handleImage, handleDoc]);
 
@@ -122,7 +124,7 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="导入课表 / 文档" width="max-w-xl">
+    <Modal isOpen={isOpen} onClose={handleClose} title={t('导入课表 / 文档')} width="max-w-xl">
       {stage === 'upload' && (
         <div
           onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
@@ -137,8 +139,8 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
           <div className="w-16 h-16 mx-auto flex items-center justify-center bg-accent-100 rounded-2xl mb-4">
             <i className="ri-calendar-schedule-line text-accent-600 text-2xl"></i>
           </div>
-          <p className="text-sm font-semibold text-foreground-700 mb-1">{dragOver ? '松开以上传' : '上传课表截图,自动识别课程加进日历'}</p>
-          <p className="text-xs text-foreground-400">支持课表截图(png/jpg),也支持 .docx / .pdf 文档</p>
+          <p className="text-sm font-semibold text-foreground-700 mb-1">{dragOver ? t('松开以上传') : t('上传课表截图,自动识别课程加进日历')}</p>
+          <p className="text-xs text-foreground-400">{t('支持课表截图(png/jpg),也支持 .docx / .pdf 文档')}</p>
         </div>
       )}
 
@@ -147,7 +149,7 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
           <div className="w-14 h-14 mx-auto flex items-center justify-center bg-accent-100 rounded-2xl mb-4">
             <div className="w-7 h-7 border-2 border-accent-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-          <p className="text-sm font-medium text-foreground-700 mb-1">正在识别…(截图识别需十几秒)</p>
+          <p className="text-sm font-medium text-foreground-700 mb-1">{t('正在识别…(截图识别需十几秒)')}</p>
           <p className="text-xs text-foreground-400 truncate max-w-[220px] mx-auto">{fileName}</p>
         </div>
       )}
@@ -159,20 +161,20 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
           </div>
           <p className="text-sm font-medium text-red-600 mb-3">{errorMsg}</p>
           <div className="flex items-center gap-3 justify-center">
-            <button onClick={() => { setStage('upload'); setErrorMsg(''); }} className="px-4 py-2 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 cursor-pointer">重新上传</button>
-            <button onClick={handleClose} className="px-4 py-2 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 cursor-pointer">取消</button>
+            <button onClick={() => { setStage('upload'); setErrorMsg(''); }} className="px-4 py-2 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 cursor-pointer">{t('重新上传')}</button>
+            <button onClick={handleClose} className="px-4 py-2 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 cursor-pointer">{t('取消')}</button>
           </div>
         </div>
       )}
 
       {stage === 'courses' && (
         <div className="space-y-3">
-          <p className="text-xs text-foreground-500">识别到 <b className="text-accent-600">{courses.length}</b> 门课,勾选要加进日历的(每周重复):</p>
+          <p className="text-xs text-foreground-500">{t('识别到')} <b className="text-accent-600">{courses.length}</b> {t('门课,勾选要加进日历的(每周重复):')}</p>
           <div className="max-h-[46vh] overflow-y-auto space-y-1.5 -mx-1 px-1">
             {courses.map((c, i) => (
               <label key={i} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${picked[i] ? 'bg-accent-50 border-accent-200' : 'bg-background-100 border-background-200 opacity-60'}`}>
                 <input type="checkbox" checked={picked[i]} onChange={() => setPicked((p) => p.map((v, j) => (j === i ? !v : v)))} className="accent-accent-500 w-4 h-4 flex-shrink-0" />
-                <span className="text-xs font-mono text-accent-600 flex-shrink-0 w-10 text-center">周{DAY[c.day - 1] ?? c.day}</span>
+                <span className="text-xs font-mono text-accent-600 flex-shrink-0 w-10 text-center">{t('周' + (DAY[c.day - 1] ?? c.day))}</span>
                 <span className="text-xs font-mono text-foreground-400 flex-shrink-0 w-24">{c.start}-{c.end}</span>
                 <span className="text-sm text-foreground-800 font-medium truncate flex-1">{c.name}</span>
                 <span className="text-xs text-foreground-400 flex-shrink-0">{c.room}</span>
@@ -180,9 +182,9 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
             ))}
           </div>
           <div className="flex items-center gap-3 pt-1">
-            <button onClick={handleClose} className="flex-1 py-2.5 bg-background-100 text-foreground-600 rounded-lg text-sm font-medium hover:bg-background-200 cursor-pointer">取消</button>
+            <button onClick={handleClose} className="flex-1 py-2.5 bg-background-100 text-foreground-600 rounded-lg text-sm font-medium hover:bg-background-200 cursor-pointer">{t('取消')}</button>
             <button onClick={confirmCourses} className="flex-1 py-2.5 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 cursor-pointer">
-              加入日历（{picked.filter(Boolean).length}）
+              {t('加入日历（{n}）', { n: picked.filter(Boolean).length })}
             </button>
           </div>
         </div>
@@ -195,16 +197,16 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
             <span className="text-xs font-medium text-accent-700 truncate">{fileName}</span>
           </div>
           <div>
-            <label className="block text-xs font-medium text-foreground-600 mb-1.5">课时标题</label>
+            <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('课时标题')}</label>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" required autoFocus />
           </div>
           <div>
-            <label className="block text-xs font-medium text-foreground-600 mb-1.5">日期</label>
+            <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('日期')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm focus:outline-none focus:border-accent-400" required />
           </div>
           <div className="flex items-center gap-3 pt-2">
-            <button type="button" onClick={handleClose} className="flex-1 py-2.5 bg-background-100 text-foreground-600 rounded-lg text-sm font-medium hover:bg-background-200 cursor-pointer">取消</button>
-            <button type="submit" className="flex-1 py-2.5 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 cursor-pointer">导入并创建</button>
+            <button type="button" onClick={handleClose} className="flex-1 py-2.5 bg-background-100 text-foreground-600 rounded-lg text-sm font-medium hover:bg-background-200 cursor-pointer">{t('取消')}</button>
+            <button type="submit" className="flex-1 py-2.5 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 cursor-pointer">{t('导入并创建')}</button>
           </div>
         </form>
       )}

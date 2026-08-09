@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import TagBadge from '@/components/base/TagBadge';
 import { tags as allTags } from '@/mocks/courseData';
+import { useT } from '@/lib/i18n';
 
 interface TagFilterProps {
   selectedTags: string[];
@@ -8,6 +9,7 @@ interface TagFilterProps {
 }
 
 export default function TagFilter({ selectedTags, onTagsChange }: TagFilterProps) {
+  const t = useT();
   const [showDropdown, setShowDropdown] = useState(false);
 
   const toggleTag = (tagId: string) => {
@@ -31,7 +33,7 @@ export default function TagFilter({ selectedTags, onTagsChange }: TagFilterProps
         }`}
       >
         <i className="ri-price-tag-3-line text-base"></i>
-        <span>章节筛选</span>
+        <span>{t('章节筛选')}</span>
         {selectedTags.length > 0 && (
           <span className="bg-accent-500 text-background-50 text-xs rounded-full w-5 h-5 flex items-center justify-center">
             {selectedTags.length}
@@ -45,13 +47,13 @@ export default function TagFilter({ selectedTags, onTagsChange }: TagFilterProps
           <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)}></div>
           <div className="absolute right-0 top-full mt-2 z-20 bg-background-50 rounded-xl border border-background-200 p-4 min-w-[280px]">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-foreground-500">选择章节</span>
+              <span className="text-xs font-medium text-foreground-500">{t('选择章节')}</span>
               {selectedTags.length > 0 && (
                 <button
                   onClick={clearAll}
                   className="text-xs text-accent-600 hover:text-accent-700 cursor-pointer whitespace-nowrap"
                 >
-                  清除全部
+                  {t('清除全部')}
                 </button>
               )}
             </div>

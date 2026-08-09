@@ -23,6 +23,7 @@ import { useTagsStore } from '@/hooks/useTagsStore';
 import type { Tag } from '@/hooks/useTagsStore';
 import { useRecords } from '@/hooks/useRecords';
 import type { ScheduleEvent } from '@/hooks/useRecords';
+import { t, useT } from '@/lib/i18n';
 
 /* ───────── color config ───────── */
 const COLOR_OPTIONS = [
@@ -62,7 +63,7 @@ function ColorPicker({
           key={c.value}
           type="button"
           onClick={() => onChange(c.value)}
-          title={c.label}
+          title={t(c.label)}
           className={`w-6 h-6 rounded-full ${c.bgClass} cursor-pointer transition-transform hover:scale-110 ${
             value === c.value ? 'ring-2 ring-offset-1 ring-foreground-400 scale-110' : ''
           }`}
@@ -160,14 +161,14 @@ function TagRowContent({
           <ColorPicker value={editingState.color} onChange={(v) => onEditChange({ color: v })} />
         </div>
         <div className="flex items-center gap-2 mt-2.5">
-          <span className="text-xs text-foreground-400">预览：</span>
+          <span className="text-xs text-foreground-400">{t('预览：')}</span>
           <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getColorConfig(editingState.color).lightClass}`}>
-            {editingState.label || '标签名称'}
+            {editingState.label || t('标签名称')}
           </span>
         </div>
         <div className="flex gap-2 mt-3">
-          <button onClick={onSaveEdit} className="px-3 py-1.5 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap">保存</button>
-          <button onClick={onCancelEdit} className="px-3 py-1.5 bg-background-100 text-foreground-500 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap">取消</button>
+          <button onClick={onSaveEdit} className="px-3 py-1.5 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap">{t('保存')}</button>
+          <button onClick={onCancelEdit} className="px-3 py-1.5 bg-background-100 text-foreground-500 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap">{t('取消')}</button>
         </div>
       </div>
     );
@@ -182,13 +183,13 @@ function TagRowContent({
             <i className="ri-error-warning-line text-red-400"></i>
           </div>
           <p className="text-sm text-foreground-700">
-            确定删除「<span className="font-semibold">{tag.label}</span>」？
-            {sessionCount > 0 && <span className="text-red-500 ml-1">（已有 {sessionCount} 节课时使用此标签）</span>}
+            {t('确定删除「')}<span className="font-semibold">{tag.label}</span>{t('」？')}
+            {sessionCount > 0 && <span className="text-red-500 ml-1">{t('（已有 {n} 节课时使用此标签）', { n: sessionCount })}</span>}
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => onConfirmDelete(tag.id)} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600 transition-colors cursor-pointer whitespace-nowrap">确认删除</button>
-          <button onClick={onCancelDelete} className="px-3 py-1.5 bg-background-100 text-foreground-500 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap">取消</button>
+          <button onClick={() => onConfirmDelete(tag.id)} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600 transition-colors cursor-pointer whitespace-nowrap">{t('确认删除')}</button>
+          <button onClick={onCancelDelete} className="px-3 py-1.5 bg-background-100 text-foreground-500 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap">{t('取消')}</button>
         </div>
       </div>
     );
@@ -202,8 +203,8 @@ function TagRowContent({
         type="button"
         {...(dragHandleProps ?? {})}
         className="w-7 h-7 flex items-center justify-center text-foreground-300 hover:text-foreground-500 cursor-grab active:cursor-grabbing rounded-md hover:bg-background-200 transition-colors flex-shrink-0 touch-none"
-        title="拖动调整顺序"
-        aria-label="拖动调整顺序"
+        title={t('拖动调整顺序')}
+        aria-label={t('拖动调整顺序')}
       >
         <i className="ri-drag-move-2-fill text-base"></i>
       </button>
@@ -238,17 +239,17 @@ function TagRowContent({
 
       {/* Session count */}
       <span className="text-xs text-foreground-400">
-        {sessionCount > 0 ? `${sessionCount} 节课时` : <span className="text-foreground-300">暂无课时</span>}
+        {sessionCount > 0 ? t('{n} 节课时', { n: sessionCount }) : <span className="text-foreground-300">{t('暂无课时')}</span>}
       </span>
 
       <div className="flex-1" />
 
       {/* Actions */}
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={() => onStartEdit(tag.id, tag.label, tag.color)} className="w-8 h-8 flex items-center justify-center rounded-lg text-foreground-400 hover:text-accent-600 hover:bg-accent-50 transition-colors cursor-pointer" title="编辑">
+        <button onClick={() => onStartEdit(tag.id, tag.label, tag.color)} className="w-8 h-8 flex items-center justify-center rounded-lg text-foreground-400 hover:text-accent-600 hover:bg-accent-50 transition-colors cursor-pointer" title={t('编辑')}>
           <i className="ri-edit-2-line text-sm"></i>
         </button>
-        <button onClick={() => onAskDelete(tag.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-foreground-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer" title="删除">
+        <button onClick={() => onAskDelete(tag.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-foreground-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer" title={t('删除')}>
           <i className="ri-delete-bin-2-line text-sm"></i>
         </button>
       </div>
@@ -297,6 +298,7 @@ export default function TagsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const t = useT();
 
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -346,25 +348,25 @@ export default function TagsPage() {
   };
   const handleSaveEdit = () => {
     if (!editing) return;
-    if (!editing.label.trim()) { showToast('标签名不能为空'); return; }
+    if (!editing.label.trim()) { showToast(t('标签名不能为空')); return; }
     updateTag(editing.id, editing.label, editing.color);
     setEditing(null);
-    showToast('标签已保存');
+    showToast(t('标签已保存'));
   };
   const handleCancelEdit = () => setEditing(null);
 
   /* add handlers */
   const handleAddTag = () => {
-    if (!newTag.label.trim()) { showToast('请输入标签名'); return; }
+    if (!newTag.label.trim()) { showToast(t('请输入标签名')); return; }
     addTag(newTag.label, newTag.color);
     setNewTag({ label: '', color: 'accent' });
     setShowAddForm(false);
-    showToast('新标签已添加');
+    showToast(t('新标签已添加'));
   };
 
   /* delete handlers */
   const handleAskDelete = (id: string) => { setDeleteConfirm(id); setEditing(null); };
-  const handleConfirmDelete = (id: string) => { deleteTag(id); setDeleteConfirm(null); showToast('标签已删除'); };
+  const handleConfirmDelete = (id: string) => { deleteTag(id); setDeleteConfirm(null); showToast(t('标签已删除')); };
   const handleCancelDelete = () => setDeleteConfirm(null);
 
   const activeTag = activeId ? tags.find((t) => t.id === activeId) : null;
@@ -383,13 +385,13 @@ export default function TagsPage() {
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
           <BackButton className="flex items-center gap-1.5 text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">
             <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-left-s-line text-base"></i></div>
-            <span className="text-sm">返回</span>
+            <span className="text-sm">{t('返回')}</span>
           </BackButton>
           <div className="w-px h-4 bg-background-200"></div>
           <div className="flex items-center gap-2 flex-1">
             <div className="w-5 h-5 flex items-center justify-center"><i className="ri-price-tag-3-line text-accent-500 text-base"></i></div>
-            <h1 className="text-sm font-semibold text-foreground-800">管理标签</h1>
-            <span className="ml-1 px-2 py-0.5 bg-background-200 text-foreground-500 rounded-full text-xs font-medium">{tags.length} 个</span>
+            <h1 className="text-sm font-semibold text-foreground-800">{t('管理标签')}</h1>
+            <span className="ml-1 px-2 py-0.5 bg-background-200 text-foreground-500 rounded-full text-xs font-medium">{tags.length} {t('个')}</span>
           </div>
           <button
             data-guide="tags-add"
@@ -397,7 +399,7 @@ export default function TagsPage() {
             className="flex items-center gap-1.5 px-4 py-2 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
           >
             <div className="w-4 h-4 flex items-center justify-center"><i className="ri-add-line text-base"></i></div>
-            新建标签
+            {t('新建标签')}
           </button>
         </div>
       </div>
@@ -409,13 +411,13 @@ export default function TagsPage() {
             <i className="ri-price-tag-3-line text-accent-600 text-lg"></i>
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground-800 mb-1">标签用于分类课时记录</p>
+            <p className="text-sm font-semibold text-foreground-800 mb-1">{t('标签用于分类课时记录')}</p>
             <p className="text-xs text-foreground-400 leading-relaxed">
-              新增、重命名或删除标签，按住左侧
+              {t('新增、重命名或删除标签，按住左侧')}
               <span className="inline-flex items-center mx-1 text-foreground-500">
                 <i className="ri-drag-move-2-fill text-xs"></i>
               </span>
-              图标可拖动调整排列顺序。
+              {t('图标可拖动调整排列顺序。')}
             </p>
           </div>
         </div>
@@ -425,7 +427,7 @@ export default function TagsPage() {
           <div className="bg-accent-50 border border-accent-200 rounded-2xl p-5">
             <p className="text-sm font-semibold text-foreground-800 mb-4 flex items-center gap-2">
               <div className="w-4 h-4 flex items-center justify-center"><i className="ri-add-circle-line text-accent-500"></i></div>
-              新建标签
+              {t('新建标签')}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <input
@@ -437,21 +439,21 @@ export default function TagsPage() {
                   if (e.key === 'Enter') handleAddTag();
                   if (e.key === 'Escape') { setShowAddForm(false); setNewTag({ label: '', color: 'accent' }); }
                 }}
-                placeholder="输入标签名称，如「第八章：高级算法」"
+                placeholder={t('输入标签名称，如「第八章：高级算法」')}
                 maxLength={30}
                 className="flex-1 h-10 px-3.5 bg-background-50 border border-background-300 rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all"
               />
               <ColorPicker value={newTag.color} onChange={(v) => setNewTag((p) => ({ ...p, color: v }))} />
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-xs text-foreground-400">预览：</span>
+              <span className="text-xs text-foreground-400">{t('预览：')}</span>
               <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getColorConfig(newTag.color).lightClass}`}>
-                {newTag.label || '标签名称'}
+                {newTag.label || t('标签名称')}
               </span>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={handleAddTag} className="px-4 py-2 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap">确认添加</button>
-              <button onClick={() => { setShowAddForm(false); setNewTag({ label: '', color: 'accent' }); }} className="px-4 py-2 bg-background-100 text-foreground-500 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap">取消</button>
+              <button onClick={handleAddTag} className="px-4 py-2 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap">{t('确认添加')}</button>
+              <button onClick={() => { setShowAddForm(false); setNewTag({ label: '', color: 'accent' }); }} className="px-4 py-2 bg-background-100 text-foreground-500 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap">{t('取消')}</button>
             </div>
           </div>
         )}
@@ -462,16 +464,16 @@ export default function TagsPage() {
             <div className="w-14 h-14 mx-auto flex items-center justify-center bg-background-100 rounded-2xl mb-4">
               <i className="ri-price-tag-3-line text-foreground-300 text-2xl"></i>
             </div>
-            <p className="text-sm font-medium text-foreground-500 mb-1">还没有标签</p>
-            <p className="text-xs text-foreground-300">点击右上角「新建标签」开始创建</p>
+            <p className="text-sm font-medium text-foreground-500 mb-1">{t('还没有标签')}</p>
+            <p className="text-xs text-foreground-300">{t('点击右上角「新建标签」开始创建')}</p>
           </div>
         ) : (
           <div className="bg-background-50 rounded-2xl border border-background-200 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-background-100 flex items-center justify-between">
-              <p className="text-xs font-medium text-foreground-400">标签列表</p>
+              <p className="text-xs font-medium text-foreground-400">{t('标签列表')}</p>
               <div className="flex items-center gap-1 text-xs text-foreground-300">
                 <i className="ri-drag-move-2-fill text-xs"></i>
-                <span>按住拖动调整顺序</span>
+                <span>{t('按住拖动调整顺序')}</span>
               </div>
             </div>
 
@@ -535,7 +537,7 @@ export default function TagsPage() {
           </div>
         )}
 
-        <p className="text-center text-xs text-foreground-300 pb-4">标签修改会即时保存，刷新页面后依然有效</p>
+        <p className="text-center text-xs text-foreground-300 pb-4">{t('标签修改会即时保存，刷新页面后依然有效')}</p>
       </div>
     </div>
   );

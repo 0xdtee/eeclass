@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Modal from '@/components/base/Modal';
 import { shareUrl } from '@/hooks/useRecords';
 import type { ShareInfo } from '@/hooks/useRecords';
+import { useT } from '@/lib/i18n';
 
 interface SharePanelProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export default function SharePanel({
   onCreate,
   onRevoke,
 }: SharePanelProps) {
+  const t = useT();
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [allowDownload, setAllowDownload] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -41,7 +43,7 @@ export default function SharePanel({
 
   const create = useCallback(async () => {
     if (!selectedSid) {
-      setError('先选一节已录好的课');
+      setError(t('先选一节已录好的课'));
       return;
     }
     setBusy(true);
@@ -81,19 +83,19 @@ export default function SharePanel({
   }, [share]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="共享这节课" width="max-w-lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('共享这节课')} width="max-w-lg">
       <div className="space-y-4">
         <p className="text-xs text-foreground-500 leading-relaxed">
-          生成一个<b>只读链接</b>，同一 WiFi 下的同学不需要令牌就能打开看这节课的文字。
-          他们看不到别的课、不能录音、不能修改。
+          {t('生成一个')}<b>{t('只读链接')}</b>{t('，同一 WiFi 下的同学不需要令牌就能打开看这节课的文字。')}
+          {t('他们看不到别的课、不能录音、不能修改。')}
         </p>
 
         {/* Choose which session to share */}
         <div>
-          <label className="block text-xs font-medium text-foreground-600 mb-1.5">选择要共享的课</label>
+          <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('选择要共享的课')}</label>
           {sessions.length === 0 ? (
             <div className="p-3 bg-background-100 rounded-lg text-xs text-foreground-400">
-              还没有已录好的课可共享。先录一节课再来。
+              {t('还没有已录好的课可共享。先录一节课再来。')}
             </div>
           ) : (
             <select
@@ -118,14 +120,14 @@ export default function SharePanel({
                 onChange={(e) => setAllowDownload(e.target.checked)}
                 className="cursor-pointer"
               />
-              允许对方导出文本 / PDF
+              {t('允许对方导出文本 / PDF')}
             </label>
             <button
               onClick={create}
               disabled={busy || !selectedSid}
               className="w-full px-4 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {busy ? '生成中…' : '生成共享链接'}
+              {busy ? t('生成中…') : t('生成共享链接')}
             </button>
           </>
         ) : (
@@ -141,19 +143,18 @@ export default function SharePanel({
                 onClick={copy}
                 className="px-3 py-2 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 cursor-pointer whitespace-nowrap"
               >
-                {copied ? '已复制' : '复制'}
+                {copied ? t('已复制') : t('复制')}
               </button>
             </div>
             <p className="text-xs text-foreground-400 leading-relaxed">
-              创建于 {share.created}。对方要和你在同一个 WiFi；第一次打开会提示证书不受信任，
-              选「继续访问」即可。
+              {t('创建于 {created}。对方要和你在同一个 WiFi；第一次打开会提示证书不受信任，选「继续访问」即可。', { created: share.created })}
             </p>
             <button
               onClick={revoke}
               disabled={busy}
               className="w-full px-4 py-2 bg-red-50 text-red-600 rounded-full text-xs font-semibold hover:bg-red-100 transition-colors cursor-pointer disabled:opacity-50"
             >
-              {busy ? '处理中…' : '停止共享（链接立即失效）'}
+              {busy ? t('处理中…') : t('停止共享（链接立即失效）')}
             </button>
           </>
         )}

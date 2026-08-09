@@ -18,6 +18,7 @@ import SummaryListModal from '@/pages/dashboard/components/SummaryListModal';
 import AudioListModal from '@/pages/dashboard/components/AudioListModal';
 import VoicePrintModal from '@/pages/dashboard/components/VoicePrintModal';
 import { useAuth } from '@/hooks/useAuth';
+import { useT } from '@/lib/i18n';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -36,6 +37,7 @@ interface CreatedSession {
 
 export default function DashboardHome() {
   const navigate = useNavigate();
+  const t = useT();
   const { user, logout } = useAuth();
   const { tags, addTag } = useTagsStore();
   const [showNewSession, setShowNewSession] = useState(false);
@@ -89,7 +91,7 @@ export default function DashboardHome() {
           duration: fmtDuration(s.duration_s),
           durationSec: s.duration_s,
           tags: [] as string[],
-          description: `${s.lines ?? 0} 句`,
+          description: t('{n} 句', { n: s.lines ?? 0 }),
           summary: s.summary ?? '',
           keyPoints: s.key_points ?? [],
         };
@@ -204,7 +206,7 @@ export default function DashboardHome() {
       const idx = date ? dateKeys.indexOf(date) : -1;
       if (idx >= 0) counts[idx] += 1;
     });
-    return days.map((day, i) => ({ day, recordings: counts[i] }));
+    return days.map((day, i) => ({ day: t(day), recordings: counts[i] }));
   }, [records.sessions]);
 
   // Session-duration distribution: the 6 longest sessions (in minutes)
@@ -262,7 +264,7 @@ export default function DashboardHome() {
       keyPoints: [],
     };
     setCreatedSessions((prev) => [newSession, ...prev]);
-    setCreatedMessage(`「${data.title}」已创建！`);
+    setCreatedMessage(t('「{title}」已创建！', { title: data.title }));
     setTimeout(() => setCreatedMessage(''), 3000);
   };
 
@@ -276,7 +278,7 @@ export default function DashboardHome() {
     void records.saveSchedule(merged).catch(() => {});
     const first = newEvents.map((e) => e.date).sort()[0];
     if (first) setCalendarFocus(`${first}|${Date.now()}`);
-    setCreatedMessage(`已把 ${newEvents.length} 节课加进日历`);
+    setCreatedMessage(t('已把 {n} 节课加进日历', { n: newEvents.length }));
     setTimeout(() => setCreatedMessage(''), 4000);
   };
 
@@ -341,8 +343,8 @@ export default function DashboardHome() {
     const monthTxt = firstDate ? firstDate.slice(0, 7) : '';
 
     const tagged = nameToTag.size;
-    const tagTxt = tagged ? `,已给 ${tagged} 门课打上标签(新建 ${createdNames.length} 个 / 沿用已有 ${groupedNames.length} 个)` : '';
-    setCreatedMessage(`已把 ${courses.length} 门课加进日历${monthTxt ? `(${monthTxt})` : ''}${tagTxt}`);
+    const tagTxt = tagged ? t(',已给 {tagged} 门课打上标签(新建 {created} 个 / 沿用已有 {grouped} 个)', { tagged, created: createdNames.length, grouped: groupedNames.length }) : '';
+    setCreatedMessage(t('已把 {n} 门课加进日历', { n: courses.length }) + (monthTxt ? `(${monthTxt})` : '') + tagTxt);
     setTimeout(() => setCreatedMessage(''), 4000);
   };
 
@@ -366,14 +368,14 @@ export default function DashboardHome() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="px-3 py-1 bg-accent-100 text-accent-700 text-xs font-semibold rounded-full">
-                  2026年秋季学期
+                  {t('2026年秋季学期')}
                 </span>
               </div>
               <h1 className="text-3xl md:text-4xl font-bold text-foreground-900 mb-2">
-                课堂纪要控制台
+                {t('课堂纪要控制台')}
               </h1>
               <p className="text-sm text-foreground-400 max-w-lg mb-4">
-                智能管理你的课堂录音、AI摘要与学习资料。实时转写、一键总结、师生共享——让知识管理更高效。
+                {t('智能管理你的课堂录音、AI摘要与学习资料。实时转写、一键总结、师生共享——让知识管理更高效。')}
               </p>
               <SearchBar sessions={allSessions} tagLabels={tagLabels} />
             </div>
@@ -382,14 +384,14 @@ export default function DashboardHome() {
               className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
             >
               <i className="ri-booklet-line text-lg"></i>
-              参考资料
+              {t('参考资料')}
             </button>
             <button
               onClick={() => navigate('/course')}
               className="flex items-center gap-2 px-6 py-3 bg-accent-500 text-background-50 rounded-xl text-sm font-semibold hover:bg-accent-600 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto"
             >
               <i className="ri-mic-line text-lg"></i>
-              开始新课录制
+              {t('开始新课录制')}
             </button>
             <div className="flex items-center gap-3 self-start md:self-auto">
               <div className="flex items-center gap-2 px-3 py-2 bg-background-100 rounded-lg">
@@ -397,15 +399,15 @@ export default function DashboardHome() {
                   <i className={`${user?.role === 'teacher' ? 'ri-user-star-line' : 'ri-user-line'} text-accent-600 text-xs`}></i>
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-medium text-foreground-800">{user?.name || '用户'}</p>
-                  <p className="text-xs text-foreground-400">{user?.role === 'teacher' ? '教师' : '学生'}</p>
+                  <p className="text-xs font-medium text-foreground-800">{user?.name || t('用户')}</p>
+                  <p className="text-xs text-foreground-400">{user?.role === 'teacher' ? t('教师') : t('学生')}</p>
                 </div>
               </div>
               {user?.role === 'admin' && (
                 <button
                   onClick={() => setShowVoices(true)}
                   className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
-                  title="语音标记 / 声纹库(管理员)"
+                  title={t('语音标记 / 声纹库(管理员)')}
                 >
                   <i className="ri-user-voice-line"></i>
                 </button>
@@ -413,21 +415,21 @@ export default function DashboardHome() {
               <button
                 onClick={() => navigate('/help')}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
-                title="说明书"
+                title={t('说明书')}
               >
                 <i className="ri-book-2-line"></i>
               </button>
               <button
                 onClick={() => navigate('/settings')}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
-                title="设置"
+                title={t('设置')}
               >
                 <i className="ri-settings-3-line"></i>
               </button>
               <button
                 onClick={() => { logout(); navigate('/'); }}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
-                title="退出登录"
+                title={t('退出登录')}
               >
                 <i className="ri-logout-box-line"></i>
               </button>
@@ -467,7 +469,7 @@ export default function DashboardHome() {
                     <i className={`${stat.icon} ${c.icon} text-lg`}></i>
                   </div>
                   <p className="text-xs font-medium text-foreground-400 mb-1 flex items-center gap-1">
-                    {stat.label}
+                    {t(stat.label)}
                     {isClickable && (
                       <span className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="w-3.5 h-3.5 flex items-center justify-center">
@@ -477,7 +479,7 @@ export default function DashboardHome() {
                     )}
                   </p>
                   <p className="text-2xl font-bold text-foreground-900">
-                    <AnimatedNumber value={stat.value} suffix={stat.suffix} />
+                    <AnimatedNumber value={stat.value} suffix={t(stat.suffix)} />
                   </p>
                 </div>
               </div>
@@ -507,7 +509,7 @@ export default function DashboardHome() {
                 <div className="w-5 h-5 flex items-center justify-center">
                   <i className="ri-flashlight-line text-accent-500"></i>
                 </div>
-                快捷通道
+                {t('快捷通道')}
               </h3>
               <div className="grid grid-cols-3 gap-3">
                 {quickActions.map((action) => {
@@ -523,8 +525,8 @@ export default function DashboardHome() {
                         <div className={`w-9 h-9 flex items-center justify-center ${c.bg} rounded-lg mb-2.5 group-hover:scale-110 transition-transform duration-300`}>
                           <i className={`${action.icon} ${c.icon} text-base`}></i>
                         </div>
-                        <p className="text-sm font-semibold text-foreground-800 mb-0.5">{action.label}</p>
-                        <p className="text-xs text-foreground-400">{action.description}</p>
+                        <p className="text-sm font-semibold text-foreground-800 mb-0.5">{t(action.label)}</p>
+                        <p className="text-xs text-foreground-400">{t(action.description)}</p>
                       </div>
                     </button>
                   );
@@ -538,12 +540,12 @@ export default function DashboardHome() {
                 <div className="w-5 h-5 flex items-center justify-center">
                   <i className="ri-time-line text-primary-500"></i>
                 </div>
-                最近课时
+                {t('最近课时')}
               </h3>
               <div className="bg-background-50 rounded-2xl border border-background-200 overflow-hidden">
                 {recentSessions.length === 0 && (
                   <div className="px-5 py-8 text-center text-sm text-foreground-400">
-                    还没有课程。点上面「开始录音」录第一节课吧。
+                    {t('还没有课程。点上面「开始录音」录第一节课吧。')}
                   </div>
                 )}
                 {recentSessions.map((session, idx) => (
@@ -594,7 +596,7 @@ export default function DashboardHome() {
                 <div className="w-5 h-5 flex items-center justify-center">
                   <i className="ri-bar-chart-line text-accent-500"></i>
                 </div>
-                本周活跃度
+                {t('本周活跃度')}
               </h3>
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -622,7 +624,7 @@ export default function DashboardHome() {
                     <Legend
                       wrapperStyle={{ fontSize: '11px' }}
                     />
-                    <Bar dataKey="recordings" name="录音数" fill="oklch(var(--accent-500) / 0.7)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="recordings" name={t('录音数')} fill="oklch(var(--accent-500) / 0.7)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -634,11 +636,11 @@ export default function DashboardHome() {
                 <div className="w-5 h-5 flex items-center justify-center">
                   <i className="ri-pie-chart-line text-primary-500"></i>
                 </div>
-                课时时长(分钟)
+                {t('课时时长(分钟)')}
               </h3>
               <div className="space-y-2.5">
                 {durationDist.length === 0 && (
-                  <p className="text-xs text-foreground-400 py-2">还没有录音</p>
+                  <p className="text-xs text-foreground-400 py-2">{t('还没有录音')}</p>
                 )}
                 {durationDist.map((item) => {
                   const maxCount = Math.max(...durationDist.map((t) => t.count));

@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { shotUrl } from '@/hooks/useLibrary';
 import type { Shot } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 interface ShotStripProps {
   shots: Shot[];
@@ -14,6 +15,7 @@ interface ShotStripProps {
 }
 
 export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStripProps) {
+  const t = useT();
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
 
@@ -35,7 +37,7 @@ export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStrip
           >
             <img
               src={shotUrl(s.url)}
-              alt={s.note || '板书'}
+              alt={s.note || t('板书')}
               className="h-28 rounded-lg border border-background-200 object-cover group-hover:border-accent-400 transition-colors"
             />
             <span className="block text-xs text-foreground-400 font-mono mt-1">{s.ts}</span>
@@ -51,7 +53,7 @@ export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStrip
           <div className="max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
             <img
               src={shotUrl(cur.url)}
-              alt={cur.note || '板书'}
+              alt={cur.note || t('板书')}
               className="w-full max-h-[70vh] object-contain rounded-lg bg-background-900"
             />
             <div className="mt-3 flex items-center gap-2 flex-wrap">
@@ -64,14 +66,14 @@ export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStrip
                   }}
                   className="px-3 py-1.5 bg-background-50/20 text-background-50 rounded-full text-xs cursor-pointer hover:bg-background-50/30"
                 >
-                  <i className="ri-volume-up-line mr-1"></i>听这一刻
+                  <i className="ri-volume-up-line mr-1"></i>{t('听这一刻')}
                 </button>
               )}
               <input
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
                 onBlur={() => onNote?.(cur.id, noteDraft)}
-                placeholder="加一句备注…"
+                placeholder={t('加一句备注…')}
                 className="flex-1 min-w-[140px] text-xs px-3 py-1.5 rounded-full bg-background-50/20 text-background-50 placeholder:text-background-50/60 border-0"
               />
               <button
@@ -79,14 +81,14 @@ export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStrip
                 disabled={openIdx === 0}
                 className="px-3 py-1.5 bg-background-50/20 text-background-50 rounded-full text-xs cursor-pointer disabled:opacity-30"
               >
-                上一张
+                {t('上一张')}
               </button>
               <button
                 onClick={() => setOpenIdx((i) => (i === null ? null : Math.min(shots.length - 1, i + 1)))}
                 disabled={openIdx === shots.length - 1}
                 className="px-3 py-1.5 bg-background-50/20 text-background-50 rounded-full text-xs cursor-pointer disabled:opacity-30"
               >
-                下一张
+                {t('下一张')}
               </button>
               {onDelete && (
                 <button
@@ -96,14 +98,14 @@ export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStrip
                   }}
                   className="px-3 py-1.5 bg-red-500/80 text-background-50 rounded-full text-xs cursor-pointer"
                 >
-                  删除
+                  {t('删除')}
                 </button>
               )}
               <button
                 onClick={() => setOpenIdx(null)}
                 className="px-3 py-1.5 bg-background-50/20 text-background-50 rounded-full text-xs cursor-pointer"
               >
-                关闭
+                {t('关闭')}
               </button>
             </div>
           </div>

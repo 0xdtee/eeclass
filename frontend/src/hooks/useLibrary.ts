@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { SERVICE_ORIGIN, getToken, authFailed } from '@/hooks/useLiveCaption';
+import { t } from '@/lib/i18n';
 
 export interface Correction {
   from: string;
@@ -99,13 +100,13 @@ export function compressImage(file: File, maxSide = 1600, quality = 0.8): Promis
       c.width = Math.round(img.width * scale);
       c.height = Math.round(img.height * scale);
       const ctx = c.getContext('2d');
-      if (!ctx) return reject(new Error('浏览器不支持图片压缩'));
+      if (!ctx) return reject(new Error(t('浏览器不支持图片压缩')));
       ctx.drawImage(img, 0, 0, c.width, c.height);
       resolve(c.toDataURL('image/jpeg', quality));
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('图片读取失败'));
+      reject(new Error(t('图片读取失败')));
     };
     img.src = url;
   });

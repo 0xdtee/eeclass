@@ -13,6 +13,7 @@
  * during development (Vite on port 3000) it falls back to https://localhost:5901.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t } from '@/lib/i18n';
 
 /** Whether the page is served by the caption service itself (this is the case for phone access) */
 const servedByService =
@@ -237,10 +238,10 @@ export function useLiveCaption() {
 
   const startMic = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error(
+      throw new Error(t(
         '这个浏览器不给用麦克风。多半是页面不是用 https 打开的——' +
         '手机上必须用 https://<内网IP>:5901/app/course 这个地址。'
-      );
+      ));
     }
     // Ask for 16k directly, and downsample ourselves if we can't get it (Safari ignores this parameter)
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -259,31 +260,31 @@ export function useLiveCaption() {
     const isChromium = /Chrome|CriOS|Edg|EdgiOS|OPR/.test(ua);
     const isSafariLike = isIOS || (/Apple/.test(navigator.vendor || '') && !isChromium);
     if (isSafariLike) {
-      throw new Error(
+      throw new Error(t(
         'Safari 不支持采集系统声音（这是 Safari 本身的限制,采不到)。请在电脑上改用 Chrome 或 Edge;' +
         '或改选「本设备的麦克风」,让电脑外放声音被麦克风采到。'
-      );
+      ));
     }
     const md = navigator.mediaDevices as (MediaDevices & {
       getDisplayMedia?: (c: MediaStreamConstraints) => Promise<MediaStream>;
     }) | undefined;
     if (!md?.getDisplayMedia) {
-      throw new Error('这个浏览器不支持采集系统声音。请在电脑上用 Chrome 或 Edge（手机浏览器不行）。');
+      throw new Error(t('这个浏览器不支持采集系统声音。请在电脑上用 Chrome 或 Edge（手机浏览器不行）。'));
     }
     // Must pass video:true for the browser to offer the "share audio" option; the audio track is what we actually want.
     const stream = await md.getDisplayMedia({ video: true, audio: true });
     const audioTracks = stream.getAudioTracks();
     if (!audioTracks.length) {
       stream.getTracks().forEach((t) => t.stop());
-      throw new Error(
+      throw new Error(t(
         '没采到系统声音。共享时请勾选左下角的「分享系统音频 / 分享标签页音频」，' +
         '并选择「整个屏幕」或正在播放声音的那个标签页。'
-      );
+      ));
     }
     // The video track is unused, stop it to save resources (audio track continues); recording auto-stops when the user clicks "stop sharing".
     stream.getVideoTracks().forEach((t) => t.stop());
     audioTracks[0].addEventListener('ended', () => {
-      setNotice('系统声音共享已停止');
+      setNotice(t('系统声音共享已停止'));
       stopMic();
     });
     pipeStream(stream);
@@ -347,10 +348,10 @@ export function useLiveCaption() {
     };
 
     ws.onerror = () => {
-      setError(
+      setError(t(
         '连不上字幕服务。确认：① 电脑上的「课堂字幕」已启动；' +
         '② 手机和电脑在同一个 WiFi；③ 用的是 https 地址并已在浏览器里选「继续访问」信任证书。'
-      );
+      ));
     };
 
     ws.onmessage = (ev) => {
@@ -379,14 +380,14 @@ export function useLiveCaption() {
               // reopen the mic and re-stream; if the browser blocks getUserMedia without a fresh gesture
               // (common on iOS after a reload), tell the user honestly instead of pretending it resumed.
               startMic()
-                .then(() => setNotice('已恢复录制'))
-                .catch(() => setNotice('麦克风未能自动恢复,请重新点「开始录制」继续录音。'));
+                .then(() => setNotice(t('已恢复录制')))
+                .catch(() => setNotice(t('麦克风未能自动恢复,请重新点「开始录制」继续录音。')));
             } else if (dev === 'browser-system') {
               // System audio needs a user gesture to reopen sharing, can't auto-resume
-              setNotice('网络已恢复,但系统声音共享已中断,请重新点「开始录制」继续。');
+              setNotice(t('网络已恢复,但系统声音共享已中断,请重新点「开始录制」继续。'));
             } else {
               // server sound-card capture: the server records on its own, nothing to reopen in the browser
-              setNotice('已恢复录制');
+              setNotice(t('已恢复录制'));
             }
           } else {
             setRunning(!!m.running);
@@ -404,7 +405,7 @@ export function useLiveCaption() {
           setPartial('');
           setLastDir((m.dir as string) || '');
           setLiveSid((m.sid as string) || '');
-          setNotice(`已开始录制：${m.name}`);
+          setNotice(t('已开始录制：{name}', { name: String(m.name) }));
           break;
         case 'stopped':
           recordingRef.current = false;
@@ -416,7 +417,7 @@ export function useLiveCaption() {
           stopMic();
           setLastDir((m.dir as string) || '');
           setLiveSid((m.sid as string) || '');
-          setNotice(`已保存 ${(m.meta as { lines?: number })?.lines ?? 0} 句`);
+          setNotice(t('已保存 {n} 句', { n: (m.meta as { lines?: number })?.lines ?? 0 }));
           break;
         case 'line':
           setPartial('');
@@ -464,7 +465,7 @@ export function useLiveCaption() {
           setLines((prev) =>
             prev.map((l) => (l.speaker === m.old ? { ...l, speaker: m.name as string } : l))
           );
-          setNotice(`「${m.old}」已改为「${m.name}」`);
+          setNotice(t('「{old}」已改为「{name}」', { old: String(m.old), name: String(m.name) }));
           break;
         case 'notice':
           setNotice((m.msg as string) || '');

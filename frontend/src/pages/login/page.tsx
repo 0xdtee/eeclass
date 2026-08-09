@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useT } from '@/lib/i18n';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +22,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate('/');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '登录失败');
+      setErr(e instanceof Error ? e.message : t('登录失败'));
     } finally {
       setBusy(false);
     }
@@ -35,9 +37,9 @@ export default function LoginPage() {
           <div className="w-14 h-14 flex items-center justify-center bg-background-50/20 rounded-2xl mb-8">
             <i className="ri-book-open-line text-3xl"></i>
           </div>
-          <h1 className="text-4xl font-bold leading-tight mb-4">课堂纪要</h1>
+          <h1 className="text-4xl font-bold leading-tight mb-4">{t('课堂纪要')}</h1>
           <p className="text-lg opacity-90 leading-relaxed max-w-md">
-            智能录音转写、AI摘要生成、师生共享协作——让每一堂课都留下清晰的印记。
+            {t('智能录音转写、AI摘要生成、师生共享协作——让每一堂课都留下清晰的印记。')}
           </p>
           <div className="mt-12 space-y-4">
             <div className="flex items-center gap-3">
@@ -45,8 +47,8 @@ export default function LoginPage() {
                 <i className="ri-mic-line text-xl"></i>
               </div>
               <div>
-                <p className="font-semibold text-sm">实时语音转写</p>
-                <p className="text-xs opacity-75">课堂内容即时转换为文字</p>
+                <p className="font-semibold text-sm">{t('实时语音转写')}</p>
+                <p className="text-xs opacity-75">{t('课堂内容即时转换为文字')}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -54,8 +56,8 @@ export default function LoginPage() {
                 <i className="ri-magic-line text-xl"></i>
               </div>
               <div>
-                <p className="font-semibold text-sm">AI智能摘要</p>
-                <p className="text-xs opacity-75">一键提取课堂重点知识</p>
+                <p className="font-semibold text-sm">{t('AI智能摘要')}</p>
+                <p className="text-xs opacity-75">{t('一键提取课堂重点知识')}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -63,8 +65,8 @@ export default function LoginPage() {
                 <i className="ri-share-line text-xl"></i>
               </div>
               <div>
-                <p className="font-semibold text-sm">师生共享协作</p>
-                <p className="text-xs opacity-75">灵活设置访问与编辑权限</p>
+                <p className="font-semibold text-sm">{t('师生共享协作')}</p>
+                <p className="text-xs opacity-75">{t('灵活设置访问与编辑权限')}</p>
               </div>
             </div>
           </div>
@@ -77,17 +79,17 @@ export default function LoginPage() {
             <div className="w-12 h-12 flex items-center justify-center bg-accent-100 rounded-xl mx-auto mb-4">
               <i className="ri-book-open-line text-accent-600 text-2xl"></i>
             </div>
-            <h1 className="text-2xl font-bold text-foreground-900">课堂纪要</h1>
+            <h1 className="text-2xl font-bold text-foreground-900">{t('课堂纪要')}</h1>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-xl font-bold text-foreground-900">欢迎回来</h2>
-            <p className="text-sm text-foreground-400 mt-1">登录到你的课堂纪要账户</p>
+            <h2 className="text-xl font-bold text-foreground-900">{t('欢迎回来')}</h2>
+            <p className="text-sm text-foreground-400 mt-1">{t('登录到你的课堂纪要账户')}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">邮箱地址</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('邮箱地址')}</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <i className="ri-mail-line text-foreground-400 text-sm"></i>
@@ -104,7 +106,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">密码</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('密码')}</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <i className="ri-lock-line text-foreground-400 text-sm"></i>
@@ -113,7 +115,7 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="输入密码"
+                  placeholder={t('输入密码')}
                   className="w-full pl-10 pr-10 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all"
                   required
                 />
@@ -138,13 +140,13 @@ export default function LoginPage() {
               disabled={busy}
               className="w-full py-2.5 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {busy ? '登录中…' : '登录'}
+              {busy ? t('登录中…') : t('登录')}
             </button>
 
             <p className="text-center text-sm text-foreground-400">
-              还没有账户？{' '}
+              {t('还没有账户？')}{' '}
               <Link to="/register" className="text-accent-600 font-medium hover:text-accent-700">
-                立即注册
+                {t('立即注册')}
               </Link>
             </p>
           </form>

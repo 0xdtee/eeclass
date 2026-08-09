@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useT } from '@/lib/i18n';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const t = useT();
   const { register, sendRegisterCode } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -19,23 +21,23 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (cooldown <= 0) return;
-    const t = setTimeout(() => setCooldown((n) => n - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setCooldown((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
   }, [cooldown]);
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleSendCode = async () => {
     if (sending || cooldown > 0) return;
-    if (!emailOk) { setErr('先填写正确的邮箱'); return; }
+    if (!emailOk) { setErr(t('先填写正确的邮箱')); return; }
     setErr(''); setInfo('');
     setSending(true);
     try {
       await sendRegisterCode(email);
-      setInfo('验证码已发送,请查收邮箱(可能在垃圾箱)');
+      setInfo(t('验证码已发送,请查收邮箱(可能在垃圾箱)'));
       setCooldown(60);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '发送失败');
+      setErr(e instanceof Error ? e.message : t('发送失败'));
     } finally {
       setSending(false);
     }
@@ -45,15 +47,15 @@ export default function RegisterPage() {
     e.preventDefault();
     if (busy) return;
     if (!name || !email || !password || !code) {
-      setErr('请把姓名、邮箱、密码和验证码都填好');
+      setErr(t('请把姓名、邮箱、密码和验证码都填好'));
       return;
     }
     if (password !== confirmPassword) {
-      setErr('两次输入的密码不一致');
+      setErr(t('两次输入的密码不一致'));
       return;
     }
     if (password.length < 6) {
-      setErr('密码至少 6 位');
+      setErr(t('密码至少 6 位'));
       return;
     }
     setErr('');
@@ -62,7 +64,7 @@ export default function RegisterPage() {
       await register(name, email, password, code);
       navigate('/');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '注册失败');
+      setErr(e instanceof Error ? e.message : t('注册失败'));
     } finally {
       setBusy(false);
     }
@@ -77,9 +79,9 @@ export default function RegisterPage() {
           <div className="w-14 h-14 flex items-center justify-center bg-background-50/20 rounded-2xl mb-8">
             <i className="ri-user-add-line text-3xl"></i>
           </div>
-          <h1 className="text-4xl font-bold leading-tight mb-4">加入课堂纪要</h1>
+          <h1 className="text-4xl font-bold leading-tight mb-4">{t('加入课堂纪要')}</h1>
           <p className="text-lg opacity-90 leading-relaxed max-w-md">
-            创建你的账户，开始高效记录每一堂课的精彩内容。
+            {t('创建你的账户，开始高效记录每一堂课的精彩内容。')}
           </p>
         </div>
       </div>
@@ -90,17 +92,17 @@ export default function RegisterPage() {
             <div className="w-12 h-12 flex items-center justify-center bg-primary-100 rounded-xl mx-auto mb-4">
               <i className="ri-user-add-line text-primary-600 text-2xl"></i>
             </div>
-            <h1 className="text-2xl font-bold text-foreground-900">课堂纪要</h1>
+            <h1 className="text-2xl font-bold text-foreground-900">{t('课堂纪要')}</h1>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-xl font-bold text-foreground-900">创建账户</h2>
-            <p className="text-sm text-foreground-400 mt-1">注册后即可使用全部功能</p>
+            <h2 className="text-xl font-bold text-foreground-900">{t('创建账户')}</h2>
+            <p className="text-sm text-foreground-400 mt-1">{t('注册后即可使用全部功能')}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">姓名</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('姓名')}</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <i className="ri-user-line text-foreground-400 text-sm"></i>
@@ -109,7 +111,7 @@ export default function RegisterPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="你的姓名"
+                  placeholder={t('你的姓名')}
                   className="w-full pl-10 pr-4 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
                   required
                 />
@@ -117,7 +119,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">邮箱地址</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('邮箱地址')}</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <i className="ri-mail-line text-foreground-400 text-sm"></i>
@@ -134,7 +136,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">密码</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('密码')}</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <i className="ri-lock-line text-foreground-400 text-sm"></i>
@@ -143,7 +145,7 @@ export default function RegisterPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="至少6位密码"
+                  placeholder={t('至少6位密码')}
                   className="w-full pl-10 pr-10 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
                   required
                   minLength={6}
@@ -159,7 +161,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">确认密码</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('确认密码')}</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
                   <i className="ri-lock-line text-foreground-400 text-sm"></i>
@@ -168,7 +170,7 @@ export default function RegisterPage() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="再次输入密码"
+                  placeholder={t('再次输入密码')}
                   className={`w-full pl-10 pr-4 py-2.5 bg-background-100 border rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:ring-2 transition-all ${
                     confirmPassword && password !== confirmPassword
                       ? 'border-red-300 focus:border-red-400 focus:ring-red-100'
@@ -178,12 +180,12 @@ export default function RegisterPage() {
                 />
               </div>
               {confirmPassword && password !== confirmPassword && (
-                <p className="text-xs text-red-500 mt-1">两次输入的密码不一致</p>
+                <p className="text-xs text-red-500 mt-1">{t('两次输入的密码不一致')}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-600 mb-1.5">邮箱验证码</label>
+              <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('邮箱验证码')}</label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center">
@@ -194,7 +196,7 @@ export default function RegisterPage() {
                     inputMode="numeric"
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="6 位验证码"
+                    placeholder={t('6 位验证码')}
                     className="w-full pl-10 pr-4 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm tracking-widest text-foreground-800 placeholder:text-foreground-300 placeholder:tracking-normal focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
                     required
                   />
@@ -205,10 +207,10 @@ export default function RegisterPage() {
                   disabled={sending || cooldown > 0 || !emailOk}
                   className="px-3 py-2.5 bg-primary-100 text-primary-700 rounded-lg text-xs font-semibold hover:bg-primary-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
-                  {sending ? '发送中…' : cooldown > 0 ? `${cooldown}s 后重发` : '发送验证码'}
+                  {sending ? t('发送中…') : cooldown > 0 ? t('{n}s 后重发', { n: cooldown }) : t('发送验证码')}
                 </button>
               </div>
-              <p className="text-[11px] text-foreground-400 mt-1">验证码会发到上面填的邮箱,10 分钟内有效。</p>
+              <p className="text-[11px] text-foreground-400 mt-1">{t('验证码会发到上面填的邮箱,10 分钟内有效。')}</p>
             </div>
 
             {info && (
@@ -227,13 +229,13 @@ export default function RegisterPage() {
               disabled={busy}
               className="w-full py-2.5 bg-primary-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {busy ? '注册中…' : '注册'}
+              {busy ? t('注册中…') : t('注册')}
             </button>
 
             <p className="text-center text-sm text-foreground-400">
-              已有账户？{' '}
+              {t('已有账户？')}{' '}
               <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">
-                立即登录
+                {t('立即登录')}
               </Link>
             </p>
           </form>

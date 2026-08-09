@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { SERVICE_ORIGIN, getToken, authFailed } from '@/hooks/useLiveCaption';
 import type { Syllabus } from '@/lib/exportSyllabus';
+import { t } from '@/lib/i18n';
 
 export interface SessionMeta {
   id: string;
@@ -175,7 +176,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export function sessionTitle(s: SessionMeta) {
   if (s.title) return s.title;
   const m = s.id.match(/^\d{4}-\d{2}-\d{2}_\d{4}_(.+)$/);
-  return m ? m[1] : '未命名课程';
+  return m ? m[1] : t('未命名课程');
 }
 
 export function sessionDate(s: SessionMeta) {
@@ -187,8 +188,8 @@ export function fmtDuration(sec?: number) {
   const s = Math.round(sec ?? 0);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  if (h > 0) return `${h}小时${m}分`;
-  return m > 0 ? `${m}分${s % 60}秒` : `${s}秒`;
+  if (h > 0) return t('{h}小时{m}分', { h, m });
+  return m > 0 ? t('{m}分{s}秒', { m, s: s % 60 }) : t('{s}秒', { s });
 }
 
 export function useRecords() {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useT } from '@/lib/i18n';
 
 const features = [
   {
@@ -65,6 +66,7 @@ const stats = [
 export default function LandingPage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -89,13 +91,13 @@ export default function LandingPage() {
             <div className="w-9 h-9 flex items-center justify-center bg-accent-500 rounded-lg">
               <i className="ri-book-open-line text-background-50 text-lg"></i>
             </div>
-            <span className="text-lg font-bold text-foreground-900">课堂纪要</span>
+            <span className="text-lg font-bold text-foreground-900">{t('课堂纪要')}</span>
           </div>
 
           <div className="hidden md:flex items-center gap-6">
-            <a href="#features" className="text-sm text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">功能</a>
-            <a href="#how-it-works" className="text-sm text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">使用流程</a>
-            <a href="#cta" className="text-sm text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">开始使用</a>
+            <a href="#features" className="text-sm text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">{t('功能')}</a>
+            <a href="#how-it-works" className="text-sm text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">{t('使用流程')}</a>
+            <a href="#cta" className="text-sm text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">{t('开始使用')}</a>
           </div>
 
           <div className="flex items-center gap-3">
@@ -103,13 +105,13 @@ export default function LandingPage() {
               onClick={() => navigate('/login')}
               className="px-4 py-2 text-sm font-medium text-foreground-700 hover:text-foreground-900 transition-colors cursor-pointer whitespace-nowrap"
             >
-              登录
+              {t('登录')}
             </button>
             <button
               onClick={() => navigate('/register')}
               className="px-5 py-2 bg-accent-500 text-background-50 rounded-lg text-sm font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
             >
-              免费注册
+              {t('免费注册')}
             </button>
           </div>
         </div>
@@ -126,18 +128,18 @@ export default function LandingPage() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-background-50/20 backdrop-blur-sm rounded-full border border-background-50/20 mb-6">
               <div className="w-2 h-2 rounded-full bg-accent-400 animate-pulse"></div>
-              <span className="text-xs font-medium text-background-50/90">2026 秋季学期全新上线</span>
+              <span className="text-xs font-medium text-background-50/90">{t('2026 秋季学期全新上线')}</span>
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-background-50 leading-tight mb-5">
-              让每一堂课
+              {t('让每一堂课')}
               <br />
-              都留下清晰的
-              <span className="text-accent-300">印记</span>
+              {t('都留下清晰的')}
+              <span className="text-accent-300">{t('印记')}</span>
             </h1>
 
             <p className="text-base md:text-lg text-background-50/75 leading-relaxed mb-8 max-w-lg">
-              智能录音转写、AI 摘要生成、日历课程管理——课堂纪要帮你高效记录、整理与共享每一堂课的精彩内容。
+              {t('智能录音转写、AI 摘要生成、日历课程管理——课堂纪要帮你高效记录、整理与共享每一堂课的精彩内容。')}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -145,14 +147,14 @@ export default function LandingPage() {
                 onClick={() => navigate('/register')}
                 className="px-8 py-3.5 bg-accent-500 text-background-50 rounded-xl text-sm font-semibold hover:bg-accent-600 transition-all cursor-pointer whitespace-nowrap shadow-lg shadow-accent-500/30"
               >
-                免费开始使用
+                {t('免费开始使用')}
                 <i className="ri-arrow-right-line ml-2"></i>
               </button>
               <button
                 onClick={() => navigate('/login')}
                 className="px-8 py-3.5 bg-background-50/15 backdrop-blur-sm text-background-50 rounded-xl text-sm font-medium hover:bg-background-50/25 transition-all cursor-pointer whitespace-nowrap border border-background-50/20"
               >
-                已有账户？立即登录
+                {t('已有账户？立即登录')}
               </button>
             </div>
           </div>
@@ -167,7 +169,7 @@ export default function LandingPage() {
           {stats.map((stat) => (
             <div key={stat.label} className="px-6 py-5 text-center">
               <p className="text-2xl md:text-3xl font-bold text-foreground-900 mb-0.5">{stat.value}</p>
-              <p className="text-xs text-foreground-400">{stat.label}</p>
+              <p className="text-xs text-foreground-400">{t(stat.label)}</p>
             </div>
           ))}
         </div>
@@ -178,13 +180,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="inline-block px-3 py-1 bg-accent-100 text-accent-700 text-xs font-semibold rounded-full mb-4">
-              核心功能
+              {t('核心功能')}
             </span>
             <h2 className="text-2xl md:text-3xl font-bold text-foreground-900 mb-3">
-              全方位的课堂管理工具
+              {t('全方位的课堂管理工具')}
             </h2>
             <p className="text-sm text-foreground-400 max-w-lg mx-auto">
-              从录音转写到 AI 摘要，从日历查看到共享协作，覆盖课堂纪要从生产到消费的每一个环节。
+              {t('从录音转写到 AI 摘要，从日历查看到共享协作，覆盖课堂纪要从生产到消费的每一个环节。')}
             </p>
           </div>
 
@@ -197,8 +199,8 @@ export default function LandingPage() {
                 <div className="w-11 h-11 flex items-center justify-center bg-accent-100 rounded-xl mb-4 group-hover:bg-accent-200 transition-colors">
                   <i className={`${feature.icon} text-accent-600 text-xl`}></i>
                 </div>
-                <h3 className="text-base font-semibold text-foreground-900 mb-2">{feature.title}</h3>
-                <p className="text-sm text-foreground-400 leading-relaxed">{feature.description}</p>
+                <h3 className="text-base font-semibold text-foreground-900 mb-2">{t(feature.title)}</h3>
+                <p className="text-sm text-foreground-400 leading-relaxed">{t(feature.description)}</p>
               </div>
             ))}
           </div>
@@ -210,13 +212,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-xs font-semibold rounded-full mb-4">
-              三步开始
+              {t('三步开始')}
             </span>
             <h2 className="text-2xl md:text-3xl font-bold text-foreground-900 mb-3">
-              简单三步，高效管理课堂
+              {t('简单三步，高效管理课堂')}
             </h2>
             <p className="text-sm text-foreground-400 max-w-lg mx-auto">
-              无需复杂配置，注册即用，让技术真正为教学服务。
+              {t('无需复杂配置，注册即用，让技术真正为教学服务。')}
             </p>
           </div>
 
@@ -235,8 +237,8 @@ export default function LandingPage() {
                   <div className="w-14 h-14 flex items-center justify-center bg-primary-100 rounded-2xl mx-auto mb-4">
                     <i className={`${item.icon} text-primary-600 text-2xl`}></i>
                   </div>
-                  <h3 className="text-base font-semibold text-foreground-900 mb-2">{item.title}</h3>
-                  <p className="text-sm text-foreground-400 leading-relaxed">{item.description}</p>
+                  <h3 className="text-base font-semibold text-foreground-900 mb-2">{t(item.title)}</h3>
+                  <p className="text-sm text-foreground-400 leading-relaxed">{t(item.description)}</p>
                 </div>
               </div>
             ))}
@@ -253,23 +255,23 @@ export default function LandingPage() {
 
         <div className="relative z-10 max-w-2xl mx-auto px-6 text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-background-50 mb-4">
-            准备好提升课堂效率了吗？
+            {t('准备好提升课堂效率了吗？')}
           </h2>
           <p className="text-sm text-background-50/75 mb-8 leading-relaxed">
-            立即注册课堂纪要，免费体验智能录音转写与 AI 摘要生成。无需绑定信用卡。
+            {t('立即注册课堂纪要，免费体验智能录音转写与 AI 摘要生成。无需绑定信用卡。')}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => navigate('/register')}
               className="px-8 py-3.5 bg-background-50 text-accent-600 rounded-xl text-sm font-semibold hover:bg-background-100 transition-all cursor-pointer whitespace-nowrap shadow-lg"
             >
-              免费注册，即刻开始
+              {t('免费注册，即刻开始')}
             </button>
             <button
               onClick={() => navigate('/login')}
               className="px-8 py-3.5 bg-transparent text-background-50 rounded-xl text-sm font-medium border border-background-50/30 hover:bg-background-50/10 transition-all cursor-pointer whitespace-nowrap"
             >
-              已有账户？登录
+              {t('已有账户？登录')}
             </button>
           </div>
         </div>
@@ -283,18 +285,18 @@ export default function LandingPage() {
               <div className="w-8 h-8 flex items-center justify-center bg-accent-500 rounded-lg">
                 <i className="ri-book-open-line text-background-50"></i>
               </div>
-              <span className="text-sm font-semibold text-foreground-800">课堂纪要</span>
+              <span className="text-sm font-semibold text-foreground-800">{t('课堂纪要')}</span>
             </div>
 
             <div className="flex items-center gap-6">
-              <a href="#features" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">功能</a>
-              <a href="#how-it-works" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">使用流程</a>
-              <Link to="/login" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">登录</Link>
-              <Link to="/register" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">注册</Link>
+              <a href="#features" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">{t('功能')}</a>
+              <a href="#how-it-works" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">{t('使用流程')}</a>
+              <Link to="/login" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">{t('登录')}</Link>
+              <Link to="/register" className="text-xs text-foreground-400 hover:text-foreground-600 transition-colors cursor-pointer whitespace-nowrap">{t('注册')}</Link>
             </div>
 
             <p className="text-xs text-foreground-300">
-              &copy; 2026 课堂纪要. All rights reserved.
+              &copy; 2026 {t('课堂纪要')}. All rights reserved.
             </p>
           </div>
         </div>

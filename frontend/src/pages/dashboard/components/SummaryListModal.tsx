@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/base/Modal';
+import { useT } from '@/lib/i18n';
 
 interface SessionItem {
   id: string;
@@ -31,11 +32,12 @@ function SummaryCard({
   tagLabels: Record<string, string>;
   onNavigate: (sessionId: string, view: 'summary' | 'transcript') => void;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const hasSummary = session.summary && session.summary.trim().length > 0;
   const preview = hasSummary
     ? session.summary.slice(0, 100) + (session.summary.length > 100 ? '…' : '')
-    : '暂无摘要内容';
+    : t('暂无摘要内容');
 
   return (
     <div className="border-b border-background-100 last:border-b-0">
@@ -98,7 +100,7 @@ function SummaryCard({
                 onClick={() => setExpanded((p) => !p)}
                 className="mt-1 text-[11px] text-accent-600 hover:text-accent-700 cursor-pointer whitespace-nowrap transition-colors"
               >
-                {expanded ? '收起' : `展开全部 ${session.keyPoints.length} 条`}
+                {expanded ? t('收起') : t('展开全部 {n} 条', { n: session.keyPoints.length })}
               </button>
             )}
           </div>
@@ -118,14 +120,14 @@ function SummaryCard({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
           >
             <i className="ri-file-list-3-line text-xs"></i>
-            查看纪要
+            {t('查看纪要')}
           </button>
           <button
             onClick={() => onNavigate(session.id, 'transcript')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 border border-background-200 rounded-lg text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap"
           >
             <i className="ri-file-text-line text-xs"></i>
-            查看原文
+            {t('查看原文')}
           </button>
         </div>
       </div>
@@ -134,6 +136,7 @@ function SummaryCard({
 }
 
 export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels }: SummaryListModalProps) {
+  const t = useT();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
@@ -155,7 +158,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="AI 摘要列表" width="max-w-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('AI 摘要列表')} width="max-w-2xl">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
         {/* Stats bar */}
         <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
@@ -165,8 +168,8 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
                 <i className="ri-magic-line text-accent-600"></i>
               </div>
               <div>
-                <p className="text-xs text-foreground-400">共有摘要</p>
-                <p className="text-lg font-bold text-foreground-900">{sessions.length} 份</p>
+                <p className="text-xs text-foreground-400">{t('共有摘要')}</p>
+                <p className="text-lg font-bold text-foreground-900">{t('{n} 份', { n: sessions.length })}</p>
               </div>
             </div>
           </div>
@@ -179,7 +182,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索摘要…"
+              placeholder={t('搜索摘要…')}
               className="h-8 pl-8 pr-3 w-44 bg-background-100 border border-background-200 rounded-lg text-xs text-foreground-700 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-1 focus:ring-accent-100 transition-all"
             />
           </div>
@@ -188,7 +191,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
         {/* Tip row */}
         <div className="flex items-center gap-2 px-1 mb-3">
           <i className="ri-information-line text-foreground-300 text-xs"></i>
-          <p className="text-[11px] text-foreground-300">点击「查看纪要」进入摘要页，「查看原文」进入课堂转写页</p>
+          <p className="text-[11px] text-foreground-300">{t('点击「查看纪要」进入摘要页，「查看原文」进入课堂转写页')}</p>
         </div>
 
         {/* Session list */}
@@ -199,7 +202,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
                 <div className="w-12 h-12 mx-auto flex items-center justify-center bg-background-100 rounded-full mb-3">
                   <i className="ri-search-line text-foreground-300 text-xl"></i>
                 </div>
-                <p className="text-sm text-foreground-400">未找到匹配的摘要</p>
+                <p className="text-sm text-foreground-400">{t('未找到匹配的摘要')}</p>
               </div>
             ) : (
               filtered.map((session) => (

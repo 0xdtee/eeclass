@@ -7,6 +7,7 @@ import type { useLiveCaption } from '@/hooks/useLiveCaption';
 import type { TranscriptLine } from '@/hooks/useRecords';
 import type { Course, Shot } from '@/hooks/useLibrary';
 import { audioUrl } from '@/hooks/useLibrary';
+import { useT } from '@/lib/i18n';
 
 type RecordingStatus = 'idle' | 'recording' | 'paused';
 
@@ -79,6 +80,7 @@ export default function TranscriptionTab({
   onEditLine, onMarkLine, onRenameSpeaker, onProposeCorrection, onShoot, onDeleteShot, onNoteShot, canEdit,
   playerRef, focusLineId,
 }: TranscriptionTabProps) {
+  const t = useT();
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
   const boxRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
@@ -218,11 +220,11 @@ export default function TranscriptionTab({
             <i className="ri-sound-module-line text-accent-500 text-xl"></i>
           </div>
           <div>
-            <p className="text-sm font-medium text-accent-800">实时转写中...</p>
+            <p className="text-sm font-medium text-accent-800">{t('实时转写中...')}</p>
             <p className="text-xs text-accent-600 mt-1">
-              <span className="bg-yellow-100 px-1 rounded">黄色</span> 为老师强调的重点，
-              <span className="bg-green-100 px-1 rounded">浅绿</span> 为定义句。
-              黑板上有内容就点「拍板书」，会自动对齐到当前时间点。
+              <span className="bg-yellow-100 px-1 rounded">{t('黄色')}</span>{t(' 为老师强调的重点，')}
+              <span className="bg-green-100 px-1 rounded">{t('浅绿')}</span>{t(' 为定义句。')}
+              {t('黑板上有内容就点「拍板书」，会自动对齐到当前时间点。')}
             </p>
           </div>
         </div>
@@ -233,8 +235,8 @@ export default function TranscriptionTab({
       {speakerRows.length > 0 && (
         <div className="bg-background-50 border border-background-200 rounded-xl px-4 py-3 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-foreground-400 flex items-center gap-1 mr-1">
-            <i className="ri-user-voice-line text-accent-500"></i>说话人
-            <span className="text-foreground-300">（点名字改）</span>
+            <i className="ri-user-voice-line text-accent-500"></i>{t('说话人')}
+            <span className="text-foreground-300">{t('（点名字改）')}</span>
           </span>
           {speakerRows.map((sp) => (
             editSpk === sp.id ? (
@@ -245,7 +247,7 @@ export default function TranscriptionTab({
                   onChange={(e) => setSpkDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') commitSpeaker(sp.id); if (e.key === 'Escape') { setEditSpk(null); setSpkDraft(''); } }}
                   onBlur={() => commitSpeaker(sp.id)}
-                  placeholder="他是谁?"
+                  placeholder={t('他是谁?')}
                   className="w-24 text-xs px-2 py-1 rounded-full border border-accent-300 bg-background-100 focus:outline-none focus:border-accent-500"
                 />
               </span>
@@ -254,9 +256,9 @@ export default function TranscriptionTab({
                 key={sp.id}
                 onClick={() => { setEditSpk(sp.id); setSpkDraft(/^(老师|同学\d+)$/.test(sp.name) ? '' : sp.name); }}
                 className="group inline-flex items-center gap-1 pl-2.5 pr-2 py-1 bg-accent-100 text-accent-700 rounded-full text-xs font-medium hover:bg-accent-200 cursor-pointer"
-                title="点击改名(改后自动记进声纹库,以后自动认这个人)"
+                title={t('点击改名(改后自动记进声纹库,以后自动认这个人)')}
               >
-                {sp.name || '某人'}
+                {sp.name || t('某人')}
                 {sp.seconds != null && <span className="text-[10px] text-accent-500">{Math.round(sp.seconds)}s</span>}
                 <i className="ri-pencil-line text-[11px] opacity-50 group-hover:opacity-100"></i>
               </button>
@@ -274,24 +276,24 @@ export default function TranscriptionTab({
             <div className="w-8 h-8 flex items-center justify-center">
               <i className="ri-file-text-line text-foreground-500 text-lg"></i>
             </div>
-            <h3 className="text-sm font-semibold text-foreground-800">课堂转写内容</h3>
+            <h3 className="text-sm font-semibold text-foreground-800">{t('课堂转写内容')}</h3>
             <span className="text-xs text-foreground-400">
-              {lines.length} 句
-              {shots.length > 0 && ` · ${shots.length} 张板书`}
-              {isLive ? '（正在录制）' : canEdit ? (showPlayer ? ' · 点句子跳到录音,点「修改」改文字' : ' · 点句子后的「修改」可改文字') : ''}
+              {t('{n} 句', { n: lines.length })}
+              {shots.length > 0 && t(' · {n} 张板书', { n: shots.length })}
+              {isLive ? t('（正在录制）') : canEdit ? (showPlayer ? t(' · 点句子跳到录音,点「修改」改文字') : t(' · 点句子后的「修改」可改文字')) : ''}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {shots.length > 0 && !isLive && (
               <label className="flex items-center gap-1.5 text-xs text-foreground-500 cursor-pointer">
                 <input type="checkbox" checked={shotsOnly} onChange={(e) => setShotsOnly(e.target.checked)} className="cursor-pointer" />
-                只看板书
+                {t('只看板书')}
               </label>
             )}
             {isLive && (
               <label className="flex items-center gap-1.5 text-xs text-foreground-500 cursor-pointer">
                 <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="cursor-pointer" />
-                自动滚动
+                {t('自动滚动')}
               </label>
             )}
             <button
@@ -299,7 +301,7 @@ export default function TranscriptionTab({
               disabled={lines.length === 0}
               className="flex items-center gap-1.5 px-3 py-2 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
             >
-              <i className="ri-download-line text-sm"></i>导出文本
+              <i className="ri-download-line text-sm"></i>{t('导出文本')}
             </button>
             <button
               data-guide="gen-summary"
@@ -308,7 +310,7 @@ export default function TranscriptionTab({
               className="flex items-center gap-1.5 px-4 py-2 bg-accent-500 text-background-50 rounded-full text-xs font-semibold hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
             >
               <i className={`${isGenerating ? 'ri-loader-4-line animate-spin' : 'ri-magic-line'} text-sm`}></i>
-              {isGenerating ? 'DeepSeek 整理中...' : '生成AI摘要'}
+              {isGenerating ? t('DeepSeek 整理中...') : t('生成AI摘要')}
             </button>
           </div>
         </div>
@@ -339,7 +341,7 @@ export default function TranscriptionTab({
                           className={`text-xs text-foreground-400 font-mono mr-2 ${
                             showPlayer ? 'hover:text-accent-600 cursor-pointer' : 'cursor-default'
                           }`}
-                          title={showPlayer ? '跳到这一句的录音' : undefined}
+                          title={showPlayer ? t('跳到这一句的录音') : undefined}
                         >
                           {l.ts}
                         </button>
@@ -350,7 +352,7 @@ export default function TranscriptionTab({
                             className={`mr-2 text-xs cursor-pointer align-middle ${
                               l.kind === 'key' ? 'text-yellow-500' : 'text-foreground-300 hover:text-yellow-500'
                             }`}
-                            title={l.kind === 'key' ? '取消重点' : '标为重点'}
+                            title={l.kind === 'key' ? t('取消重点') : t('标为重点')}
                           >
                             <i className={l.kind === 'key' ? 'ri-star-fill' : 'ri-star-line'}></i>
                           </button>
@@ -369,9 +371,9 @@ export default function TranscriptionTab({
                               className="text-sm px-2 py-1 rounded border border-accent-300 w-full max-w-[560px] min-w-[180px]"
                             />
                             <span className="flex items-center gap-2 flex-shrink-0">
-                              <button onClick={() => void save(l.id, l.text)} className="text-xs px-3 py-1.5 rounded bg-accent-500 text-background-50 cursor-pointer">保存</button>
-                              <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded bg-background-100 text-foreground-600 cursor-pointer">取消</button>
-                              <span className="text-[11px] text-foreground-300">Esc 退出</span>
+                              <button onClick={() => void save(l.id, l.text)} className="text-xs px-3 py-1.5 rounded bg-accent-500 text-background-50 cursor-pointer">{t('保存')}</button>
+                              <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded bg-background-100 text-foreground-600 cursor-pointer">{t('取消')}</button>
+                              <span className="text-[11px] text-foreground-300">{t('Esc 退出')}</span>
                             </span>
                           </span>
                         ) : (
@@ -382,7 +384,7 @@ export default function TranscriptionTab({
                               className={`text-sm leading-relaxed text-foreground-700 ${
                                 KIND_STYLE[l.kind ?? ''] ?? ''
                               } ${showPlayer ? 'cursor-pointer hover:text-accent-700' : ''}`}
-                              title={showPlayer ? '跳到这一句的录音' : undefined}
+                              title={showPlayer ? t('跳到这一句的录音') : undefined}
                             >
                               {l.text}
                             </span>
@@ -391,14 +393,14 @@ export default function TranscriptionTab({
                               <button
                                 onClick={() => { setEditingId(l.id); setDraft(l.text); }}
                                 className="ml-2 text-xs text-foreground-300 hover:text-accent-600 cursor-pointer align-middle whitespace-nowrap"
-                                title="修改这一句"
+                                title={t('修改这一句')}
                               >
-                                <i className="ri-edit-line"></i> 修改
+                                <i className="ri-edit-line"></i> {t('修改')}
                               </button>
                             )}
                           </>
                         )}
-                        {l.edited && <span className="text-xs text-accent-500 ml-2">已修改</span>}
+                        {l.edited && <span className="text-xs text-accent-500 ml-2">{t('已修改')}</span>}
                         {l.translation && (
                           <div className="mt-1 flex items-start gap-1.5 text-[13px] leading-snug text-sky-700 bg-sky-50 border-l-2 border-sky-300 rounded-r px-2 py-1">
                             <i className="ri-translate-2 text-sky-400 mt-0.5 flex-shrink-0"></i>
@@ -422,8 +424,8 @@ export default function TranscriptionTab({
             ) : (
               <p className="text-foreground-400 italic text-sm">
                 {live.running
-                  ? '已开麦，等待第一句话…'
-                  : '暂无转写内容，点上方「开始录音」，或去「历史课程」选一节已录好的课。'}
+                  ? t('已开麦，等待第一句话…')
+                  : t('暂无转写内容，点上方「开始录音」，或去「历史课程」选一节已录好的课。')}
               </p>
             )}
           </div>
@@ -434,16 +436,16 @@ export default function TranscriptionTab({
         <div className="bg-background-50 border border-background-200 rounded-xl p-4 w-full lg:w-96 flex-shrink-0 flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-foreground-800 flex items-center gap-1.5">
-              <i className="ri-sticky-note-line text-accent-500"></i>我的笔记
+              <i className="ri-sticky-note-line text-accent-500"></i>{t('我的笔记')}
             </h3>
             <span className="text-xs text-foreground-400">
-              {noteStatus === 'saving' ? '保存中…' : noteStatus === 'saved' ? '✓ 已保存' : '随手记,自动保存'}
+              {noteStatus === 'saving' ? t('保存中…') : noteStatus === 'saved' ? t('✓ 已保存') : t('随手记,自动保存')}
             </span>
           </div>
           <textarea
             value={note ?? ''}
             onChange={(e) => onNoteChange?.(e.target.value)}
-            placeholder="在这里记笔记…(和这节课绑定,边听边记,自动保存)"
+            placeholder={t('在这里记笔记…(和这节课绑定,边听边记,自动保存)')}
             className="w-full flex-1 min-h-[360px] px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all resize-none leading-relaxed"
           />
         </div>

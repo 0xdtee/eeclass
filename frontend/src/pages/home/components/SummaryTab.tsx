@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useT } from '@/lib/i18n';
 
 interface SummaryTabProps {
   summary: string;
@@ -47,6 +48,7 @@ export default function SummaryTab({
   error,
   deepseekReady,
 }: SummaryTabProps) {
+  const t = useT();
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFmt, setExportFmt] = useState<'word' | 'pdf'>('word');
   const [exportOpts, setExportOpts] = useState({ summary: true, corrections: false, transcript: false });
@@ -91,8 +93,8 @@ export default function SummaryTab({
         <div className="bg-accent-50 border border-accent-200 rounded-xl p-4">
           <p className="text-xs text-accent-700 leading-relaxed">
             <i className="ri-information-line mr-1"></i>
-            服务端还没配 DeepSeek API key，「生成AI摘要」会退回本机规则提取的重点。
-            把 key 填到 <code>service/config.json</code> 的 <code>deepseek.api_key</code> 后重启服务即可。
+            {t('服务端还没配 DeepSeek API key，「生成AI摘要」会退回本机规则提取的重点。')}
+            {t(' 把 key 填到 ')}<code>service/config.json</code>{t(' 的 ')}<code>deepseek.api_key</code>{t(' 后重启服务即可。')}
           </p>
         </div>
       )}
@@ -102,18 +104,18 @@ export default function SummaryTab({
             <div className="w-8 h-8 flex items-center justify-center">
               <i className="ri-ai-generate text-foreground-500 text-lg"></i>
             </div>
-            <h3 className="text-sm font-semibold text-foreground-800">AI 摘要预览</h3>
+            <h3 className="text-sm font-semibold text-foreground-800">{t('AI 摘要预览')}</h3>
           </div>
           <div className="flex items-center gap-2">
             {onSaveSummary && (
               <button
                 onClick={() => void onSaveSummary()}
                 disabled={!summary || !canSave}
-                title={!canSave ? '这节课还没保存,先停止录音' : undefined}
+                title={!canSave ? t('这节课还没保存,先停止录音') : undefined}
                 className="flex items-center gap-1.5 px-4 py-2 bg-background-100 text-foreground-700 rounded-full text-xs font-semibold hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <i className="ri-save-3-line text-sm"></i>
-                保存
+                {t('保存')}
               </button>
             )}
             {/* Export as…: open it to first choose a format (Word/PDF), then check what to export */}
@@ -123,7 +125,7 @@ export default function SummaryTab({
                 className="flex items-center gap-1.5 px-4 py-2 bg-primary-500 text-background-50 rounded-full text-xs font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <i className="ri-download-2-line text-sm"></i>
-                导出为…
+                {t('导出为…')}
                 <i className={`ri-arrow-${exportOpen ? 'up' : 'down'}-s-line text-sm`}></i>
               </button>
               {exportOpen && (
@@ -131,7 +133,7 @@ export default function SummaryTab({
                   <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 z-20 w-52 bg-background-50 border border-background-200 rounded-xl shadow-lg p-3">
                     {/* Format */}
-                    <p className="text-[11px] text-foreground-400 mb-1.5">导出格式</p>
+                    <p className="text-[11px] text-foreground-400 mb-1.5">{t('导出格式')}</p>
                     <div className="flex gap-2 mb-3">
                       {([
                         { f: 'word', label: 'Word', icon: 'ri-file-word-2-line' },
@@ -152,7 +154,7 @@ export default function SummaryTab({
                       ))}
                     </div>
                     {/* Content */}
-                    <p className="text-[11px] text-foreground-400 mb-1">导出内容</p>
+                    <p className="text-[11px] text-foreground-400 mb-1">{t('导出内容')}</p>
                     {([
                       { k: 'summary', label: '摘要', icon: 'ri-magic-line' },
                       { k: 'corrections', label: '可能错误', icon: 'ri-error-warning-line' },
@@ -169,14 +171,14 @@ export default function SummaryTab({
                           className="accent-primary-500 w-3.5 h-3.5"
                         />
                         <i className={`${it.icon} text-foreground-400 text-sm`}></i>
-                        {it.label}
+                        {t(it.label)}
                       </label>
                     ))}
                     <button
                       onClick={doExport}
                       className="mt-2 w-full px-3 py-1.5 bg-primary-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-primary-600 cursor-pointer"
                     >
-                      导出为 {exportFmt === 'pdf' ? 'PDF' : 'Word'}
+                      {t('导出为')} {exportFmt === 'pdf' ? 'PDF' : 'Word'}
                     </button>
                   </div>
                 </>
@@ -194,7 +196,7 @@ export default function SummaryTab({
             {keyPoints.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-foreground-500 uppercase tracking-wider mb-3">
-                  重点知识点
+                  {t('重点知识点')}
                 </h4>
                 <div className="space-y-2">
                   {keyPoints.map((point, idx) => (
@@ -213,26 +215,26 @@ export default function SummaryTab({
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                   <h4 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5">
-                    <i className="ri-error-warning-line"></i>识别可能听错 · 一键替换
+                    <i className="ri-error-warning-line"></i>{t('识别可能听错 · 一键替换')}
                     {applied.length > 0 && (
-                      <span className="text-xs font-normal text-amber-500">(已替换 {applied.length} 条)</span>
+                      <span className="text-xs font-normal text-amber-500">{t('(已替换 {n} 条)', { n: applied.length })}</span>
                     )}
                   </h4>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-600 hidden sm:inline">选中一条按 Tab 键替换并跳下一条</span>
+                    <span className="text-xs text-amber-600 hidden sm:inline">{t('选中一条按 Tab 键替换并跳下一条')}</span>
                     {onApplyAll && (
                       <button
                         onClick={() => void onApplyAll()}
                         className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-background-50 rounded-full text-xs font-semibold hover:bg-amber-600 cursor-pointer whitespace-nowrap"
                       >
-                        <i className="ri-check-double-line"></i>全部替换
+                        <i className="ri-check-double-line"></i>{t('全部替换')}
                       </button>
                     )}
                     <button
                       onClick={exportCorrections}
                       className="flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-medium hover:bg-amber-200 cursor-pointer whitespace-nowrap"
                     >
-                      <i className="ri-download-line"></i>导出清单
+                      <i className="ri-download-line"></i>{t('导出清单')}
                     </button>
                   </div>
                 </div>
@@ -268,7 +270,7 @@ export default function SummaryTab({
                             onClick={() => void onApplyCorrection(p.from, p.to, c)}
                             className="flex-shrink-0 px-3 py-1.5 bg-amber-500 text-background-50 rounded-full text-xs font-semibold hover:bg-amber-600 cursor-pointer whitespace-nowrap"
                           >
-                            替换
+                            {t('替换')}
                           </button>
                         )}
                       </div>
@@ -283,8 +285,8 @@ export default function SummaryTab({
             <div className="w-16 h-16 flex items-center justify-center mb-4">
               <i className="ri-magic-line text-foreground-300 text-3xl"></i>
             </div>
-            <p className="text-sm text-foreground-400">暂无摘要内容</p>
-            <p className="text-xs text-foreground-300 mt-1">请在「实时转写」标签页中点击「生成AI摘要」按钮</p>
+            <p className="text-sm text-foreground-400">{t('暂无摘要内容')}</p>
+            <p className="text-xs text-foreground-300 mt-1">{t('请在「实时转写」标签页中点击「生成AI摘要」按钮')}</p>
           </div>
         )}
       </div>
