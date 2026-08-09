@@ -303,6 +303,42 @@ class DeepSeek:
             return ""
         return out
 
+    def polish_dialect(self, text, topic="", timeout_s=12):
+        """Polish a per-sentence Mandarin transcription of DIALECT speech (from fun-asr-realtime) into fluent,
+        standard written Mandarin -- in place. The dialect model already outputs Mandarin, but wording can be
+        rough or keep dialect-specific phrasing; this smooths it while staying faithful to the meaning.
+        Returns the polished sentence; with no key / on failure / no change, returns "" (caller keeps the original)."""
+        text = (text or "").strip()
+        if not self.api_key or len(text) < 2:
+            return ""
+        sys_prompt = (
+            "下面是对方言语音的普通话转写(来自语音识别),可能有方言用词或不通顺的地方。"
+            "把它改写成通顺、规范的书面普通话,忠实原意,不要解释、不要加引号、不要改变说话内容,只输出改写后的句子。")
+        topic = (topic or "").strip()
+        if topic:
+            sys_prompt += f"\n本次场景/学科是「{topic}」,专业术语按该领域的习惯写法。"
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": text}],
+            "temperature": 0.2,
+            "stream": False,
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
+        except Exception:
+            return ""
+        if not out or out == text:
+            return ""
+        return out
+
     def segment(self, fragments, topic="", timeout_s=12):
         """Smart segmentation: merge consecutive ASR speech fragments (each cut out by one VAD pause) into complete sentences by meaning.
         fragments: ["fragment1","fragment2",...] in time order. Returns a dict:

@@ -7,7 +7,7 @@ import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
 
 // Render straight from the constant array (no inner component), so setState doesn't remount and swallow clicks each time.
 const TOGGLES: { k: 'aiCorrect' | 'smartSeg' | 'translateEn' | 'autoSummary'; label: string; hint: string }[] = [
-  { k: 'aiCorrect', label: '✨ AI 实时纠错', hint: '出字后让 DeepSeek 异步改同音错字(如 影射→映射),消耗少量 API 额度。' },
+  { k: 'aiCorrect', label: '✨ AI 实时纠错', hint: '出字后让 DeepSeek 异步改同音错字(如 影射→映射);选「方言」时改为把方言直出的文字润色成规范普通话。消耗少量 API 额度。' },
   { k: 'smartSeg', label: '🧩 AI 智能分句', hint: '让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)。' },
   { k: 'translateEn', label: '🌐 英文自动翻译', hint: '识别到英文句(或英语课)时,在该句下面自动加一行中文字幕。消耗少量 API 额度。' },
   { k: 'autoSummary', label: '📝 结束录制自动生成概要', hint: '停止录制后自动整理这节课的 AI 概要;关掉则需手动点生成。' },

@@ -717,18 +717,24 @@ class Session:
                 pass
 
     def _ai_correct(self, line_id, ts, text):
+        # Cloud dialect model (fun-asr-realtime, backend aliyun_funasr) already outputs Mandarin but it can read
+        # rough, so polish it into standard Mandarin; for every other backend, fix homophone typos as before.
+        dialect = self.cfg["asr"].get("backend") == "aliyun_funasr"
         try:
-            fixed = self.corrector.correct(text, topic=self._correction_topic())
+            if dialect:
+                fixed = self.corrector.polish_dialect(text, topic=self._correction_topic())
+            else:
+                fixed = self.corrector.correct(text, topic=self._correction_topic())
         except Exception:
             return
         if not fixed or fixed == text:
             return
         # push to the frontend to replace that line
         self.emit({"type": "line_update", "id": line_id, "text": fixed})
-        # persist: record an edit (by=AI correction) so reloading the transcript shows the corrected text
+        # persist: record an edit so reloading the transcript shows the corrected/polished text
         try:
             rec = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "line_id": line_id,
-                   "before": text, "after": fixed, "by": "AI纠错", "ts": ts}
+                   "before": text, "after": fixed, "by": ("方言润色" if dialect else "AI纠错"), "ts": ts}
             with open(os.path.join(self.rec.dir, "edits.jsonl"), "a", encoding="utf-8") as f:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         except Exception:
