@@ -3,7 +3,7 @@ import type { AudioDevice, LiveStatus } from '@/hooks/useLiveCaption';
 import { SERVICE_ORIGIN, getToken, setToken } from '@/hooks/useLiveCaption';
 import { loadSettings } from '@/lib/settings';
 import { useAuth } from '@/hooks/useAuth';
-import { useT } from '@/lib/i18n';
+import { useT, t } from '@/lib/i18n';
 
 // Cloud models regular users may pick; local/technical models are admin-only.
 const CLOUD_MODELS = ['aliyun', 'aliyun_wu'] as const;
@@ -11,7 +11,7 @@ const CLOUD_MODELS = ['aliyun', 'aliyun_wu'] as const;
 function defaultCourseName(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
-  return `课程 ${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${t('课程')} ${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 type RecordingStatus = 'idle' | 'recording' | 'paused';

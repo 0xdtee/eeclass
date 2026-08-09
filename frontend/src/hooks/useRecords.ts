@@ -173,10 +173,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** Course name is taken from the directory name: 2026-07-29_0936_高等数学 -> 高等数学 */
+// The auto-generated default session name, e.g. "课程 08-09 21:05". Stored as data, but its prefix is
+// re-localized at display so it follows the UI language (matches whatever prefix was stored: zh/zh-Hant/en).
+const DEFAULT_TITLE_RE = /^(?:课程|課程|Course) (\d{2}-\d{2} \d{2}:\d{2})$/;
+
 export function sessionTitle(s: SessionMeta) {
-  if (s.title) return s.title;
-  const m = s.id.match(/^\d{4}-\d{2}-\d{2}_\d{4}_(.+)$/);
-  return m ? m[1] : t('未命名课程');
+  const raw = s.title || s.id.match(/^\d{4}-\d{2}-\d{2}_\d{4}_(.+)$/)?.[1] || '';
+  if (!raw) return t('未命名课程');
+  const m = raw.match(DEFAULT_TITLE_RE);
+  return m ? `${t('课程')} ${m[1]}` : raw;
 }
 
 export function sessionDate(s: SessionMeta) {
