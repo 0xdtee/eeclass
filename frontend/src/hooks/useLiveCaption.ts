@@ -53,6 +53,11 @@ export function authFailed() {
 }
 
 const CID_KEY = 'live_caption_cid';
+const DEVICE_KEY = 'live_caption_device';   // remember the audio source so a full page reload can resume browser-mic streaming
+
+function savedDevice(): string | null {
+  try { return localStorage.getItem(DEVICE_KEY); } catch { return null; }
+}
 
 /** Client ID: on reconnect the server uses it to recover the same session (no lost transcription). Stored locally, fixed long-term. */
 export function getCid(): string {
@@ -365,13 +370,22 @@ export function useLiveCaption() {
             setRunning(true);
             setStarting(false);
             if (m.sid) setLiveSid(m.sid as string);
-            if (deviceRef.current === 'browser') {
-              void startMic();   // reopen mic and re-stream
-              setNotice('已恢复录制');
-            } else if (deviceRef.current === 'browser-system') {
+            // After a FULL page reload the in-memory deviceRef is null, so fall back to the persisted
+            // choice -- otherwise a browser-mic recording silently stops streaming while the UI still
+            // says "已恢复录制" and the rest of the class is lost.
+            const dev = deviceRef.current ?? savedDevice();
+            deviceRef.current = dev;
+            if (dev === 'browser') {
+              // reopen the mic and re-stream; if the browser blocks getUserMedia without a fresh gesture
+              // (common on iOS after a reload), tell the user honestly instead of pretending it resumed.
+              startMic()
+                .then(() => setNotice('已恢复录制'))
+                .catch(() => setNotice('麦克风未能自动恢复,请重新点「开始录制」继续录音。'));
+            } else if (dev === 'browser-system') {
               // System audio needs a user gesture to reopen sharing, can't auto-resume
-              setNotice('网络已恢复。系统声音共享可能已中断,如没继续请重新点「开始录制」。');
+              setNotice('网络已恢复,但系统声音共享已中断,请重新点「开始录制」继续。');
             } else {
+              // server sound-card capture: the server records on its own, nothing to reopen in the browser
               setNotice('已恢复录制');
             }
           } else {
@@ -515,6 +529,7 @@ export function useLiveCaption() {
       }
       const dev = devices.find((d) => d.id === opts.device);
       deviceRef.current = opts.device ?? null;   // Remember the audio source, needed to reopen the mic on reconnect recovery
+      try { if (opts.device) localStorage.setItem(DEVICE_KEY, opts.device); } catch { /* ignore */ }   // survive a full page reload
       // Model selection: sensevoice/paraformer=full-sentence; stream=streaming zipformer (words appear as you speak);
       // shanghainese=Shanghainese (wenet_ctc, Wu recognition, backend auto-translates to Mandarin captions);
       // aliyun=Aliyun Mandarin (aliyun_paraformer); aliyun_wu=Aliyun Shanghainese (aliyun_funasr, outputs Mandarin directly). Defaults to sensevoice.

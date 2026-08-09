@@ -24,9 +24,15 @@ import os
 import re
 import json
 import hashlib
+import threading
 import numpy as np
 
 SR = 16000
+# The registry (records/voiceprints/registry.json) is GLOBAL across all accounts, and account library
+# files are read-modify-write. Many sessions can stop/rename in the same window (a class period ending),
+# each doing load -> modify -> save; without serialization the last writer wins and the rest are lost.
+# One process-wide reentrant lock guards every registry/library read-modify-write below.
+_REG_LOCK = threading.RLock()
 # dedup merge threshold: more conservative than the match threshold (0.35); only merge into one
 # entry when we're quite sure it's the same person, to avoid merging two different people and polluting the voiceprint. "If the voiceprint says it's one person" -- similar enough only.
 REG_MERGE_TH = 0.45
@@ -75,33 +81,37 @@ def register(root, embedding, seconds=0.0, threshold=REG_MERGE_TH, reg=None):
     existing person, merge into that person (no new entry, update centroid); otherwise create a new
     person. Returns (person_id, reg, is_new). Pass reg to register in batch and write to disk once at the end."""
     own = reg is None
-    if own:
-        reg = load_registry(root)
-    e = _norm(embedding)
-    if e.size == 0:
-        return None, reg, False
-    persons = reg["persons"]
-    best, bs = None, -1.0
-    for p in persons:
-        s = float(np.dot(e, _norm(p.get("centroid") or [])))
-        if s > bs:
-            bs, best = s, p
-    if best is not None and bs >= threshold:
-        n = int(best.get("n", 1) or 1)
-        c = _norm(_norm(best.get("centroid") or []) * n + e)   # weighted average, then renormalize
-        best["centroid"] = [float(x) for x in c]
-        best["n"] = n + 1
-        best["seconds"] = round(float(best.get("seconds", 0) or 0) + float(seconds or 0), 1)
-        pid, is_new = best["id"], False
-    else:
-        import secrets
-        pid = "p" + secrets.token_hex(5)
-        persons.append({"id": pid, "centroid": [float(x) for x in e],
-                        "n": 1, "seconds": round(float(seconds or 0), 1)})
-        is_new = True
-    if own:
-        save_registry(root, reg)
-    return pid, reg, is_new
+    # Serialize the whole load -> modify -> save when we own the registry read (own=True), so concurrent
+    # session-stop threads don't clobber each other's newly-registered voiceprints. RLock is reentrant,
+    # so upsert_voice (which holds the lock and calls register) is safe.
+    with _REG_LOCK:
+        if own:
+            reg = load_registry(root)
+        e = _norm(embedding)
+        if e.size == 0:
+            return None, reg, False
+        persons = reg["persons"]
+        best, bs = None, -1.0
+        for p in persons:
+            s = float(np.dot(e, _norm(p.get("centroid") or [])))
+            if s > bs:
+                bs, best = s, p
+        if best is not None and bs >= threshold:
+            n = int(best.get("n", 1) or 1)
+            c = _norm(_norm(best.get("centroid") or []) * n + e)   # weighted average, then renormalize
+            best["centroid"] = [float(x) for x in c]
+            best["n"] = n + 1
+            best["seconds"] = round(float(best.get("seconds", 0) or 0) + float(seconds or 0), 1)
+            pid, is_new = best["id"], False
+        else:
+            import secrets
+            pid = "p" + secrets.token_hex(5)
+            persons.append({"id": pid, "centroid": [float(x) for x in e],
+                            "n": 1, "seconds": round(float(seconds or 0), 1)})
+            is_new = True
+        if own:
+            save_registry(root, reg)
+        return pid, reg, is_new
 
 
 def registry_centroid(root, pid, reg=None):
@@ -171,20 +181,21 @@ def upsert_voice(root, name, embedding, key=None):
     e = _norm(embedding)
     if e.size == 0:
         return None
-    pid, _, _ = register(root, e)          # global dedup: get this person's unique id (this entry has already been merged in)
-    lib = _load_raw(root, key)
-    for v in lib:
-        if v.get("name") == name:
-            v["pid"] = pid
-            v.pop("embedding", None)       # clear the old-format inlined vector, switch to a dedup-store reference
-            v.pop("n", None)
-            _save_raw(root, lib, key)
-            return v.get("id")
-    import secrets
-    vid = "v" + secrets.token_hex(4)
-    lib.append({"id": vid, "name": name, "pid": pid})
-    _save_raw(root, lib, key)
-    return vid
+    with _REG_LOCK:                        # atomic registry + account-library read-modify-write
+        pid, _, _ = register(root, e)      # global dedup: get this person's unique id (already merged in)
+        lib = _load_raw(root, key)
+        for v in lib:
+            if v.get("name") == name:
+                v["pid"] = pid
+                v.pop("embedding", None)   # clear the old-format inlined vector, switch to a dedup-store reference
+                v.pop("n", None)
+                _save_raw(root, lib, key)
+                return v.get("id")
+        import secrets
+        vid = "v" + secrets.token_hex(4)
+        lib.append({"id": vid, "name": name, "pid": pid})
+        _save_raw(root, lib, key)
+        return vid
 
 
 def remove_voice(root, vid, key=None):

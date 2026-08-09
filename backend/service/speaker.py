@@ -29,12 +29,32 @@ worst blends two people into one, while a wrong split litters the document with 
 crowd of phantom "classmates".
 """
 import os
+import threading
 import numpy as np
 
 SR = 16000
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 DEFAULT_MODEL = "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx"
+
+# The eres2netv2 embedding extractor is the largest model a session loads -- and EVERY session loads it
+# (even cloud-ASR ones use it for diarization). It is stateless: each embed() opens its own create_stream(),
+# so one instance is safe to share across all concurrent sessions. Cache it per model path so 40 concurrent
+# recordings share ONE extractor instead of loading 40 copies (which would OOM the box at high concurrency).
+_EX_CACHE = {}
+_EX_LOCK = threading.Lock()
+
+
+def _get_extractor(model_path):
+    with _EX_LOCK:
+        ex = _EX_CACHE.get(model_path)
+        if ex is None:
+            import sherpa_onnx
+            ex = sherpa_onnx.SpeakerEmbeddingExtractor(
+                sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                    model=model_path, num_threads=2, debug=False))
+            _EX_CACHE[model_path] = ex
+        return ex
 
 
 class SpeakerID:
@@ -63,12 +83,9 @@ class SpeakerID:
 
         model_path = model_path or os.path.join(HERE, "models", s.get("model", DEFAULT_MODEL))
         try:
-            import sherpa_onnx
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"找不到声纹模型 {model_path}（跑一次 install.ps1 下载）")
-            self.ex = sherpa_onnx.SpeakerEmbeddingExtractor(
-                sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-                    model=model_path, num_threads=2, debug=False))
+            self.ex = _get_extractor(model_path)   # shared, process-wide (stateless extractor; per-session state stays on self)
         except Exception as e:
             self.err = f"声纹模型加载失败({e})，将全部标记为同一个说话人"
             self.enabled = False

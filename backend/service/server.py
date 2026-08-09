@@ -59,13 +59,18 @@ def load_config():
 
 
 # ---------- Personalization feedback: keep accumulating user-corrected terms into records/learned_terms.json ----------
-def _learned_terms_file(cfg):
+def _learned_terms_file(cfg, key=None):
+    # Per-account file (learned_terms_<keyid>.json) so one user's homophone corrections don't get applied
+    # to everyone. The owner / global token keeps the original shared path.
     root = os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"]))
-    return os.path.join(root, "learned_terms.json")
+    if key in (None, "", "owner"):
+        return os.path.join(root, "learned_terms.json")
+    import voiceprint
+    return os.path.join(root, f"learned_terms_{voiceprint._key_id(key)}.json")
 
 
-def load_learned_terms(cfg):
-    p = _learned_terms_file(cfg)
+def load_learned_terms(cfg, key=None):
+    p = _learned_terms_file(cfg, key)
     if not os.path.exists(p):
         return []
     try:
@@ -75,12 +80,12 @@ def load_learned_terms(cfg):
         return []
 
 
-def add_learned_term(cfg, term):
-    """Record a term the user corrected (>=2 chars, deduped) so later sessions auto-fix this homophone error."""
+def add_learned_term(cfg, term, key=None):
+    """Record a term this account corrected (>=2 chars, deduped) so its later sessions auto-fix the homophone."""
     term = (term or "").strip()
     if len(term) < 2:
         return False
-    p = _learned_terms_file(cfg)
+    p = _learned_terms_file(cfg, key)
     data = {"terms": []}
     if os.path.exists(p):
         try:
@@ -93,8 +98,10 @@ def add_learned_term(cfg, term):
         return False
     terms.append(term)
     data["terms"] = terms
-    with open(p, "w", encoding="utf-8") as f:
+    tmp = p + ".part"                       # write atomically so a concurrent read never sees a truncated file
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, p)
     return True
 
 
@@ -121,8 +128,9 @@ class Session:
     """One class session."""
 
     def __init__(self, cfg, loop, emit, title=None, device=None, loopback=False,
-                 to_word=False, word_doc="active", append_sid=None):
+                 to_word=False, word_doc="active", append_sid=None, user_key=None):
         self.cfg = cfg
+        self.user_key = user_key   # owning account -> per-account learned terms / voiceprint library
         self.loop = loop
         self.emit = emit           # thread-safe broadcast function
         self.title = title
@@ -167,8 +175,9 @@ class Session:
             terms = list(a.get("terms") or [])
             hw = a.get("hotwords")
             terms += hw.split() if isinstance(hw, str) else list(hw or [])
-            # personalization feedback: terms learned from the user's past one-click corrections, fed back so future recognition auto-corrects them
-            terms += load_learned_terms(cfg)
+            # personalization feedback: terms this account learned from past one-click corrections (per-account,
+            # so one user's corrections never leak into everyone else's recognition)
+            terms += load_learned_terms(cfg, self.user_key)
             if terms:
                 self.tfix = TermFixer(terms)
         except Exception as e:
@@ -378,12 +387,16 @@ class Session:
         try:
             import voiceprint
             root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
-            reg = voiceprint.load_registry(root)
-            for s in self.spk.stats():
-                emb = self.spk.centroid_of(s["id"])
-                if emb is not None:
-                    voiceprint.register(root, emb, seconds=s.get("seconds", 0), reg=reg)
-            voiceprint.save_registry(root, reg)
+            # Hold the registry lock across the whole load -> register-batch -> save. Many sessions end at
+            # once (a class period finishing); without this each thread loads its own snapshot and the last
+            # save wins, silently discarding the other sessions' newly-registered voiceprints.
+            with voiceprint._REG_LOCK:
+                reg = voiceprint.load_registry(root)
+                for s in self.spk.stats():
+                    emb = self.spk.centroid_of(s["id"])
+                    if emb is not None:
+                        voiceprint.register(root, emb, seconds=s.get("seconds", 0), reg=reg)
+                voiceprint.save_registry(root, reg)
         except Exception:
             traceback.print_exc()
         return self.rec.finish(meta), meta
@@ -902,7 +915,7 @@ class App:
         # another connection with the same cid is still recording (dropped within the grace period) -> recover: attach the session to this new connection
         resumed = False
         ent = self.sessions.get(cid)
-        if ent and ent["s"].running:
+        if ent and ent.get("s") is not None and ent["s"].running:
             ent["ws"] = ws
             ent["detached_at"] = None
             resumed = True
@@ -939,10 +952,11 @@ class App:
             # when the grace period expires, the ticker wraps up and persists. If not recording, just clean it up.
             ent = self.sessions.get(cid)
             if ent and ent["ws"] is ws:
-                if ent["s"].running:
+                if ent.get("s") is not None and ent["s"].running:
                     ent["ws"] = None
                     ent["detached_at"] = time.time()
                 else:
+                    # not recording (or still just a reserved slot) -> free it
                     self.sessions.pop(cid, None)
         return ws
 
@@ -959,12 +973,18 @@ class App:
         elif cmd == "start":
             if sess and sess.running:
                 return
-            # protect the server: cap concurrent sessions (each session holds a copy of the recognition model's memory + CPU)
-            running = sum(1 for e in self.sessions.values() if e["s"].running)
+            # protect the server: cap concurrent sessions. Count both running sessions AND ones still
+            # loading ("starting"), then reserve THIS slot synchronously below. Without the reservation,
+            # many concurrent starts all read below the cap during the awaited model load (s.start) and
+            # blow past max_sessions -- the guard would fail exactly when it matters most.
+            running = sum(1 for e in self.sessions.values()
+                          if e.get("starting") or (e.get("s") is not None and e["s"].running))
             if running >= self.max_sessions:
                 emit({"type": "error",
                       "msg": f"服务器繁忙（已有 {running} 路转写在跑），稍后再试"})
                 return
+            # reserve the slot now (synchronously, before any await) so the count above already includes us
+            self.sessions[cid] = {"s": None, "ws": ws, "detached_at": None, "starting": True}
             # each session reads its own config copy, avoiding parameter clobbering when classes start concurrently
             cfg = load_config()
             for k in ("backend", "streaming", "model", "cpu_threads", "beam_size"):
@@ -996,7 +1016,7 @@ class App:
                         loopback=bool(m.get("loopback")),
                         to_word=bool(m.get("to_word")),
                         word_doc=m.get("word_doc") or "active",
-                        append_sid=append_sid)
+                        append_sid=append_sid, user_key=user_key)
             s.user_key = user_key                       # this recording's owning account -> private voiceprint library + data isolation
             s.only_key = bool(m.get("only_key"))
             s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
@@ -1022,8 +1042,13 @@ class App:
                     if hw:
                         base = (cfg["asr"].get("hotwords") or "").strip()
                         s.cfg["asr"]["hotwords"] = (base + " " + hw).strip()
-            info = await asyncio.get_running_loop().run_in_executor(None, s.start)
-            self.sessions[cid] = {"s": s, "ws": ws, "detached_at": None}
+            self.sessions[cid]["s"] = s                  # fill the slot we reserved above
+            try:
+                info = await asyncio.get_running_loop().run_in_executor(None, s.start)
+            except Exception:
+                self.sessions.pop(cid, None)             # start failed -> free the reserved slot
+                raise
+            self.sessions[cid].update({"detached_at": None, "starting": False})
             # hand out the sid at start: capturing blackboard shots during recording needs it to know where to store them
             emit({"type": "started", **info, "dir": s.rec.dir,
                   "sid": os.path.basename(s.rec.dir)})
@@ -1098,7 +1123,9 @@ class App:
             await asyncio.sleep(1.0)
             now = time.time()
             for cid, ent in list(self.sessions.items()):
-                s = ent["s"]
+                s = ent.get("s")
+                if s is None:
+                    continue                       # a reserved-but-not-yet-started slot; nothing to tick yet
                 if ent["ws"] is not None and s.running:
                     self._send_soon(ent["ws"], s.status())   # has a connection: push status
                 elif ent["detached_at"] and now - ent["detached_at"] > self.detach_grace:
@@ -1299,8 +1326,10 @@ class App:
                 rec["tries"] = rec.get("tries", 0) + 1
                 return web.json_response({"error": "验证码不对"}, status=400)
             # force role to user -- admins can only be set manually in the database by the owner.
-            token, user = self.accounts.register(
-                m.get("email"), m.get("name"), m.get("password"))
+            # run in a thread: pbkdf2 hashing (600k iters) + blocking psycopg would otherwise stall the loop.
+            loop = asyncio.get_running_loop()
+            token, user = await loop.run_in_executor(
+                None, self.accounts.register, m.get("email"), m.get("name"), m.get("password"))
             self._reg_codes.pop(email, None)   # burn after use
             return web.json_response({"token": token, "user": user})
         except ValueError as e:
@@ -1313,7 +1342,11 @@ class App:
             return web.json_response({"error": "尝试次数过多，稍后再试"}, status=429)
         try:
             m = await request.json()
-            token, user = self.accounts.login(m.get("email"), m.get("password"))
+            # run in a thread: pbkdf2 verification is CPU-heavy (600k iters) and psycopg is blocking;
+            # doing it inline would stall the event loop (and every live WS) when many log in at once.
+            loop = asyncio.get_running_loop()
+            token, user = await loop.run_in_executor(
+                None, self.accounts.login, m.get("email"), m.get("password"))
             return web.json_response({"token": token, "user": user})
         except ValueError as e:
             self._note_fail(request)          # a wrong password also counts as a failure, to prevent brute-forcing
@@ -1548,7 +1581,9 @@ class App:
         root = self._records_root()
         th = self.cfg["speaker"].get("voiceprint_threshold", self.cfg["speaker"]["threshold"])
         spk = self._voice_embedder()
-        skip = {os.path.basename(ent["s"].rec.dir) for ent in self.sessions.values()
+        # snapshot to a list first: this runs in a worker thread while the event loop mutates self.sessions,
+        # so iterating .values() directly can raise "dictionary changed size during iteration".
+        skip = {os.path.basename(ent["s"].rec.dir) for ent in list(self.sessions.values())
                 if ent.get("s") is not None}       # skip the session currently recording (handled by live rename)
         if exclude_sid:
             skip.add(os.path.basename(exclude_sid))   # the session being renamed here isn't counted in the "backfill" total
@@ -1780,9 +1815,10 @@ class App:
             m = await request.json()
         except Exception:
             return web.json_response({"error": "参数不对"}, status=400)
-        added = add_learned_term(self.cfg, m.get("term"))
+        key = self._req_user_key(request)   # learn per-account, not globally
+        added = add_learned_term(self.cfg, m.get("term"), key)
         return web.json_response({"ok": True, "added": added,
-                                  "count": len(load_learned_terms(self.cfg))})
+                                  "count": len(load_learned_terms(self.cfg, key))})
 
     async def api_import_timetable(self, request):
         """Timetable screenshot -> local OCR -> DeepSeek structures it into a course list. The image never leaves the server."""
@@ -2734,14 +2770,13 @@ class App:
             else:
                 resp = await handler(request)
             origin = request.headers.get("Origin", "")
-            # allow: local development (localhost), and the phone/tablet App (hosted by Readdy on *.readdy.co, cross-origin to this backend).
-            # every endpoint still requires a session token, so allowing an origin doesn't open up the data -- without logging in you still get nothing.
+            # allow: local development (localhost) and the native App (capacitor:// / ionic://). The web app is
+            # served same-origin from this backend, so it needs no CORS allowance. Every endpoint still requires
+            # a session token, so allowing an origin never exposes data on its own.
             allowed = bool(origin) and (
                 origin.startswith(("http://localhost", "https://localhost",
                                    "http://127.0.0.1", "https://127.0.0.1"))
-                or origin.startswith(("capacitor://", "ionic://"))  # origins bundled into the native App
-                or origin.endswith(".readdy.co")
-                or origin == "https://readdy.co")
+                or origin.startswith(("capacitor://", "ionic://")))  # origins bundled into the native App
             if allowed:
                 resp.headers["Access-Control-Allow-Origin"] = origin
                 resp.headers["Vary"] = "Origin"
@@ -2922,7 +2957,7 @@ def main():
             print("  网页还没打包：在 frontend 目录里跑一次打包")
             print("      BASE_PATH=/app/ npm run build")
         if app_obj.token:
-            print(f"  访问令牌:    {app_obj.token}   （手机第一次打开要填，之后记住）")
+            print(f"  访问令牌:    {app_obj.token}   （保密！这是管理员超级令牌，别外泄、别把日志贴到公开处）")
         print(f"  记录目录:    {os.path.normpath(os.path.join(HERE, app_obj.cfg['server']['records_dir']))}")
         print(f"  监听:        {host}:{port}"
               + ("（局域网可访问）" if host == "0.0.0.0" else "（仅本机）"))

@@ -44,7 +44,10 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    if (!name || !email || !password || !code) return;
+    if (!name || !email || !password || !code) {
+      setErr('请把姓名、邮箱、密码和验证码都填好');
+      return;
+    }
     if (password !== confirmPassword) {
       setErr('两次输入的密码不一致');
       return;

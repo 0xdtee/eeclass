@@ -20,7 +20,8 @@ import time
 
 import db
 
-_ITERS = 200_000
+_ITERS = 600_000                   # OWASP-current for pbkdf2-hmac-sha256; each hash stores its own iter
+                                   # count, so existing 200k hashes still verify and re-hash on next change
 _SESSION_TTL = 30 * 86400          # sessions expire after 30 days
 
 
