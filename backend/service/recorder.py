@@ -12,6 +12,7 @@ Every write is flushed immediately -- if Word crashes or the machine loses power
 """
 import json
 import os
+import secrets
 import time
 
 import numpy as np
@@ -24,12 +25,25 @@ class Recorder:
         append = bool(existing_dir)
         if append:
             self.dir = existing_dir
+            os.makedirs(self.dir, exist_ok=True)
         else:
             stamp = time.strftime("%Y-%m-%d_%H%M")
             name = f"{stamp}_{title}" if title else stamp
             name = "".join(c for c in name if c not in '\\/:*?"<>|')
-            self.dir = os.path.join(root, name)
-        os.makedirs(self.dir, exist_ok=True)
+            # Create a UNIQUE directory atomically. Two accounts recording the same class in the
+            # same minute would otherwise use the default title "课程 MM-DD HH:MM" and collide on
+            # one folder -- clobbering each other's audio.wav/transcript/owner. exist_ok=False makes
+            # the create atomic; on collision we retry with a short random suffix. Single-user
+            # recordings keep the clean name (meta.title drives the display, so the suffix is invisible).
+            base = os.path.join(root, name)
+            d = base
+            while True:
+                try:
+                    os.makedirs(d, exist_ok=False)
+                    break
+                except FileExistsError:
+                    d = f"{base}_{secrets.token_hex(3)}"
+            self.dir = d
 
         self.jsonl = open(os.path.join(self.dir, "transcript.jsonl"), "a", encoding="utf-8")
         self.md = open(os.path.join(self.dir, "transcript.md"), "a", encoding="utf-8")

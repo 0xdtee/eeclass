@@ -831,6 +831,7 @@ class App:
         #   self.sessions[cid] = {"s": Session, "ws": ws or None, "detached_at": float or None}
         self.sessions = {}
         self.cid_user = {}        # {cid: voiceprint-library account id} -- computed from the token at connect time, used when recording starts / renaming
+        self.cid_admin = {}       # {cid: bool} -- whether this connection's account is an admin; computed at connect (handle_cmd has no request in scope)
         self.max_sessions = int(self.cfg["server"].get("max_sessions", 8))
         self.detach_grace = int(self.cfg["server"].get("detach_grace_s", 90))
         self.loop = None
@@ -841,6 +842,7 @@ class App:
         self.accounts = Accounts(records_dir)
         self._fails = {}          # {source IP: {n, until, first}} token brute-force protection
         self._reg_codes = {}      # {email: {code, exp, tries, sent}} registration email verification codes
+        self._reg_ip = {}         # {ip: [send timestamps]} per-IP throttle for the code-send endpoint (anti mail-bomb)
         self.access_log_path = os.path.join(
             os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"])), "access.log")
         # when exposed to the public internet, keep everything behind the token (not even the page itself is served),
@@ -893,6 +895,7 @@ class App:
         cid = request.query.get("cid") or secrets.token_urlsafe(6)
         # which account this connection belongs to -> decides which private voiceprint library to use/write (needed for starting recording and renaming mid-recording)
         self.cid_user[cid] = self._user_key_for_token(self._req_token(request))
+        self.cid_admin[cid] = self.is_admin(request)   # remember admin status here; handle_cmd has no request
         ws = web.WebSocketResponse(heartbeat=20, max_msg_size=8 * 1024 * 1024)
         await ws.prepare(request)
 
@@ -969,7 +972,7 @@ class App:
                     cfg["asr"][k] = m[k]
             # Regular users may only use the cloud models; force any local backend to cloud Mandarin.
             # Admins keep full choice. This is the server-side guard behind the UI restriction.
-            if not self.is_admin(request) and cfg["asr"].get("backend") not in ("aliyun_paraformer", "aliyun_funasr"):
+            if not self.cid_admin.get(cid, False) and cfg["asr"].get("backend") not in ("aliyun_paraformer", "aliyun_funasr"):
                 cfg["asr"]["backend"] = "aliyun_paraformer"
                 cfg["asr"]["streaming"] = False
             if m.get("new_para_gap_ms") is not None:
@@ -1258,6 +1261,14 @@ class App:
         if not mailer.ready():
             return web.json_response({"error": "服务端还没配置邮件服务,暂时无法发送验证码"}, status=503)
         now = time.time()
+        # Evict expired codes so the dict can't grow without bound (each never-completed signup left one forever).
+        self._reg_codes = {e: r for e, r in self._reg_codes.items() if now < r.get("exp", 0)}
+        # Per-IP throttle so this token-less endpoint can't be used to mail-bomb arbitrary addresses
+        # or burn the sender's reputation: at most 8 sends per hour from one IP.
+        ip = self._client_ip(request)
+        hits = [t for t in self._reg_ip.get(ip, []) if now - t < 3600]
+        if len(hits) >= 8:
+            return web.json_response({"error": "发送太频繁了,请稍后再试"}, status=429)
         rec = self._reg_codes.get(email)
         if rec and now - rec.get("sent", 0) < 60:
             return web.json_response({"error": "验证码刚发过,请 1 分钟后再试"}, status=429)
@@ -1266,7 +1277,10 @@ class App:
         try:
             await asyncio.get_running_loop().run_in_executor(None, mailer.send_code, email, code)
         except Exception as e:
+            self._reg_codes.pop(email, None)   # send failed: drop the code so the user can retry immediately
             return web.json_response({"error": f"验证码发送失败:{e}"}, status=502)
+        hits.append(now)
+        self._reg_ip[ip] = hits
         return web.json_response({"ok": True})
 
     async def api_register(self, request):
@@ -2479,19 +2493,27 @@ class App:
         except Exception:
             return web.json_response({"error": "图片解码失败"}, status=400)
         item = self.lib.add_shot(sid, at, raw, ext, body.get("note", ""))
-        item["url"] = f"/api/shot/{sid}/{item['file']}"
+        # <img> can't send an X-Token header, so carry the caller's token in the image URL (see api_shot_file)
+        item["url"] = f"/api/shot/{sid}/{item['file']}?token={self._req_token(request)}"
         return web.json_response(item)
 
     async def api_shots(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
         sid = request.match_info["sid"]
-        shots = [{**s, "url": f"/api/shot/{sid}/{s['file']}"} for s in self.lib.shots(sid)]
+        tok = self._req_token(request)   # carry the token in each image URL (<img> can't send a header)
+        shots = [{**s, "url": f"/api/shot/{sid}/{s['file']}?token={tok}"} for s in self.lib.shots(sid)]
         return web.json_response({"shots": shots})
 
     async def api_shot_file(self, request):
-        # the image itself isn't token-checked: <img src> can't carry custom headers, and the path itself is unguessable
+        # Board screenshots are private data. An <img> tag can't send an X-Token header, so the token
+        # rides in the query string (see api_shots); we still require a valid token AND session ownership
+        # here -- the filename (shot_001.jpg) and the sid are guessable, so path secrecy is NOT a guard.
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
         sid = os.path.basename(request.match_info["sid"])
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这张图"}, status=403)
         name = os.path.basename(request.match_info["file"])
         p = os.path.join(self.lib.shots_dir(sid), name)
         if not os.path.isfile(p):
@@ -2499,10 +2521,10 @@ class App:
         url = self._oss_url(p)
         if url:
             return web.HTTPFound(url)
-        # blackboard image content never changes (the filename is the content), so use strong caching + immutable:
-        # on remount (e.g. ending recording and switching back to the transcript page) the browser uses the cache instead of re-downloading -> no flicker.
+        # blackboard image content never changes (the filename is the content), so cache hard -- but
+        # PRIVATE (the URL carries a per-user token; never let a shared proxy serve it to someone else).
         return web.FileResponse(p, headers={
-            "Cache-Control": "public, max-age=31536000, immutable"})
+            "Cache-Control": "private, max-age=31536000, immutable"})
 
     async def api_shot_delete(self, request):
         if not self.check_token(request):
@@ -2666,7 +2688,11 @@ class App:
     async def api_share_list(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
-        return web.json_response({"shares": self._load_shares()})
+        # Only your own shares: keep those whose underlying session you own. _owns_session returns
+        # True for the global-token owner, so the machine owner still sees everything.
+        shares = self._load_shares()
+        mine = {k: v for k, v in shares.items() if self._owns_session(request, v.get("sid"))}
+        return web.json_response({"shares": mine})
 
     async def api_share_revoke(self, request):
         if not self.check_token(request):
@@ -2674,6 +2700,8 @@ class App:
         shares = self._load_shares()
         k = request.match_info["key"]
         if k in shares:
+            if not self._owns_session(request, shares[k].get("sid")):   # can only revoke your own share
+                return web.json_response({"error": "无权撤销这个分享"}, status=403)
             shares[k]["revoked"] = True
             self._save_shares(shares)
         return web.json_response({"ok": True})
