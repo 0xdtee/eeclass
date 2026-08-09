@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import BackButton from '@/components/feature/BackButton';
 import {
   DndContext,
@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useTagsStore } from '@/hooks/useTagsStore';
 import type { Tag } from '@/hooks/useTagsStore';
 import { useRecords } from '@/hooks/useRecords';
+import type { ScheduleEvent } from '@/hooks/useRecords';
 
 /* ───────── color config ───────── */
 const COLOR_OPTIONS = [
@@ -258,9 +259,37 @@ function TagRowContent({
 /* ───────── Main Page ───────── */
 export default function TagsPage() {
   const { tags, addTag, updateTag, deleteTag, reorderTag, reorderAll } = useTagsStore();
-  const { sessions } = useRecords();   // real recordings; each carries its tag names in s.tags
-  // A tag's lesson count = number of real recordings tagged with this tag's name (tags are stored by label, not id)
-  const countFor = (label: string) => sessions.filter((s) => (s.tags ?? []).includes(label)).length;
+  const { sessions, loadSchedule } = useRecords();
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);
+  useEffect(() => {
+    void loadSchedule().then((r) => setScheduleEvents(r.events || [])).catch(() => {});
+  }, [loadSchedule]);
+  // A tag's lesson count aggregates both imported timetable courses (deduped by course name) and actual
+  // recordings that carry this tag — the same way the dashboard's tag card counts. Tags are stored by
+  // label (name), not id.
+  const countByLabel = useMemo(() => {
+    const map = new Map<string, { courses: Set<string>; recs: number }>();
+    const ensure = (t: string) => {
+      let v = map.get(t);
+      if (!v) { v = { courses: new Set<string>(), recs: 0 }; map.set(t, v); }
+      return v;
+    };
+    scheduleEvents.forEach((e) => {
+      const t = (e.tag || '').trim();
+      if (t && e.name) ensure(t).courses.add(e.name);
+    });
+    sessions.forEach((s) => {
+      (s.tags ?? []).forEach((t) => {
+        const n = (t || '').trim();
+        if (n) ensure(n).recs += 1;
+      });
+    });
+    return map;
+  }, [scheduleEvents, sessions]);
+  const countFor = (label: string) => {
+    const v = countByLabel.get(label.trim());
+    return v ? v.courses.size + v.recs : 0;
+  };
 
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
