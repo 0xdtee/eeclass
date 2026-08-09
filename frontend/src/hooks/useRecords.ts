@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { SERVICE_ORIGIN, getToken, authFailed } from '@/hooks/useLiveCaption';
 import type { Syllabus } from '@/lib/exportSyllabus';
-import { t } from '@/lib/i18n';
+import { t, getLang } from '@/lib/i18n';
 
 export interface SessionMeta {
   id: string;
@@ -358,7 +358,9 @@ export function useRecords() {
    * Server-side cached; refresh forces recomputation.
    */
   const courseBody = (name: string, refresh: boolean, aiOnly: boolean, tag?: string) =>
-    JSON.stringify(tag ? { tag, refresh, ai_only: aiOnly } : { name, refresh, ai_only: aiOnly });
+    JSON.stringify(tag
+      ? { tag, refresh, ai_only: aiOnly, lang: getLang() }
+      : { name, refresh, ai_only: aiOnly, lang: getLang() });
   const courseSummary = useCallback(
     (name: string, refresh = false, aiOnly = false, tag?: string) =>
       api<CourseSummary>('/api/course/summary', { method: 'POST', body: courseBody(name, refresh, aiOnly, tag) }),

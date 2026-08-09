@@ -13,7 +13,7 @@
  * during development (Vite on port 3000) it falls back to https://localhost:5901.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { t } from '@/lib/i18n';
+import { t, getLang } from '@/lib/i18n';
 
 /** Whether the page is served by the caption service itself (this is the case for phone access) */
 const servedByService =
@@ -581,7 +581,7 @@ export function useLiveCaption() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
         // sid lets the backend identify this class's blackboard shots and fold them into the summary
-        body: JSON.stringify({ title, lines: which ?? lines, dir: lastDir || undefined, sid: sid || liveSid || undefined }),
+        body: JSON.stringify({ title, lines: which ?? lines, dir: lastDir || undefined, sid: sid || liveSid || undefined, lang: getLang() }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error((j as { error?: string }).error || `HTTP ${r.status}`);

@@ -130,6 +130,21 @@ def _loads_forgiving(text):
     raise last
 
 
+def lang_note(lang):
+    """Instruction appended to summary/course prompts so the AI writes its output in the UI language."""
+    if lang == "en":
+        return ("\n\nOUTPUT LANGUAGE: write every text value in the JSON (summary, key_points, formulas, "
+                "exam_hints, questions, and any question/option/answer text) in ENGLISH, regardless of the "
+                "transcript's language. Keep the JSON keys unchanged. EXCEPTION: the 'corrections' array must "
+                "keep its exact original format 「听成X应为Y」 with the raw Chinese transcript words unchanged "
+                "(do not translate it).")
+    if lang == "zh-Hant":
+        return ("\n\n輸出語言:JSON 裡所有文字內容(summary、key_points、formulas、exam_hints、questions、"
+                "題目/選項/答案等)一律用**繁體中文**書寫。例外:corrections 陣列保留原本的「听成X应为Y」"
+                "簡體格式與轉寫原詞,不要改。")
+    return ""   # zh-Hans: default (Chinese)
+
+
 class DeepSeek:
     def __init__(self, cfg):
         d = (cfg.get("deepseek") or {})
@@ -455,8 +470,9 @@ class DeepSeek:
         ]
         return out
 
-    def summarize(self, lines, title=None, board=""):
-        """lines: [{ts, speaker, text, kind}]; board: recognized whiteboard/slide content. Returns a dict."""
+    def summarize(self, lines, title=None, board="", lang="zh-Hans"):
+        """lines: [{ts, speaker, text, kind}]; board: recognized whiteboard/slide content.
+        lang: UI language for the OUTPUT text ('zh-Hans' | 'zh-Hant' | 'en'). Returns a dict."""
         if not self.ready:
             raise RuntimeError(
                 "还没配 DeepSeek API key。把 key 填到 service/config.json 的 "
@@ -476,7 +492,7 @@ class DeepSeek:
         user = (f"课程：{title}\n\n" if title else "") + "逐句转写：\n" + body + board_sec
         payload = json.dumps({
             "model": self.model,
-            "messages": [{"role": "system", "content": SYSTEM},
+            "messages": [{"role": "system", "content": SYSTEM + lang_note(lang)},
                          {"role": "user", "content": user}],
             "temperature": 0.3,
             "max_tokens": 8192,

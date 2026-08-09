@@ -1423,7 +1423,7 @@ class App:
                 board = ""
         try:
             out = await asyncio.get_running_loop().run_in_executor(
-                None, ds.summarize, lines, body.get("title"), board)
+                None, ds.summarize, lines, body.get("title"), board, body.get("lang") or "zh-Hans")
         except Exception as e:
             return web.json_response({"error": f"DeepSeek 调用失败：{e}"}, status=502)
         return web.json_response(out)
@@ -2309,12 +2309,13 @@ class App:
             tag = (m.get("tag") or "").strip()   # if tag is given, aggregate by subject tag; otherwise by same-named course
             refresh = bool(m.get("refresh"))
             ai_only = bool(m.get("ai_only"))   # with no recordings, let the AI generate from just the course name/tag
+            lang = m.get("lang") or "zh-Hans"   # UI language for the generated text
         except Exception:
             return web.json_response({"error": "参数不对"}, status=400)
         if not name and not tag:
             return web.json_response({"error": "缺少课程名或标签"}, status=400)
         label = tag or name   # used as the subject name for the AI / the title in the cache and prompt
-        cache = self._course_cache_path(name, kind, request, tag=tag or None)
+        cache = self._course_cache_path(name, f"{kind}_{lang}", request, tag=tag or None)   # cache per language
         if not refresh and os.path.exists(cache):
             try:
                 return web.json_response(json.load(open(cache, encoding="utf-8")))
@@ -2336,7 +2337,7 @@ class App:
         else:
             content = text
         try:
-            result = await asyncio.get_running_loop().run_in_executor(None, fn, content, label, ds)
+            result = await asyncio.get_running_loop().run_in_executor(None, fn, content, label, ds, lang)
         except Exception as e:
             return web.json_response({"error": f"AI 生成失败: {e}"}, status=500)
         if kind == "exam" and n > 0:
