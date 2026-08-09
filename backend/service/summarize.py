@@ -269,6 +269,42 @@ class DeepSeek:
             return ""
         return out
 
+    def translate_to_english(self, text, topic="", timeout_s=12):
+        """Translate one Chinese sentence into natural, concise English for a caption line under the original.
+        Returns the English translation; with no key / on failure / nothing to translate, returns ""."""
+        text = (text or "").strip()
+        if not self.api_key or len(text) < 1:
+            return ""
+        sys_prompt = (
+            "You are translating live classroom captions. Translate the user's Chinese sentence into natural, "
+            "concise, spoken English, to sit as one caption line under the original. Output only the English "
+            "translation, no explanation, no quotes, no pinyin, and don't repeat the Chinese. If the sentence "
+            "is already English and needs no translation, output nothing.")
+        topic = (topic or "").strip()
+        if topic:
+            sys_prompt += f"\nThe subject/context is 「{topic}」; use that field's conventional English terminology."
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": text}],
+            "temperature": 0.2,
+            "stream": False,
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
+        except Exception:
+            return ""
+        if not out or out == text:
+            return ""
+        return out
+
     def translate_wu_to_mandarin(self, text, topic="", timeout_s=12):
         """Translate a per-sentence Shanghainese (Wu) transcript into standard Mandarin, as a caption line beneath the original.
         Returns the Mandarin translation; with no key / on failure / on an empty sentence, returns "" (the caller then shows only the Wu original)."""

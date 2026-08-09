@@ -7,7 +7,7 @@ import { SERVICE_ORIGIN, getToken } from '@/hooks/useLiveCaption';
 export interface AppSettings {
   aiCorrect: boolean;                                  // AI real-time correction on by default
   smartSeg: boolean;                                   // AI smart sentence segmentation on by default
-  translateEn: boolean;                                // Auto-translate English to Chinese subtitles on by default
+  translateMode: 'off' | 'en2zh' | 'zh2en';            // Live translation subtitles: off / English→Chinese / Chinese→English
   model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';   // Default recognition model
   sensitivity: 'std' | 'high' | 'max';                 // Default pickup sensitivity
   device: 'auto' | 'browser' | 'browser-system';       // Default audio source
@@ -20,7 +20,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   aiCorrect: false,
   smartSeg: true,
-  translateEn: true,
+  translateMode: 'en2zh',
   model: 'aliyun',   // Default to the cloud Mandarin/English model (regular users only get cloud models)
   sensitivity: 'high',
   device: 'auto',
@@ -36,8 +36,13 @@ export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    const s = JSON.parse(raw) as Partial<AppSettings>;
-    return { ...DEFAULT_SETTINGS, ...s };
+    const s = JSON.parse(raw) as Partial<AppSettings> & { translateEn?: boolean };
+    const merged = { ...DEFAULT_SETTINGS, ...s };
+    // migrate the old boolean translateEn -> translateMode
+    if (s.translateMode === undefined && s.translateEn !== undefined) {
+      merged.translateMode = s.translateEn ? 'en2zh' : 'off';
+    }
+    return merged;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

@@ -4,6 +4,12 @@
  * coverage never breaks the UI. Traditional Chinese is generated automatically (OpenCC), not listed here.
  */
 export const EN: Record<string, string> = {
+  "不翻译": "No translation",
+  "英译中": "EN→ZH",
+  "中译英": "ZH→EN",
+  "翻译字幕": "Translation subtitles",
+  "给字幕加一行翻译。": "Add a translated line under each caption.",
+  "给字幕加一行翻译:英译中 / 中译英 / 不翻译": "Add a translated caption line: EN→ZH / ZH→EN / off",
   " · {n} 张板书": " · {n} board photos",
   " · 对 {n} 题": " · {n} correct",
   " · 点句子后的「修改」可改文字": " · tap \"Edit\" after a line to change the text",

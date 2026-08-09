@@ -151,7 +151,7 @@ class Session:
         self.corrector = None
         self.correct_pool = None
         # English subtitles: when English is recognized (or in an English class), asynchronously translate to Chinese and attach under the line
-        self.translate_en = False
+        self.translate_mode = 'off'   # live translation subtitles: 'off' | 'en2zh' | 'zh2en'
         self.translate_wu = False   # Shanghainese (Wu) backend: auto-translate each line to Mandarin subtitles
         self.translator = None
         self.translate_pool = None
@@ -306,7 +306,7 @@ class Session:
         if self.ai_correct:
             self.corrector = DeepSeek(self.cfg)
             self.correct_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="aicorrect")
-        if self.translate_en or self.translate_wu:
+        if self.translate_mode != 'off' or self.translate_wu:
             ds = DeepSeek(self.cfg)
             if ds.ready:
                 self.translator = ds
@@ -522,18 +522,17 @@ class Session:
         # AI real-time correction: emit the original instantly, then asynchronously let DeepSeek fix homophone typos and push line_update when done
         if self.ai_correct and self.correct_pool and self.corrector and self.corrector.ready:
             self.correct_pool.submit(self._ai_correct, rec["id"], rec["ts"], text)
-        # Shanghainese (Wu) -> asynchronously translate each line to Mandarin, attached below as subtitles (bypasses the English-detection _should_translate)
+        # Translation subtitle line, attached below the original. Wu backend always translates to Mandarin;
+        # otherwise follow translate_mode: en2zh translates English lines, zh2en translates Chinese lines.
         if self.translate_wu:
             if self.translate_pool and text.strip():
-                self.translate_pool.submit(self._translate_line, rec["id"], text, True)
-        # English line -> asynchronously translate to Chinese, attached below as subtitles
-        elif self.translate_en:
-            ok = bool(self.translate_pool) and self._should_translate(text)
-            if ok:
-                self.translate_pool.submit(self._translate_line, rec["id"], text)
-            else:
-                print(f"[translate] skip id={rec['id']} pool={self.translate_pool is not None} "
-                      f"should={self._should_translate(text)} text={text[:24]!r}", flush=True)
+                self.translate_pool.submit(self._translate_line, rec["id"], text, 'wu')
+        elif self.translate_mode == 'en2zh':
+            if self.translate_pool and self._should_translate(text):
+                self.translate_pool.submit(self._translate_line, rec["id"], text, 'en2zh')
+        elif self.translate_mode == 'zh2en':
+            if self.translate_pool and self._should_translate_zh(text):
+                self.translate_pool.submit(self._translate_line, rec["id"], text, 'zh2en')
 
     # ---------- DeepSeek smart segmentation ----------
     _SEG_NORM = re.compile(r"[^一-鿿A-Za-z0-9]+")
@@ -684,22 +683,29 @@ class Session:
         zh = sum(1 for c in text if "一" <= c <= "鿿")
         return en >= zh
 
+    def _should_translate_zh(self, text):
+        """For zh->en: translate any line that carries enough Chinese content."""
+        zh = sum(1 for c in text if "一" <= c <= "鿿")
+        return zh >= 2
+
     def _translations_path(self):
         return os.path.join(self.rec.dir, "translations.json")
 
-    def _translate_line(self, line_id, text, wu=False):
+    def _translate_line(self, line_id, text, mode='en2zh'):
         try:
-            if wu:
-                zh = self.translator.translate_wu_to_mandarin(text, topic=self._correction_topic())
+            if mode == 'wu':
+                out = self.translator.translate_wu_to_mandarin(text, topic=self._correction_topic())
+            elif mode == 'zh2en':
+                out = self.translator.translate_to_english(text, topic=self._correction_topic())
             else:
-                zh = self.translator.translate(text, topic=self._correction_topic())
+                out = self.translator.translate(text, topic=self._correction_topic())
         except Exception as e:
             print(f"[translate] line {line_id} 出错: {e}", flush=True)
             return
-        print(f"[translate] line {line_id}: {text[:30]!r} -> {zh[:30]!r}", flush=True)
-        if not zh:
+        print(f"[translate] line {line_id}: {text[:30]!r} -> {out[:30]!r}", flush=True)
+        if not out:
             return
-        self.emit({"type": "line_translation", "id": line_id, "text": zh})
+        self.emit({"type": "line_translation", "id": line_id, "text": out})
         # persist: {line number: Chinese translation}, reattached when reloading the transcript. Concurrent translation pool, guarded with a lock + atomic temp-file replace to prevent loss/corruption.
         with self._trans_lock:
             try:
@@ -708,7 +714,7 @@ class Session:
                 if os.path.exists(p):
                     with open(p, encoding="utf-8") as f:
                         data = json.load(f)
-                data[str(line_id)] = zh
+                data[str(line_id)] = out
                 tmp = p + ".part"
                 with open(tmp, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False)
@@ -1027,11 +1033,14 @@ class App:
             s.only_key = bool(m.get("only_key"))
             s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
             s.smart_seg = bool(m.get("smart_seg"))      # AI smart segmentation toggle
-            s.translate_en = bool(m.get("translate_en"))  # auto-translate English to Chinese subtitles
+            # live translation subtitles: prefer translate_mode; fall back to the old boolean translate_en
+            s.translate_mode = m.get("translate_mode") or ('en2zh' if m.get("translate_en") else 'off')
+            if s.translate_mode not in ('off', 'en2zh', 'zh2en'):
+                s.translate_mode = 'off'
             s.subjects = [x.strip() for x in (m.get("subjects") or [])
                           if isinstance(x, str) and x.strip()]   # selected subject tags
             print(f"[start] ai_correct={s.ai_correct} smart_seg={s.smart_seg} "
-                  f"translate_en={s.translate_en}(raw={m.get('translate_en')!r})", flush=True)
+                  f"translate_mode={s.translate_mode!r}", flush=True)
             # if a course is selected, use that course's term list and correction list
             course_id = m.get("course_id")
             if course_id:

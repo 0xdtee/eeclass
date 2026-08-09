@@ -43,7 +43,7 @@ interface RecordingControlsProps {
     title: string;
     aiCorrect: boolean;
     smartSeg: boolean;
-    translateEn: boolean;
+    translateMode: 'off' | 'en2zh' | 'zh2en';
     subjects: string[];
   }) => void;
   onStop: () => void;
@@ -99,7 +99,7 @@ export default function RecordingControls({
   const nameRef = useRef<HTMLInputElement>(null);
   const [aiCorrect, setAiCorrect] = useState(defaults.aiCorrect);  // AI real-time correction toggle (defaults from settings)
   const [smartSeg, setSmartSeg] = useState(defaults.smartSeg);     // AI smart sentence splitting (defaults from settings)
-  const [translateEn] = useState(defaults.translateEn);           // Automatic English translation (defaults from settings)
+  const [translateMode, setTranslateMode] = useState(defaults.translateMode);   // live translation direction (defaults from settings)
   const [subjects, setSubjects] = useState<string[]>([]);         // Checked subject tags
   const [subjOpen, setSubjOpen] = useState(false);                // Whether the subject-tag dropdown is expanded
   const toggleSubject = (name: string) =>
@@ -208,7 +208,7 @@ export default function RecordingControls({
                 onChange={(e) => setCourseName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && connected && !starting) {
-                    onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateEn, subjects });
+                    onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateMode, subjects });
                   }
                 }}
                 placeholder={t('课程名称(如 高数第3讲)')}
@@ -217,7 +217,7 @@ export default function RecordingControls({
               />
               <button
                 data-guide="rec-start"
-                onClick={() => onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateEn, subjects })}
+                onClick={() => onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateMode, subjects })}
                 disabled={!connected || starting}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -347,6 +347,16 @@ export default function RecordingControls({
                     <option value="shanghainese">{t('🗣️ 上海话(本地)')}</option>
                   </>
                 )}
+              </select>
+              <i className="ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm"></i>
+            </div>
+
+            {/* Live translation subtitles: off / English→Chinese / Chinese→English */}
+            <div className="relative inline-flex">
+              <select value={translateMode} onChange={(e) => setTranslateMode(e.target.value as 'off' | 'en2zh' | 'zh2en')} className={selCls} title={t('给字幕加一行翻译:英译中 / 中译英 / 不翻译')}>
+                <option value="off">{t('不翻译')}</option>
+                <option value="en2zh">{t('英译中')}</option>
+                <option value="zh2en">{t('中译英')}</option>
               </select>
               <i className="ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm"></i>
             </div>

@@ -8,10 +8,9 @@ import { t, useLang, setLang, LANGS } from '@/lib/i18n';
 
 // Labels/hints are stored as their Simplified source string and translated at render via t(),
 // so switching language updates them live (don't pre-translate at module load).
-const TOGGLES: { k: 'aiCorrect' | 'smartSeg' | 'translateEn' | 'autoSummary'; label: string; hint: string }[] = [
+const TOGGLES: { k: 'aiCorrect' | 'smartSeg' | 'autoSummary'; label: string; hint: string }[] = [
   { k: 'aiCorrect', label: '✨ AI 实时纠错', hint: '出字后让 DeepSeek 异步改同音错字(如 影射→映射);选「方言」时改为把方言直出的文字润色成规范普通话。消耗少量 API 额度。' },
   { k: 'smartSeg', label: '🧩 AI 智能分句', hint: '让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)。' },
-  { k: 'translateEn', label: '🌐 英文自动翻译', hint: '识别到英文句(或英语课)时,在该句下面自动加一行中文字幕。消耗少量 API 额度。' },
   { k: 'autoSummary', label: '📝 结束录制自动生成概要', hint: '停止录制后自动整理这节课的 AI 概要;关掉则需手动点生成。' },
 ];
 
@@ -20,9 +19,11 @@ const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: strin
   { k: 'importTagNew', label: '没有相似的就新建标签', hint: '导入的课程没有相近标签时,按课程名自动建一个新标签。' },
 ];
 
-const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
+const SEGS: { k: 'model' | 'sensitivity' | 'device' | 'translateMode'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
   { k: 'model', label: '识别模型', hint: '',
     options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '方言' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
+  { k: 'translateMode', label: '翻译字幕', hint: '给字幕加一行翻译。',
+    options: [{ value: 'off', label: '不翻译' }, { value: 'en2zh', label: '英译中' }, { value: 'zh2en', label: '中译英' }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
   { k: 'device', label: '默认音源', hint: '系统声音用于网课(仅电脑 Chrome/Edge)。',
