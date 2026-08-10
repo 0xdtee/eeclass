@@ -215,6 +215,8 @@ class GummyStreamingASR:
     so live partials are pushed straight from the callback.
     """
 
+    MAX_BUF_S = 90        # rolling audio kept for slicing each sentence's window (speaker id)
+
     def __init__(self, cfg, on_partial=None):
         import os
         import queue
@@ -222,12 +224,16 @@ class GummyStreamingASR:
         g = a.get("gummy") or {}
         self.source = g.get("source") or "zh"
         self.on_partial = on_partial
-        self._q = queue.Queue()       # finalized sentence texts, from the callback thread
+        self._q = queue.Queue()       # (text, begin_ms, end_ms) finalized sentences, from the callback thread
         self._sendbuf = []            # frames waiting to be sent (batched to ~100ms)
         self._sendlen = 0
-        self.buf = []                 # audio of the current sentence (for speaker id)
-        self.samples = 0
-        self.seg_start = 0.0
+        # rolling audio buffer, indexed by absolute sample position, so each sentence's exact [begin,end]
+        # window can be sliced out for speaker identification (Gummy gives per-sentence timestamps).
+        self._frames = []
+        self._frames_len = 0
+        self._frames_base = 0         # absolute sample index of _frames[0]
+        self.samples = 0              # total samples fed (absolute session time axis)
+        self._stream_base = 0         # samples fed when the current stream opened (Gummy times are relative to it)
         self.last_gap_end = None
         self.partial = ""
         self._last_partial = ""
@@ -258,7 +264,7 @@ class GummyStreamingASR:
                 if getattr(tr, "is_sentence_end", False):
                     txt = (tr.text or "").strip()
                     if txt:
-                        outer._q.put(txt)
+                        outer._q.put((txt, getattr(tr, "begin_time", None), getattr(tr, "end_time", None)))
                 else:
                     # interim result -> live preview (emit() is thread-safe)
                     if outer.on_partial and tr.text != outer._last_partial:
@@ -276,6 +282,7 @@ class GummyStreamingASR:
             model="gummy-realtime-v1", callback=_CB(), format="pcm", sample_rate=SR,
             transcription_enabled=True, source_language=self.source, translation_enabled=False)
         self._r.start()
+        self._stream_base = self.samples   # this stream's timestamps are relative to the audio sent from here on
         self._closed = False
 
     @property
@@ -306,23 +313,39 @@ class GummyStreamingASR:
                 self._open()
             except Exception:
                 return None
-        self.buf.append(frame)
+        self._frames.append(frame)
+        self._frames_len += len(frame)
+        maxlen = self.MAX_BUF_S * SR
+        while self._frames_len > maxlen and len(self._frames) > 1:
+            d = self._frames.pop(0)
+            self._frames_len -= len(d)
+            self._frames_base += len(d)
         self.samples += len(frame)
         self._send(frame)
         self.speaking = bool(self.partial)
         self.speech_prob = 1.0 if self.partial else 0.0
         try:
-            text = self._q.get_nowait()
+            item = self._q.get_nowait()
         except Exception:
             return None
-        return self._finish(text)
+        return self._finish(*item)
 
-    def _finish(self, text):
-        end = self.samples / SR
-        audio = np.concatenate(self.buf) if self.buf else np.zeros(0, dtype=np.float32)
-        start = self.seg_start
-        self.buf = []
-        self.seg_start = end
+    def _slice(self, begin_ms, end_ms):
+        """Slice the audio for [begin_ms, end_ms] (relative to the current stream) from the rolling buffer,
+        so speaker identification runs on exactly this sentence's audio."""
+        rel_begin = int((begin_ms or 0) / 1000.0 * SR)
+        rel_end = int((end_ms if end_ms is not None else (self.samples - self._stream_base) * 1000.0 / SR)
+                      / 1000.0 * SR)
+        abs_begin = self._stream_base + rel_begin
+        abs_end = self._stream_base + rel_end
+        buf = np.concatenate(self._frames) if self._frames else np.zeros(0, dtype=np.float32)
+        lo = max(0, abs_begin - self._frames_base)
+        hi = min(len(buf), abs_end - self._frames_base)
+        audio = buf[lo:hi] if hi > lo else np.zeros(0, dtype=np.float32)
+        return audio, abs_begin / SR, abs_end / SR
+
+    def _finish(self, text, begin_ms=None, end_ms=None):
+        audio, start, end = self._slice(begin_ms, end_ms)
         self.partial = ""
         self._last_partial = ""
         gap = 0.0 if self.last_gap_end is None else max(0.0, start - self.last_gap_end)
@@ -342,12 +365,13 @@ class GummyStreamingASR:
         except Exception:
             pass
         self._closed = True
-        texts = []
+        items = []
         while True:
             try:
-                texts.append(self._q.get_nowait())
+                items.append(self._q.get_nowait())
             except Exception:
                 break
-        if not texts:
+        if not items:
             return None
-        return self._finish(" ".join(texts))
+        text = " ".join(i[0] for i in items)
+        return self._finish(text, items[0][1], items[-1][2])
