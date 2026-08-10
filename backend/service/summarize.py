@@ -133,6 +133,7 @@ def _loads_forgiving(text):
 TRANS_LANG_NAMES = {
     "zh": "Chinese", "en": "English", "fr": "French",
     "de": "German", "it": "Italian", "ja": "Japanese", "ko": "Korean",
+    "es": "Spanish", "ru": "Russian",
 }
 
 

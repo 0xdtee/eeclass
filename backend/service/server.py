@@ -308,7 +308,7 @@ class Session:
         if self.ai_correct:
             self.corrector = DeepSeek(self.cfg)
             self.correct_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="aicorrect")
-        if (self.translate_from != self.translate_to or self.translate_wu) and not self.gummy:
+        if self.translate_from != self.translate_to or self.translate_wu:
             ds = DeepSeek(self.cfg)
             if ds.ready:
                 self.translator = ds
@@ -688,7 +688,7 @@ class Session:
         if from_lang == 'zh':
             zh = sum(1 for c in t if "一" <= c <= "鿿")
             return zh >= 2
-        if from_lang in ('en', 'fr', 'de', 'it'):
+        if from_lang in ('en', 'fr', 'de', 'it', 'es'):
             # Latin letters, incl. accented ones (Latin-1/Latin Extended)
             latin = sum(1 for c in t if c.isalpha() and (c.isascii() or ord(c) < 0x250))
             if latin < 6:
@@ -698,6 +698,9 @@ class Session:
                 zh = sum(1 for c in t if "一" <= c <= "鿿")
                 return latin >= zh
             return True
+        if from_lang == 'ru':
+            cyr = sum(1 for c in t if "Ѐ" <= c <= "ӿ")
+            return cyr >= 3
         if from_lang == 'ja':
             ja = sum(1 for c in t if "぀" <= c <= "ヿ" or "一" <= c <= "鿿")
             return ja >= 1
@@ -1055,7 +1058,7 @@ class App:
             s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
             s.smart_seg = bool(m.get("smart_seg"))      # AI smart segmentation toggle
             # live translation subtitles: source/target language codes; off when equal.
-            _valid_langs = ('zh', 'en', 'fr', 'de', 'it', 'ja', 'ko')
+            _valid_langs = ('zh', 'en', 'fr', 'de', 'it', 'ja', 'ko', 'es', 'ru')
             tf = m.get("translate_from")
             tt = m.get("translate_to")
             if not tf and not tt:   # back-compat with the old translate_mode / translate_en boolean
@@ -1063,13 +1066,12 @@ class App:
                 tf, tt = {'en2zh': ('en', 'zh'), 'zh2en': ('zh', 'en')}.get(_old, ('zh', 'zh'))
             s.translate_from = tf if tf in _valid_langs else 'zh'
             s.translate_to = tt if tt in _valid_langs else 'zh'
-            # Gummy cloud backend: recognizes translate_from and translates to translate_to in one pass.
-            # Its segments already carry whole sentences + an aligned translation, so smart-seg must stay off
-            # (merging would decouple the translation), and the source/target are handed to the backend here.
+            # Gummy cloud backend: multilingual recognition. It's told which language to recognize (translate_from);
+            # translation goes through DeepSeek like every other model (Gummy's own translation reaches only a few
+            # targets), so all target languages work uniformly.
             s.gummy = (cfg["asr"].get("backend") == "aliyun_gummy")
             if s.gummy:
-                s.smart_seg = False
-                cfg["asr"]["gummy"] = {"source": s.translate_from, "target": s.translate_to}
+                cfg["asr"]["gummy"] = {"source": s.translate_from}
             s.subjects = [x.strip() for x in (m.get("subjects") or [])
                           if isinstance(x, str) and x.strip()]   # selected subject tags
             print(f"[start] ai_correct={s.ai_correct} smart_seg={s.smart_seg} "

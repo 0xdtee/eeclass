@@ -339,7 +339,7 @@ export default function RecordingControls({
             </div>
 
             <div className="relative inline-flex">
-              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi')} className={selCls} title={isAdmin ? t('普通话/英语·方言·多语言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别') : t('普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话;多语言=云端识别法/德/意/日/韩等,可直接出翻译')}>
+              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi')} className={selCls} title={isAdmin ? t('普通话/英语·方言·多语言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别') : t('普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话;多语言=云端识别法/德/意/西/俄/日/韩等,再配合右侧翻译出字幕')}>
                 <option value="aliyun">{t('普通话/英语')}</option>
                 <option value="aliyun_wu">{t('方言')}</option>
                 <option value="aliyun_multi">{t('多语言')}</option>
