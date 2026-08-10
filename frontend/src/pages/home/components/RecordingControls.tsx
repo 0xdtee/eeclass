@@ -3,7 +3,7 @@ import type { AudioDevice, LiveStatus } from '@/hooks/useLiveCaption';
 import { SERVICE_ORIGIN, getToken, setToken } from '@/hooks/useLiveCaption';
 import { loadSettings } from '@/lib/settings';
 import { useAuth } from '@/hooks/useAuth';
-import { useT, t } from '@/lib/i18n';
+import { useT, t, getLang } from '@/lib/i18n';
 
 // Cloud models regular users may pick; local/technical models are admin-only.
 const CLOUD_MODELS = ['aliyun', 'aliyun_wu'] as const;
@@ -99,7 +99,9 @@ export default function RecordingControls({
   const nameRef = useRef<HTMLInputElement>(null);
   const [aiCorrect, setAiCorrect] = useState(defaults.aiCorrect);  // AI real-time correction toggle (defaults from settings)
   const [smartSeg, setSmartSeg] = useState(defaults.smartSeg);     // AI smart sentence splitting (defaults from settings)
-  const [translateMode, setTranslateMode] = useState(defaults.translateMode);   // live translation direction (defaults from settings)
+  // Default translation direction follows the UI language: English UI -> Chinese speech to English (zh2en);
+  // Chinese UI -> English speech to Chinese (en2zh). The user can still change it per recording.
+  const [translateMode, setTranslateMode] = useState<'off' | 'en2zh' | 'zh2en'>(() => (getLang() === 'en' ? 'zh2en' : 'en2zh'));
   const [subjects, setSubjects] = useState<string[]>([]);         // Checked subject tags
   const [subjOpen, setSubjOpen] = useState(false);                // Whether the subject-tag dropdown is expanded
   const toggleSubject = (name: string) =>
