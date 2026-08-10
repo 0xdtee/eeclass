@@ -387,12 +387,13 @@ export function useRecords() {
     []
   );
 
-  /** Personalized feedback loop: learn the terms the user corrected, so later classes auto-correct this homophone error */
+  /** Personalized feedback loop: learn the terms the user corrected, so later classes auto-correct this homophone error.
+   *  Also send the wrong->right pair and session id (when known) so the server can log the learning provenance for research. */
   const learnTerm = useCallback(
-    (term: string) =>
+    (term: string, wrong?: string, sid?: string) =>
       api<{ ok: boolean; added: boolean; count: number }>('/api/terms/learn', {
         method: 'POST',
-        body: JSON.stringify({ term }),
+        body: JSON.stringify({ term, wrong, sid }),
       }),
     []
   );

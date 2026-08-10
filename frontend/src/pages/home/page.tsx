@@ -473,7 +473,7 @@ export default function HomePage() {
         const j = await records.loadTranscript(activeSessionId);
         setHistLines(j.lines);
         if (raw) setAppliedCorrections((prev) => (prev.includes(raw) ? prev : [...prev, raw]));
-        void records.learnTerm(to);   // Personalized feedback: learn the correct term so future sessions are corrected automatically
+        void records.learnTerm(to, from, activeSessionId ?? undefined);   // Personalized feedback: learn the correct term so future sessions are corrected automatically
         say(t('已把 {n} 处「{from}」改为「{to}」', { n: affected.length, from, to }));
       } catch (e) {
         say(t('替换失败:') + (e instanceof Error ? e.message : String(e)));
@@ -504,7 +504,7 @@ export default function HomePage() {
       const j = await records.loadTranscript(activeSessionId);
       setHistLines(j.lines);
       setAppliedCorrections((prev) => Array.from(new Set([...prev, ...pending])));
-      pairs.forEach(({ p }) => void records.learnTerm(p.to));   // Personalized feedback: learn all the corrected terms
+      pairs.forEach(({ p }) => void records.learnTerm(p.to, p.from, activeSessionId ?? undefined));   // Personalized feedback: learn all the corrected terms
       say(changed > 0 ? t('已一键替换 {n} 行', { n: changed }) : t('转写里没找到这些词(可能已替换)'));
     } catch (e) {
       say(t('替换失败:') + (e instanceof Error ? e.message : String(e)));

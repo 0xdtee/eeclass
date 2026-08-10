@@ -80,8 +80,13 @@ def load_learned_terms(cfg, key=None):
         return []
 
 
-def add_learned_term(cfg, term, key=None):
-    """Record a term this account corrected (>=2 chars, deduped) so its later sessions auto-fix the homophone."""
+def add_learned_term(cfg, term, key=None, wrong=None, sid=None):
+    """Record a term this account corrected (>=2 chars, deduped) so its later sessions auto-fix the homophone.
+
+    Besides the flat deduped list (used at runtime), append every newly-learned term to an append-only log
+    (learned_terms_<keyid>.log.jsonl) with a timestamp and, when known, the wrong->right pair and the session it
+    came from. The flat list loses ordering/time; the log is the longitudinal signal for studying how a per-account
+    term memory grows from human corrections over time (research only; never read on the hot path)."""
     term = (term or "").strip()
     if len(term) < 2:
         return False
@@ -102,6 +107,13 @@ def add_learned_term(cfg, term, key=None):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, p)
+    try:                                    # append-only provenance log; best-effort, must never block learning
+        rec = {"term": term, "wrong": (wrong or "").strip() or None,
+               "sid": sid or None, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        with open(p[:-5] + ".log.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
     return True
 
 
@@ -1881,7 +1893,8 @@ class App:
         except Exception:
             return web.json_response({"error": "参数不对"}, status=400)
         key = self._req_user_key(request)   # learn per-account, not globally
-        added = add_learned_term(self.cfg, m.get("term"), key)
+        added = add_learned_term(self.cfg, m.get("term"), key,
+                                 wrong=m.get("wrong"), sid=m.get("sid"))
         return web.json_response({"ok": True, "added": added,
                                   "count": len(load_learned_terms(self.cfg, key))})
 
