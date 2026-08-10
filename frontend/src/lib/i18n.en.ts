@@ -9,6 +9,7 @@ export const EN: Record<string, string> = {
   "中译英": "ZH→EN",
   "翻译字幕": "Translation subtitles",
   "给字幕加一行翻译。": "Add a translated line under each caption.",
+  "给字幕加一行翻译;切换界面语言会自动设为对应方向。": "Add a translated line under each caption; switching the interface language sets the matching direction automatically.",
   "给字幕加一行翻译:英译中 / 中译英 / 不翻译": "Add a translated caption line: EN→ZH / ZH→EN / off",
   " · {n} 张板书": " · {n} board photos",
   " · 对 {n} 题": " · {n} correct",

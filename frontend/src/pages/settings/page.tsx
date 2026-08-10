@@ -19,9 +19,11 @@ const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: strin
   { k: 'importTagNew', label: '没有相似的就新建标签', hint: '导入的课程没有相近标签时,按课程名自动建一个新标签。' },
 ];
 
-const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
+const SEGS: { k: 'model' | 'sensitivity' | 'device' | 'translateMode'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
   { k: 'model', label: '识别模型', hint: '',
     options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '方言' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
+  { k: 'translateMode', label: '翻译字幕', hint: '给字幕加一行翻译;切换界面语言会自动设为对应方向。',
+    options: [{ value: 'off', label: '不翻译' }, { value: 'en2zh', label: '英译中' }, { value: 'zh2en', label: '中译英' }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
   { k: 'device', label: '默认音源', hint: '系统声音用于网课(仅电脑 Chrome/Edge)。',
@@ -177,7 +179,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-foreground-800 mb-2">{t('界面语言')}</p>
                   <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl">
                     {LANGS.map((l) => (
-                      <button key={l.value} type="button" onClick={() => setLang(l.value)} className={segBtn(lang === l.value)}>
+                      <button key={l.value} type="button" onClick={() => { setLang(l.value); set('translateMode', l.value === 'en' ? 'zh2en' : 'en2zh'); }} className={segBtn(lang === l.value)}>
                         {l.label}
                       </button>
                     ))}

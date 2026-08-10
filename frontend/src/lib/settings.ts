@@ -7,6 +7,7 @@ import { SERVICE_ORIGIN, getToken } from '@/hooks/useLiveCaption';
 export interface AppSettings {
   aiCorrect: boolean;                                  // AI real-time correction on by default
   smartSeg: boolean;                                   // AI smart sentence segmentation on by default
+  translateMode: 'off' | 'en2zh' | 'zh2en';            // Live translation subtitles; default follows the UI language
   model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';   // Default recognition model
   sensitivity: 'std' | 'high' | 'max';                 // Default pickup sensitivity
   device: 'auto' | 'browser' | 'browser-system';       // Default audio source
@@ -19,6 +20,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   aiCorrect: false,
   smartSeg: true,
+  translateMode: 'en2zh',   // Chinese UI default (English->Chinese); switching to English flips it to zh2en
   model: 'aliyun',   // Default to the cloud Mandarin/English model (regular users only get cloud models)
   sensitivity: 'high',
   device: 'auto',
