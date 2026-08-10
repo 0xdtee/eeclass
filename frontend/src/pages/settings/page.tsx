@@ -22,7 +22,7 @@ const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: strin
 
 const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
   { k: 'model', label: '识别模型', hint: '',
-    options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '方言' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
+    options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '方言' }, { value: 'aliyun_multi', label: '多语言' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
   { k: 'device', label: '默认音源', hint: '系统声音用于网课(仅电脑 Chrome/Edge)。',

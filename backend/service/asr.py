@@ -143,7 +143,9 @@ class ASRWorker:
             self.busy = False
 
             if text:
-                self.on_result(utt, meta, text, el)
+                # some backends (Gummy) also produce a translation for the same segment; pass it through
+                translation = getattr(self.backend, "last_translation", "") or ""
+                self.on_result(utt, meta, text, el, translation)
             else:
                 self.drops.append({
                     "start": round(utt.start, 1), "dur": round(utt.end - utt.start, 1),

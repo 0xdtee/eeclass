@@ -129,7 +129,7 @@ export interface StartOptions {
   sensitivity?: 'std' | 'high' | 'max';
   courseId?: string | null;
   /** Recognition model: 'sensevoice'/'paraformer'=full-sentence; 'stream'=streaming (zipformer, words appear as you speak); 'shanghainese'=Shanghainese (wenet_ctc); 'aliyun'=Aliyun Mandarin; 'aliyun_wu'=Aliyun Shanghainese */
-  model?: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';
+  model?: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi';
   /** AI real-time correction: after text appears, let DeepSeek asynchronously fix homophone typos */
   aiCorrect?: boolean;
   /** AI smart sentence segmentation: let DeepSeek merge VAD fragments into complete sentences by meaning (full-sentence mode only) */
@@ -542,6 +542,7 @@ export function useLiveCaption() {
         : model === 'shanghainese' ? 'wenet_ctc'
         : model === 'aliyun' ? 'aliyun_paraformer'
         : model === 'aliyun_wu' ? 'aliyun_funasr'
+        : model === 'aliyun_multi' ? 'aliyun_gummy'   // Gummy: multilingual recognition + translation in one pass
         : model;
       send({
         cmd: 'start',

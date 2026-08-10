@@ -58,7 +58,7 @@ def main():
     results = []
     state = {"chars": 0, "start": None, "sid": None}
 
-    def on_text(utt, meta, text, proc_s):
+    def on_text(utt, meta, text, proc_s, translation=""):
         kind, score, reasons = hl.judge(text, utt.start)
         p = cfg["paragraph"]
         sid = meta["speaker_id"]

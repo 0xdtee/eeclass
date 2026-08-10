@@ -306,6 +306,92 @@ class AliyunFunASRBackend(AliyunASRBackend):
     model = "fun-asr-realtime"
 
 
+class AliyunGummyBackend(Backend):
+    """Alibaba Cloud · Gummy (gummy-realtime-v1): multilingual recognition + speech translation in one call.
+
+    Recognizes cfg['gummy']['source'] (zh/en/fr/de/it/ja/ko) and, when a different target is set, translates to
+    cfg['gummy']['target'] in the same pass. transcribe() returns the recognized ORIGINAL text and stashes the
+    translation on self.last_translation; the Session reads that and attaches it as the caption's translation
+    line, so no separate DeepSeek translation call is needed for this backend.
+
+    The VAD has already cut the audio into one sentence, so each call opens a short realtime stream, pushes that
+    one segment, and waits for the final result. The API key is read only from DASHSCOPE_API_KEY.
+    """
+    name = "aliyun_gummy"
+    model = "gummy-realtime-v1"
+    _warned = False
+
+    def load(self):
+        import dashscope  # lazy load, don't import at module top level
+        key = os.environ.get("DASHSCOPE_API_KEY")
+        if not key:
+            raise RuntimeError("没配 DASHSCOPE_API_KEY，在 start-server.sh 里设")
+        dashscope.api_key = key
+        g = self.cfg.get("gummy") or {}
+        self.source = g.get("source") or "zh"
+        self.target = g.get("target") or ""
+        self.last_translation = ""
+        return 0.0
+
+    def transcribe(self, audio, with_prompt=True):
+        import threading
+        import numpy as np
+        from dashscope.audio.asr import (TranslationRecognizerRealtime,
+                                         TranslationRecognizerCallback)
+
+        self.last_translation = ""
+        translate = bool(self.target) and self.target != self.source
+        target = self.target
+        got = {"orig": [], "trans": [], "orig_last": "", "trans_last": ""}
+        done = threading.Event()
+
+        class _CB(TranslationRecognizerCallback):
+            def on_event(self, request_id, transcription_result, translation_result, usage):
+                if transcription_result is not None and transcription_result.text:
+                    got["orig_last"] = transcription_result.text
+                    if getattr(transcription_result, "is_sentence_end", False):
+                        got["orig"].append(transcription_result.text)
+                if translate and translation_result is not None:
+                    tr = translation_result.get_translation(target)
+                    if tr is not None and tr.text:
+                        got["trans_last"] = tr.text
+                        if getattr(tr, "is_sentence_end", False):
+                            got["trans"].append(tr.text)
+
+            def on_complete(self):
+                done.set()
+
+            def on_error(self, message):
+                done.set()
+
+            def on_close(self):
+                done.set()
+
+        # numpy float32 [-1,1] @16k → 16-bit PCM bytes, streamed in 100ms frames
+        pcm = (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+        try:
+            r = TranslationRecognizerRealtime(
+                model=self.model, callback=_CB(), format="pcm", sample_rate=16000,
+                transcription_enabled=True, source_language=self.source,
+                translation_enabled=translate,
+                translation_target_languages=[target] if translate else None)
+            r.start()
+            step = 3200   # 100 ms of 16 kHz mono 16-bit PCM
+            for i in range(0, len(pcm), step):
+                r.send_audio_frame(pcm[i:i + step])
+            r.stop()
+            done.wait(timeout=10)
+        except Exception as e:  # cloud/network errors should never crash recording
+            if not AliyunGummyBackend._warned:
+                AliyunGummyBackend._warned = True
+                print(f"[gummy] 识别异常：{e}")
+            return ""
+        orig = ("".join(got["orig"]) or got["orig_last"]).strip()
+        trans = ("".join(got["trans"]) or got["trans_last"]).strip()
+        self.last_translation = trans if translate else ""
+        return orig
+
+
 def make_punct(asr_cfg):
     """Add punctuation for backends that have none. Returns None if the model can't be loaded, and the caller treats it as unpunctuated."""
     c = (asr_cfg.get("zipformer") or {})
@@ -329,6 +415,7 @@ BACKENDS = {
     "zipformer": ZipformerBackend,
     "aliyun_paraformer": AliyunParaformerBackend,
     "aliyun_funasr": AliyunFunASRBackend,
+    "aliyun_gummy": AliyunGummyBackend,
 }
 
 

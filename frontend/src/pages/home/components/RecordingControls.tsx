@@ -7,7 +7,7 @@ import { useT, t } from '@/lib/i18n';
 import { TRANS_LANGS, type TransLang } from '@/lib/translateLangs';
 
 // Cloud models regular users may pick; local/technical models are admin-only.
-const CLOUD_MODELS = ['aliyun', 'aliyun_wu'] as const;
+const CLOUD_MODELS = ['aliyun', 'aliyun_wu', 'aliyun_multi'] as const;
 
 function defaultCourseName(): string {
   const d = new Date();
@@ -40,7 +40,7 @@ interface RecordingControlsProps {
     sensitivity: 'std' | 'high' | 'max';
     toWord: boolean;
     courseId: string | null;
-    model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';
+    model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi';
     title: string;
     aiCorrect: boolean;
     smartSeg: boolean;
@@ -92,7 +92,7 @@ export default function RecordingControls({
   const [defaults] = useState(loadSettings);   // Defaults from settings (remembered on this device)
   const [device, setDevice] = useState<string | null>(null);
   const [sensitivity, setSensitivity] = useState<'std' | 'high' | 'max'>(defaults.sensitivity);
-  const [model, setModel] = useState<'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu'>(defaults.model);
+  const [model, setModel] = useState<'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi'>(defaults.model);
   const [toWord] = useState(defaults.toWord);   // No more inline toggle, use the settings default (off by default)
   const [courseId] = useState<string>('');   // Inline course binding is now handled by subject tags, so this stays empty
   const [shotState, setShotState] = useState<'' | 'busy' | 'ok' | 'err'>('');
@@ -339,9 +339,10 @@ export default function RecordingControls({
             </div>
 
             <div className="relative inline-flex">
-              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu')} className={selCls} title={isAdmin ? t('普通话/英语·方言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别') : t('普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话')}>
+              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi')} className={selCls} title={isAdmin ? t('普通话/英语·方言·多语言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别') : t('普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话;多语言=云端识别法/德/意/日/韩等,可直接出翻译')}>
                 <option value="aliyun">{t('普通话/英语')}</option>
                 <option value="aliyun_wu">{t('方言')}</option>
+                <option value="aliyun_multi">{t('多语言')}</option>
                 {isAdmin && (
                   <>
                     <option value="sensevoice">🎯 SenseVoice</option>

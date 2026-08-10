@@ -153,6 +153,7 @@ class Session:
         # English subtitles: when English is recognized (or in an English class), asynchronously translate to Chinese and attach under the line
         self.translate_from = 'zh'   # live translation source language (原文); off when from == to
         self.translate_to = 'zh'     # live translation target language (译文)
+        self.gummy = False   # Gummy backend recognizes + translates in one pass (translation comes inline, not via DeepSeek)
         self.translate_wu = False   # Shanghainese (Wu) backend: auto-translate each line to Mandarin subtitles
         self.translator = None
         self.translate_pool = None
@@ -307,7 +308,7 @@ class Session:
         if self.ai_correct:
             self.corrector = DeepSeek(self.cfg)
             self.correct_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="aicorrect")
-        if self.translate_from != self.translate_to or self.translate_wu:
+        if (self.translate_from != self.translate_to or self.translate_wu) and not self.gummy:
             ds = DeepSeek(self.cfg)
             if ds.ready:
                 self.translator = ds
@@ -431,7 +432,7 @@ class Session:
             self.asr.submit(utt, meta)
 
     # ---------- recognition result -> Word ----------
-    def _on_text(self, utt, meta, text, proc_s):
+    def _on_text(self, utt, meta, text, proc_s, translation=""):
         # first apply homophone term correction (mapping/range/derivative...), then this course's fixed corrections.
         # both paths (the whole-sentence ASRWorker callback and the direct streaming call) go through here, so one place covers all.
         if self.tfix is not None:
@@ -447,12 +448,14 @@ class Session:
         conf = round(meta.get("speaker_conf", 0), 3)
         # smart segmentation on (and recording) -> buffer first, let DeepSeek merge into whole sentences by meaning before emitting;
         # otherwise each VAD fragment becomes a line directly (the old behavior).
-        if self.smart_seg and self.seg_pool and self.segmenter_ds and self.running:
+        # A Gummy segment carries its own translation, aligned 1:1 with this text, so it must not go through the
+        # smart-segmentation buffer (which would merge/split and decouple the translation) -- emit it directly.
+        if self.smart_seg and self.seg_pool and self.segmenter_ds and self.running and not translation:
             self._seg_feed(text, utt.start, utt.end, sid, utt.gap_before, conf)
         else:
-            self._emit_line(text, utt.start, utt.end, sid, utt.gap_before, conf, proc_s)
+            self._emit_line(text, utt.start, utt.end, sid, utt.gap_before, conf, proc_s, translation)
 
-    def _emit_line(self, text, start, end, sid, gap, conf, proc_s=0.0):
+    def _emit_line(self, text, start, end, sid, gap, conf, proc_s=0.0, translation=""):
         """Write a line (possibly merged from multiple fragments) to disk and push it to the frontend. line_id/paragraph state are maintained here.
         Serialized with a lock: the smart-segmentation worker thread and the stop wrap-up thread may call it concurrently.
         If a paragraph contains multiple sentences (already carrying sentence-ending punctuation), split it line by line at each sentence end -- the content is unchanged.
@@ -461,14 +464,16 @@ class Session:
         sents = [s for s in sents if s]
         with self._emit_lock:
             if len(sents) <= 1:
-                self._emit_line_locked(text, start, end, sid, gap, conf, proc_s)
+                self._emit_line_locked(text, start, end, sid, gap, conf, proc_s, translation)
             else:
+                # a multi-sentence segment: the segment-level translation is attached to the first line only
                 for i, s in enumerate(sents):
                     self._emit_line_locked(s, start, end, sid,
                                            gap if i == 0 else 0.0, conf,
-                                           proc_s if i == 0 else 0.0)
+                                           proc_s if i == 0 else 0.0,
+                                           translation if i == 0 else "")
 
-    def _emit_line_locked(self, text, start, end, sid, gap, conf, proc_s=0.0):
+    def _emit_line_locked(self, text, start, end, sid, gap, conf, proc_s=0.0, translation=""):
         p = self.cfg["paragraph"]
         speaker_changed = (self.last_speaker is not None and sid != self.last_speaker)
         # some teachers talk for over ten minutes without pausing, and relying on pauses alone would produce one giant paragraph,
@@ -523,9 +528,12 @@ class Session:
         # AI real-time correction: emit the original instantly, then asynchronously let DeepSeek fix homophone typos and push line_update when done
         if self.ai_correct and self.correct_pool and self.corrector and self.corrector.ready:
             self.correct_pool.submit(self._ai_correct, rec["id"], rec["ts"], text)
-        # Translation subtitle line, attached below the original. Wu backend always translates to Mandarin;
-        # otherwise translate from translate_from into translate_to (skipped when the two are equal).
-        if self.translate_wu:
+        # Translation subtitle line, attached below the original. The Gummy backend already produced the
+        # translation in the same pass, so just attach it (no DeepSeek call). Otherwise: Wu backend translates
+        # to Mandarin; else translate from translate_from into translate_to (skipped when the two are equal).
+        if translation:
+            self._save_translation(rec["id"], translation)
+        elif self.translate_wu:
             if self.translate_pool and text.strip():
                 self.translate_pool.submit(self._translate_line, rec["id"], text, 'wu', 'zh')
         elif self.translate_from != self.translate_to:
@@ -711,10 +719,15 @@ class Session:
             print(f"[translate] line {line_id} 出错: {e}", flush=True)
             return
         print(f"[translate] line {line_id}: {text[:30]!r} -> {out[:30]!r}", flush=True)
+        self._save_translation(line_id, out)
+
+    def _save_translation(self, line_id, out):
+        """Emit a line_translation to the frontend and persist it. Shared by the DeepSeek translate pool and the
+        Gummy backend (which translates inline). Persisted as {line number: translation}, reattached on reload;
+        guarded with a lock + atomic temp-file replace to prevent loss/corruption under concurrency."""
         if not out:
             return
         self.emit({"type": "line_translation", "id": line_id, "text": out})
-        # persist: {line number: Chinese translation}, reattached when reloading the transcript. Concurrent translation pool, guarded with a lock + atomic temp-file replace to prevent loss/corruption.
         with self._trans_lock:
             try:
                 p = self._translations_path()
@@ -1012,7 +1025,7 @@ class App:
                     cfg["asr"][k] = m[k]
             # Regular users may only use the cloud models; force any local backend to cloud Mandarin.
             # Admins keep full choice. This is the server-side guard behind the UI restriction.
-            if not self.cid_admin.get(cid, False) and cfg["asr"].get("backend") not in ("aliyun_paraformer", "aliyun_funasr"):
+            if not self.cid_admin.get(cid, False) and cfg["asr"].get("backend") not in ("aliyun_paraformer", "aliyun_funasr", "aliyun_gummy"):
                 cfg["asr"]["backend"] = "aliyun_paraformer"
                 cfg["asr"]["streaming"] = False
             if m.get("new_para_gap_ms") is not None:
@@ -1050,10 +1063,17 @@ class App:
                 tf, tt = {'en2zh': ('en', 'zh'), 'zh2en': ('zh', 'en')}.get(_old, ('zh', 'zh'))
             s.translate_from = tf if tf in _valid_langs else 'zh'
             s.translate_to = tt if tt in _valid_langs else 'zh'
+            # Gummy cloud backend: recognizes translate_from and translates to translate_to in one pass.
+            # Its segments already carry whole sentences + an aligned translation, so smart-seg must stay off
+            # (merging would decouple the translation), and the source/target are handed to the backend here.
+            s.gummy = (cfg["asr"].get("backend") == "aliyun_gummy")
+            if s.gummy:
+                s.smart_seg = False
+                cfg["asr"]["gummy"] = {"source": s.translate_from, "target": s.translate_to}
             s.subjects = [x.strip() for x in (m.get("subjects") or [])
                           if isinstance(x, str) and x.strip()]   # selected subject tags
             print(f"[start] ai_correct={s.ai_correct} smart_seg={s.smart_seg} "
-                  f"translate={s.translate_from}->{s.translate_to}", flush=True)
+                  f"backend={cfg['asr'].get('backend')} translate={s.translate_from}->{s.translate_to}", flush=True)
             # if a course is selected, use that course's term list and correction list
             course_id = m.get("course_id")
             if course_id:

@@ -10,7 +10,7 @@ export interface AppSettings {
   smartSeg: boolean;                                   // AI smart sentence segmentation on by default
   translateFrom: TransLang;                            // Live translation: source language (原文). Off when from === to.
   translateTo: TransLang;                              // Live translation: target language (译文). Default follows the UI language.
-  model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu';   // Default recognition model
+  model: 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi';   // Default recognition model
   sensitivity: 'std' | 'high' | 'max';                 // Default pickup sensitivity
   device: 'auto' | 'browser' | 'browser-system';       // Default audio source
   toWord: boolean;                                     // Write to Word while recording
