@@ -17,6 +17,8 @@ import TagCoursesModal from '@/pages/dashboard/components/TagCoursesModal';
 import SummaryListModal from '@/pages/dashboard/components/SummaryListModal';
 import AudioListModal from '@/pages/dashboard/components/AudioListModal';
 import VoicePrintModal from '@/pages/dashboard/components/VoicePrintModal';
+import ChangelogModal from '@/pages/dashboard/components/ChangelogModal';
+import { LATEST_CHANGELOG } from '@/lib/changelog';
 import { useAuth } from '@/hooks/useAuth';
 import { useT } from '@/lib/i18n';
 import {
@@ -54,6 +56,16 @@ export default function DashboardHome() {
   const [showSummaryList, setShowSummaryList] = useState(false);
   const [showAudioList, setShowAudioList] = useState(false);
   const [showVoices, setShowVoices] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
+  // show an "unseen" dot on the changelog button until the user opens it on the latest release
+  const [changelogSeen, setChangelogSeen] = useState(() => {
+    try { return localStorage.getItem('changelog_seen') === LATEST_CHANGELOG; } catch { return false; }
+  });
+  const openChangelog = () => {
+    setShowChangelog(true);
+    setChangelogSeen(true);
+    try { localStorage.setItem('changelog_seen', LATEST_CHANGELOG); } catch { /* ignore */ }
+  };
 
   const tagLabels = useMemo(() => {
     const map: Record<string, string> = {};
@@ -413,6 +425,16 @@ export default function DashboardHome() {
                 </button>
               )}
               <button
+                onClick={openChangelog}
+                className="relative w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
+                title={t('更新日志')}
+              >
+                <i className="ri-megaphone-line"></i>
+                {!changelogSeen && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-background-50"></span>
+                )}
+              </button>
+              <button
                 onClick={() => navigate('/help')}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-400 hover:text-foreground-600 hover:bg-background-200 transition-colors cursor-pointer"
                 title={t('说明书')}
@@ -721,6 +743,7 @@ export default function DashboardHome() {
       />
 
       <VoicePrintModal isOpen={showVoices && user?.role === 'admin'} onClose={() => setShowVoices(false)} />
+      <ChangelogModal isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
     </div>
   );
 }
