@@ -186,8 +186,8 @@ class Session:
             print(f"⚠️ 同音术语纠正未启用: {e}")
 
         # two mutually exclusive paths: streaming (the model segments as it listens) or VAD segmentation + whole-sentence recognition
-        self.streaming = bool(cfg["asr"].get("streaming")) and \
-            cfg["asr"].get("backend") == "zipformer"
+        self.streaming = (bool(cfg["asr"].get("streaming")) and cfg["asr"].get("backend") == "zipformer") \
+            or cfg["asr"].get("backend") == "aliyun_gummy"   # Gummy is a continuous streaming cloud recognizer
         # Shanghainese backend: output is in Wu characters; auto-translate each line to Mandarin and attach below as subtitles
         self.translate_wu = cfg["asr"].get("backend") == "wenet_ctc"
         self.seg = None if self.streaming else Segmenter(cfg)
@@ -312,7 +312,7 @@ class Session:
             ds = DeepSeek(self.cfg)
             if ds.ready:
                 self.translator = ds
-                self.translate_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="translate")
+                self.translate_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="translate")
         # smart segmentation runs only in whole-sentence (VAD) mode; streaming already segments itself. Without DeepSeek configured, it falls back to one line per fragment.
         if self.smart_seg and not self.streaming:
             ds = DeepSeek(self.cfg)
@@ -320,9 +320,14 @@ class Session:
                 self.segmenter_ds = ds
                 self.seg_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="smartseg")
         if self.streaming:
-            from stream_asr import StreamingASR
-            self.sasr = StreamingASR(
-                self.cfg, on_partial=lambda t: self.emit({"type": "partial", "text": t}))
+            if self.cfg["asr"].get("backend") == "aliyun_gummy":
+                from stream_asr import GummyStreamingASR
+                self.sasr = GummyStreamingASR(
+                    self.cfg, on_partial=lambda t: self.emit({"type": "partial", "text": t}))
+            else:
+                from stream_asr import StreamingASR
+                self.sasr = StreamingASR(
+                    self.cfg, on_partial=lambda t: self.emit({"type": "partial", "text": t}))
             load_s = self.sasr.load_s
         else:
             load_s = self.asr.load()
@@ -713,14 +718,19 @@ class Session:
         return os.path.join(self.rec.dir, "translations.json")
 
     def _translate_line(self, line_id, text, from_lang='en', to_lang='zh'):
-        try:
-            if from_lang == 'wu':
-                out = self.translator.translate_wu_to_mandarin(text, topic=self._correction_topic())
-            else:
-                out = self.translator.translate_general(text, from_lang, to_lang, topic=self._correction_topic())
-        except Exception as e:
-            print(f"[translate] line {line_id} 出错: {e}", flush=True)
-            return
+        # one retry: a transient cloud hiccup would otherwise leave a line silently untranslated
+        out = ""
+        for attempt in range(2):
+            try:
+                if from_lang == 'wu':
+                    out = self.translator.translate_wu_to_mandarin(text, topic=self._correction_topic())
+                else:
+                    out = self.translator.translate_general(text, from_lang, to_lang, topic=self._correction_topic())
+            except Exception as e:
+                print(f"[translate] line {line_id} 出错: {e}", flush=True)
+                out = ""
+            if out:
+                break
         print(f"[translate] line {line_id}: {text[:30]!r} -> {out[:30]!r}", flush=True)
         self._save_translation(line_id, out)
 

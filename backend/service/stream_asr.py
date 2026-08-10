@@ -199,3 +199,155 @@ class StreamingASR:
         self.proc_s = 0.0
         self.speaking = False
         self.speech_prob = 0.0
+
+
+class GummyStreamingASR:
+    """Streaming recognition via Alibaba Cloud Gummy (gummy-realtime-v1), used for the multilingual model.
+
+    Same push()/flush() interface as StreamingASR, so the server's streaming path drives it identically. Instead
+    of running a local model, it keeps ONE Gummy realtime stream open for the whole session and feeds audio
+    continuously; Gummy emits interim results (shown as live partials) and marks sentence ends itself, so sentence
+    breaks are consistent and low-latency -- unlike the earlier per-VAD-segment approach that reopened a stream
+    per sentence (high latency) and fought the local VAD's boundaries (erratic segmentation).
+
+    Recognition only; translation goes through DeepSeek downstream. The callback runs on the SDK's socket thread,
+    so finalized sentences are handed to the push() thread through a Queue; emit() is thread-safe (call_soon_threadsafe)
+    so live partials are pushed straight from the callback.
+    """
+
+    def __init__(self, cfg, on_partial=None):
+        import os
+        import queue
+        a = cfg["asr"]
+        g = a.get("gummy") or {}
+        self.source = g.get("source") or "zh"
+        self.on_partial = on_partial
+        self._q = queue.Queue()       # finalized sentence texts, from the callback thread
+        self._sendbuf = []            # frames waiting to be sent (batched to ~100ms)
+        self._sendlen = 0
+        self.buf = []                 # audio of the current sentence (for speaker id)
+        self.samples = 0
+        self.seg_start = 0.0
+        self.last_gap_end = None
+        self.partial = ""
+        self._last_partial = ""
+        self.speaking = False
+        self.speech_prob = 0.0
+        self.total_proc = 0.0
+        self._r = None
+        self._closed = True
+        import dashscope
+        key = os.environ.get("DASHSCOPE_API_KEY")
+        if not key:
+            raise RuntimeError("没配 DASHSCOPE_API_KEY，在 start-server.sh 里设")
+        dashscope.api_key = key
+        t0 = time.time()
+        self._open()
+        self.load_s = time.time() - t0
+
+    def _open(self):
+        from dashscope.audio.asr import (TranslationRecognizerRealtime,
+                                         TranslationRecognizerCallback)
+        outer = self
+
+        class _CB(TranslationRecognizerCallback):
+            def on_event(self, request_id, transcription_result, translation_result, usage):
+                tr = transcription_result
+                if tr is None or not getattr(tr, "text", ""):
+                    return
+                if getattr(tr, "is_sentence_end", False):
+                    txt = (tr.text or "").strip()
+                    if txt:
+                        outer._q.put(txt)
+                else:
+                    # interim result -> live preview (emit() is thread-safe)
+                    if outer.on_partial and tr.text != outer._last_partial:
+                        outer._last_partial = tr.text
+                        outer.partial = tr.text
+                        outer.on_partial(tr.text)
+
+            def on_error(self, message):
+                outer._closed = True
+
+            def on_close(self):
+                outer._closed = True
+
+        self._r = TranslationRecognizerRealtime(
+            model="gummy-realtime-v1", callback=_CB(), format="pcm", sample_rate=SR,
+            transcription_enabled=True, source_language=self.source, translation_enabled=False)
+        self._r.start()
+        self._closed = False
+
+    @property
+    def rtf(self):
+        return 0.0            # cloud streaming: no local decode time to measure
+
+    @property
+    def backlog(self):
+        return self._q.qsize()
+
+    def _send(self, frame, force=False):
+        self._sendbuf.append(frame)
+        self._sendlen += len(frame)
+        if not force and self._sendlen < 1600:   # batch to ~100ms before sending
+            return
+        chunk = np.concatenate(self._sendbuf)
+        self._sendbuf = []
+        self._sendlen = 0
+        pcm = (np.clip(chunk, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+        try:
+            self._r.send_audio_frame(pcm)
+        except Exception:
+            self._closed = True
+
+    def push(self, frame):
+        if self._closed:
+            try:
+                self._open()
+            except Exception:
+                return None
+        self.buf.append(frame)
+        self.samples += len(frame)
+        self._send(frame)
+        self.speaking = bool(self.partial)
+        self.speech_prob = 1.0 if self.partial else 0.0
+        try:
+            text = self._q.get_nowait()
+        except Exception:
+            return None
+        return self._finish(text)
+
+    def _finish(self, text):
+        end = self.samples / SR
+        audio = np.concatenate(self.buf) if self.buf else np.zeros(0, dtype=np.float32)
+        start = self.seg_start
+        self.buf = []
+        self.seg_start = end
+        self.partial = ""
+        self._last_partial = ""
+        gap = 0.0 if self.last_gap_end is None else max(0.0, start - self.last_gap_end)
+        self.last_gap_end = end
+        if self.on_partial:
+            self.on_partial("")
+        return StreamUtterance(audio=audio, start=start, end=end, gap_before=gap,
+                               forced=False, text=text)
+
+    def flush(self):
+        """Recording stopped: send whatever's buffered, stop the stream, and emit any last finalized sentence."""
+        try:
+            if self._r is not None and not self._closed:
+                if self._sendbuf:
+                    self._send(np.zeros(0, dtype=np.float32), force=True)
+                self._r.stop()
+        except Exception:
+            pass
+        self._closed = True
+        texts = []
+        while True:
+            try:
+                texts.append(self._q.get_nowait())
+            except Exception:
+                break
+        if not texts:
+            return None
+        return self._finish(" ".join(texts))
