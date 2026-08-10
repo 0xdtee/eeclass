@@ -388,6 +388,11 @@ class Session:
             "streaming": self.streaming,
             "model": self.cfg["asr"]["model"],
             "rtf": round((self.sasr.rtf if self.streaming else self.asr.rtf), 2),
+            # language pair: translate_from is also the recognized source language for the multilingual (Gummy)
+            # backend; translate_to is the live-translation target (equal to from == translation off). Recorded so
+            # the research corpus can build a labelled parallel set (source -> target) per session.
+            "translate_from": self.translate_from,
+            "translate_to": self.translate_to,
             "speakers": [{**s, "name": self.name_of(s["id"])} for s in self.spk.stats()],
         }
         # register each speaker voiceprint captured this time into the global dedup library: the same person (regardless of session/account) is stored only once.
