@@ -276,18 +276,25 @@ export function useLiveCaption() {
     const stream = await md.getDisplayMedia({ video: true, audio: true });
     const audioTracks = stream.getAudioTracks();
     if (!audioTracks.length) {
-      stream.getTracks().forEach((t) => t.stop());
+      stream.getTracks().forEach((tk) => tk.stop());
+      const isMac = /Mac/.test(navigator.platform) || /Mac OS X/.test(navigator.userAgent);
       throw new Error(t(
-        '没采到系统声音。共享时请勾选左下角的「分享系统音频 / 分享标签页音频」，' +
-        '并选择「整个屏幕」或正在播放声音的那个标签页。'
+        isMac
+          ? '没采到系统声音。macOS 上 Chrome 只能采集「Chrome 标签页」的声音:共享时请切到「标签页」这一栏,选中正在播放声音的那个标签页,并打开左下角的音频开关。(选「整个屏幕」在 macOS 上采不到系统声音。)'
+          : '没采到系统声音。共享时请勾选左下角的「分享系统音频 / 分享标签页音频」,并选择「整个屏幕」或正在播放声音的那个标签页。'
       ));
     }
-    // The video track is unused, stop it to save resources (audio track continues); recording auto-stops when the user clicks "stop sharing".
-    stream.getVideoTracks().forEach((t) => t.stop());
-    audioTracks[0].addEventListener('ended', () => {
+    // Keep the video track ALIVE. On current Chrome the audio track belongs to the same capture session, and
+    // stopping the video track tears the whole session down -- the audio dies with it, which is why sharing
+    // worked but nothing was recognized. Just disable the video track to avoid wasting work on unused frames.
+    stream.getVideoTracks().forEach((tk) => { tk.enabled = false; });
+    // Either track firing 'ended' means the user clicked "Stop sharing" -> stop recording.
+    const onShareEnded = () => {
       setNotice(t('系统声音共享已停止'));
       stopMic();
-    });
+    };
+    audioTracks[0].addEventListener('ended', onShareEnded);
+    stream.getVideoTracks().forEach((tk) => tk.addEventListener('ended', onShareEnded));
     pipeStream(stream);
   }, [pipeStream, stopMic]);
 
