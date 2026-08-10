@@ -5,6 +5,7 @@ import { loadSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from '
 import { useAuth } from '@/hooks/useAuth';
 import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
 import { t, useLang, setLang, LANGS } from '@/lib/i18n';
+import { TRANS_LANGS } from '@/lib/translateLangs';
 
 // Labels/hints are stored as their Simplified source string and translated at render via t(),
 // so switching language updates them live (don't pre-translate at module load).
@@ -19,11 +20,9 @@ const IMPORT_TAG_TOGGLES: { k: 'importTagSimilar' | 'importTagNew'; label: strin
   { k: 'importTagNew', label: '没有相似的就新建标签', hint: '导入的课程没有相近标签时,按课程名自动建一个新标签。' },
 ];
 
-const SEGS: { k: 'model' | 'sensitivity' | 'device' | 'translateMode'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
+const SEGS: { k: 'model' | 'sensitivity' | 'device'; label: string; hint: string; options: { value: string; label: string; admin?: boolean }[] }[] = [
   { k: 'model', label: '识别模型', hint: '',
     options: [{ value: 'aliyun', label: '普通话/英语' }, { value: 'aliyun_wu', label: '方言' }, { value: 'sensevoice', label: 'SenseVoice', admin: true }, { value: 'paraformer', label: 'Paraformer', admin: true }, { value: 'stream', label: '流式', admin: true }, { value: 'shanghainese', label: '上海话(本地)', admin: true }] },
-  { k: 'translateMode', label: '翻译字幕', hint: '给字幕加一行翻译;切换界面语言会自动设为对应方向。',
-    options: [{ value: 'off', label: '不翻译' }, { value: 'en2zh', label: '英译中' }, { value: 'zh2en', label: '中译英' }] },
   { k: 'sensitivity', label: '拾音灵敏度', hint: '老师声音小或坐得远就调高。',
     options: [{ value: 'std', label: '标准' }, { value: 'high', label: '灵敏' }, { value: 'max', label: '最灵敏' }] },
   { k: 'device', label: '默认音源', hint: '系统声音用于网课(仅电脑 Chrome/Edge)。',
@@ -134,6 +133,22 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ))}
+                {/* Live translation default: [source 原文] ⇄ [target 译文]; off when equal. Coupled to the UI language switcher. */}
+                <div className="py-4">
+                  <p className="text-sm font-medium text-foreground-800">{t('翻译字幕')}</p>
+                  <p className="text-xs text-foreground-400 mt-1 mb-2.5 leading-relaxed">{t('给字幕加一行翻译:左边说的语言,右边译成的语言,相同则不翻译。切换界面语言会自动设为对应方向。')}</p>
+                  <div className="flex items-center gap-2">
+                    <select value={s.translateFrom} onChange={(e) => set('translateFrom', e.target.value as AppSettings['translateFrom'])} className="flex-1 min-w-0 px-3 py-2 bg-background-100 rounded-xl text-sm text-foreground-800 outline-none cursor-pointer">
+                      {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{t(l.label)}</option>)}
+                    </select>
+                    <button type="button" onClick={() => { const f = s.translateFrom; set('translateFrom', s.translateTo); set('translateTo', f); }} title={t('交换原文和译文')} className="w-9 h-9 flex items-center justify-center rounded-full text-foreground-500 hover:bg-background-200 cursor-pointer flex-shrink-0">
+                      <i className="ri-arrow-left-right-line"></i>
+                    </button>
+                    <select value={s.translateTo} onChange={(e) => set('translateTo', e.target.value as AppSettings['translateTo'])} className="flex-1 min-w-0 px-3 py-2 bg-background-100 rounded-xl text-sm text-foreground-800 outline-none cursor-pointer">
+                      {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{t(l.label)}</option>)}
+                    </select>
+                  </div>
+                </div>
               </div>
             </section>
           )}
@@ -179,7 +194,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-foreground-800 mb-2">{t('界面语言')}</p>
                   <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl">
                     {LANGS.map((l) => (
-                      <button key={l.value} type="button" onClick={() => { setLang(l.value); set('translateMode', l.value === 'en' ? 'zh2en' : 'en2zh'); }} className={segBtn(lang === l.value)}>
+                      <button key={l.value} type="button" onClick={() => { setLang(l.value); if (l.value === 'en') { set('translateFrom', 'zh'); set('translateTo', 'en'); } else { set('translateFrom', 'en'); set('translateTo', 'zh'); } }} className={segBtn(lang === l.value)}>
                         {l.label}
                       </button>
                     ))}

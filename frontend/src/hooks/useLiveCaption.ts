@@ -134,8 +134,9 @@ export interface StartOptions {
   aiCorrect?: boolean;
   /** AI smart sentence segmentation: let DeepSeek merge VAD fragments into complete sentences by meaning (full-sentence mode only) */
   smartSeg?: boolean;
-  /** Live translation subtitles: 'off' | 'en2zh' (English→Chinese) | 'zh2en' (Chinese→English) */
-  translateMode?: 'off' | 'en2zh' | 'zh2en';
+  /** Live translation subtitles: source (原文) and target (译文) language codes; off when from === to */
+  translateFrom?: string;
+  translateTo?: string;
   /** Selected subject tags (Advanced Math/College Physics…), giving the AI correction/translation subject context */
   subjects?: string[];
   /** Continue recording: keep recording onto an already-recorded class (audio/transcript continue), pass its sid */
@@ -555,7 +556,8 @@ export function useLiveCaption() {
         streaming,
         ai_correct: !!opts.aiCorrect,
         smart_seg: opts.smartSeg !== false,   // AI smart sentence segmentation (on by default)
-        translate_mode: opts.translateMode ?? 'en2zh',   // live translation direction (off / en2zh / zh2en)
+        translate_from: opts.translateFrom ?? 'en',   // live translation source language (原文)
+        translate_to: opts.translateTo ?? 'zh',       // live translation target language (译文); off when equal
         subjects: opts.subjects ?? [],        // Selected subject tags
         append_sid: opts.appendSid ?? null,   // Continue recording: keep recording onto this class
       });

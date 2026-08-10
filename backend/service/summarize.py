@@ -130,6 +130,12 @@ def _loads_forgiving(text):
     raise last
 
 
+TRANS_LANG_NAMES = {
+    "zh": "Chinese", "en": "English", "fr": "French",
+    "de": "German", "it": "Italian", "ja": "Japanese", "ko": "Korean",
+}
+
+
 def lang_note(lang):
     """Instruction appended to summary/course prompts so the AI writes its output in the UI language."""
     if lang == "en":
@@ -298,6 +304,45 @@ class DeepSeek:
         topic = (topic or "").strip()
         if topic:
             sys_prompt += f"\nThe subject/context is 「{topic}」; use that field's conventional English terminology."
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": text}],
+            "temperature": 0.2,
+            "stream": False,
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
+        except Exception:
+            return ""
+        if not out or out == text:
+            return ""
+        return out
+
+    def translate_general(self, text, from_lang, to_lang, topic="", timeout_s=12):
+        """Translate one caption sentence from `from_lang` into `to_lang` (both are codes in TRANS_LANG_NAMES),
+        for a caption line under the original. Returns the translation; with no key / on failure / nothing to
+        translate / from == to, returns ""."""
+        text = (text or "").strip()
+        src = TRANS_LANG_NAMES.get(from_lang)
+        dst = TRANS_LANG_NAMES.get(to_lang)
+        if not self.api_key or len(text) < 1 or not src or not dst or from_lang == to_lang:
+            return ""
+        sys_prompt = (
+            f"You are translating live classroom captions. Translate the user's {src} sentence into natural, "
+            f"concise, spoken {dst}, to sit as one caption line under the original. Output only the {dst} "
+            "translation, no explanation, no quotes, no phonetic notation, and don't repeat the original. If the "
+            f"sentence is already {dst} and needs no translation, output nothing.")
+        topic = (topic or "").strip()
+        if topic:
+            sys_prompt += f"\nThe subject/context is 「{topic}」; use that field's conventional {dst} terminology."
         payload = json.dumps({
             "model": self.model,
             "messages": [{"role": "system", "content": sys_prompt},

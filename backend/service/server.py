@@ -151,7 +151,8 @@ class Session:
         self.corrector = None
         self.correct_pool = None
         # English subtitles: when English is recognized (or in an English class), asynchronously translate to Chinese and attach under the line
-        self.translate_mode = 'off'   # live translation subtitles: 'off' | 'en2zh' | 'zh2en'
+        self.translate_from = 'zh'   # live translation source language (原文); off when from == to
+        self.translate_to = 'zh'     # live translation target language (译文)
         self.translate_wu = False   # Shanghainese (Wu) backend: auto-translate each line to Mandarin subtitles
         self.translator = None
         self.translate_pool = None
@@ -306,7 +307,7 @@ class Session:
         if self.ai_correct:
             self.corrector = DeepSeek(self.cfg)
             self.correct_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="aicorrect")
-        if self.translate_mode != 'off' or self.translate_wu:
+        if self.translate_from != self.translate_to or self.translate_wu:
             ds = DeepSeek(self.cfg)
             if ds.ready:
                 self.translator = ds
@@ -523,16 +524,13 @@ class Session:
         if self.ai_correct and self.correct_pool and self.corrector and self.corrector.ready:
             self.correct_pool.submit(self._ai_correct, rec["id"], rec["ts"], text)
         # Translation subtitle line, attached below the original. Wu backend always translates to Mandarin;
-        # otherwise follow translate_mode: en2zh translates English lines, zh2en translates Chinese lines.
+        # otherwise translate from translate_from into translate_to (skipped when the two are equal).
         if self.translate_wu:
             if self.translate_pool and text.strip():
-                self.translate_pool.submit(self._translate_line, rec["id"], text, 'wu')
-        elif self.translate_mode == 'en2zh':
-            if self.translate_pool and self._should_translate(text):
-                self.translate_pool.submit(self._translate_line, rec["id"], text, 'en2zh')
-        elif self.translate_mode == 'zh2en':
-            if self.translate_pool and self._should_translate_zh(text):
-                self.translate_pool.submit(self._translate_line, rec["id"], text, 'zh2en')
+                self.translate_pool.submit(self._translate_line, rec["id"], text, 'wu', 'zh')
+        elif self.translate_from != self.translate_to:
+            if self.translate_pool and self._should_translate_lang(text, self.translate_from):
+                self.translate_pool.submit(self._translate_line, rec["id"], text, self.translate_from, self.translate_to)
 
     # ---------- DeepSeek smart segmentation ----------
     _SEG_NORM = re.compile(r"[^一-鿿A-Za-z0-9]+")
@@ -673,32 +671,42 @@ class Session:
         s = ((self.course_name or "") + " " + (self.title or "") + " " + " ".join(self.subjects)).lower()
         return ("英语" in s) or ("english" in s) or ("英文" in s)
 
-    def _should_translate(self, text):
-        """Whether this line should be translated to Chinese: in an English class, translate whenever there's decent English; in a regular class, only when the whole line is mostly English."""
-        en = sum(1 for c in text if "a" <= c.lower() <= "z")
-        if en < 6:
+    def _should_translate_lang(self, text, from_lang):
+        """Whether this line carries enough content in the source language to be worth translating.
+        Kept lenient — a session is normally spoken in one language — while filtering empty/mismatched lines."""
+        t = (text or "").strip()
+        if len(t) < 1:
             return False
-        if self._course_is_english():
+        if from_lang == 'zh':
+            zh = sum(1 for c in t if "一" <= c <= "鿿")
+            return zh >= 2
+        if from_lang in ('en', 'fr', 'de', 'it'):
+            # Latin letters, incl. accented ones (Latin-1/Latin Extended)
+            latin = sum(1 for c in t if c.isalpha() and (c.isascii() or ord(c) < 0x250))
+            if latin < 6:
+                return False
+            # In a non-English class, only translate lines that are mostly Latin (avoid translating stray words)
+            if from_lang == 'en' and not self._course_is_english():
+                zh = sum(1 for c in t if "一" <= c <= "鿿")
+                return latin >= zh
             return True
-        zh = sum(1 for c in text if "一" <= c <= "鿿")
-        return en >= zh
-
-    def _should_translate_zh(self, text):
-        """For zh->en: translate any line that carries enough Chinese content."""
-        zh = sum(1 for c in text if "一" <= c <= "鿿")
-        return zh >= 2
+        if from_lang == 'ja':
+            ja = sum(1 for c in t if "぀" <= c <= "ヿ" or "一" <= c <= "鿿")
+            return ja >= 1
+        if from_lang == 'ko':
+            ko = sum(1 for c in t if "가" <= c <= "힣")
+            return ko >= 1
+        return len(t) >= 2
 
     def _translations_path(self):
         return os.path.join(self.rec.dir, "translations.json")
 
-    def _translate_line(self, line_id, text, mode='en2zh'):
+    def _translate_line(self, line_id, text, from_lang='en', to_lang='zh'):
         try:
-            if mode == 'wu':
+            if from_lang == 'wu':
                 out = self.translator.translate_wu_to_mandarin(text, topic=self._correction_topic())
-            elif mode == 'zh2en':
-                out = self.translator.translate_to_english(text, topic=self._correction_topic())
             else:
-                out = self.translator.translate(text, topic=self._correction_topic())
+                out = self.translator.translate_general(text, from_lang, to_lang, topic=self._correction_topic())
         except Exception as e:
             print(f"[translate] line {line_id} 出错: {e}", flush=True)
             return
@@ -1033,14 +1041,19 @@ class App:
             s.only_key = bool(m.get("only_key"))
             s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
             s.smart_seg = bool(m.get("smart_seg"))      # AI smart segmentation toggle
-            # live translation subtitles: prefer translate_mode; fall back to the old boolean translate_en
-            s.translate_mode = m.get("translate_mode") or ('en2zh' if m.get("translate_en") else 'off')
-            if s.translate_mode not in ('off', 'en2zh', 'zh2en'):
-                s.translate_mode = 'off'
+            # live translation subtitles: source/target language codes; off when equal.
+            _valid_langs = ('zh', 'en', 'fr', 'de', 'it', 'ja', 'ko')
+            tf = m.get("translate_from")
+            tt = m.get("translate_to")
+            if not tf and not tt:   # back-compat with the old translate_mode / translate_en boolean
+                _old = m.get("translate_mode") or ('en2zh' if m.get("translate_en") else 'off')
+                tf, tt = {'en2zh': ('en', 'zh'), 'zh2en': ('zh', 'en')}.get(_old, ('zh', 'zh'))
+            s.translate_from = tf if tf in _valid_langs else 'zh'
+            s.translate_to = tt if tt in _valid_langs else 'zh'
             s.subjects = [x.strip() for x in (m.get("subjects") or [])
                           if isinstance(x, str) and x.strip()]   # selected subject tags
             print(f"[start] ai_correct={s.ai_correct} smart_seg={s.smart_seg} "
-                  f"translate_mode={s.translate_mode!r}", flush=True)
+                  f"translate={s.translate_from}->{s.translate_to}", flush=True)
             # if a course is selected, use that course's term list and correction list
             course_id = m.get("course_id")
             if course_id:

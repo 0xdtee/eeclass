@@ -4,6 +4,17 @@
  * coverage never breaks the UI. Traditional Chinese is generated automatically (OpenCC), not listed here.
  */
 export const EN: Record<string, string> = {
+  "中文": "Chinese",
+  "英语": "English",
+  "法语": "French",
+  "德语": "German",
+  "意大利语": "Italian",
+  "日语": "Japanese",
+  "韩语": "Korean",
+  "交换原文和译文": "Swap source and target",
+  "原文语言(说的是什么语言)": "Source language (what is spoken)",
+  "译文语言(翻译成什么语言)": "Target language (translate into)",
+  "给字幕加一行翻译:左边说的语言,右边译成的语言;相同则不翻译": "Add a translated caption line: left = spoken language, right = target; same = off",
   "不翻译": "No translation",
   "英译中": "EN→ZH",
   "中译英": "ZH→EN",
