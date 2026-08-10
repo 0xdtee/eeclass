@@ -248,7 +248,10 @@ class GummyStreamingASR:
             raise RuntimeError("没配 DASHSCOPE_API_KEY，在 start-server.sh 里设")
         dashscope.api_key = key
         t0 = time.time()
-        self._open()
+        try:
+            self._open()
+        except Exception:
+            self._closed = True   # a transient cloud hiccup must not fail the whole start; push() reopens lazily
         self.load_s = time.time() - t0
 
     def _open(self):
