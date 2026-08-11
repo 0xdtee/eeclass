@@ -247,7 +247,7 @@ const CATEGORIES: Category[] = [
       {
         icon: 'ri-share-forward-line',
         name: '共享课程',
-        desc: '为某节课生成只读分享链接发给他人,对方无需登录即可查看转写与摘要,链接可随时撤销,安全可控。',
+        desc: '为某节课生成只读分享链接发给他人,对方无需登录即可查查看转写与摘要,链接可随时撤销,安全可控。',
         route: '/courses',
         cta: '前往课程',
         demo: 'share',

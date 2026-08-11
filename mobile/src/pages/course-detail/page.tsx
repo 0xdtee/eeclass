@@ -224,7 +224,7 @@ export default function CourseDetailPage() {
   const Spinner = (
     <div className="flex flex-col items-center justify-center py-16 gap-3">
       <div className="w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-sm text-foreground-400 text-center px-6">AI 正在分析这门课的所有录音…(首次会慢一点)</p>
+      <p className="text-sm text-foreground-400 text-center px-6">AI 正在分析本课程的全部录音…(首次较慢)</p>
     </div>
   );
 
@@ -328,7 +328,7 @@ export default function CourseDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 mb-2.5">
                     <button onClick={() => navigate(`/session/${encodeURIComponent(s.sid)}`)} className="px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap flex-shrink-0">
-                      <i className="ri-file-text-line mr-1"></i>看转写
+                      <i className="ri-file-text-line mr-1"></i>查看转写
                     </button>
                     <a href={audioDownloadUrl(s.sid, `${(s.title || '录音').replace(/[\\/:*?"<>|]/g, '_')}.wav`)} className="px-3 py-1.5 bg-primary-100 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                       <i className="ri-download-2-line mr-1"></i>导出

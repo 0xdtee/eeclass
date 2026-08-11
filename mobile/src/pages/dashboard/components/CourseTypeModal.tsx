@@ -50,7 +50,7 @@ export default function CourseTypeModal({ isOpen, onClose, courses, onSelect }: 
         <div className="overflow-y-auto flex-1 space-y-2">
           {filtered.length === 0 ? (
             <div className="py-10 text-center text-sm text-foreground-400">
-              {courses.length === 0 ? '还没有课程。去录一节课,或导入课表。' : '没找到匹配的课程'}
+              {courses.length === 0 ? '暂无课程。请录制一节课,或导入课表。' : '没找到匹配的课程'}
             </div>
           ) : (
             filtered.map((c, idx) => (

@@ -137,20 +137,19 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   }, [viewMode, sessions, sessionsByMonth, sessionsByDate, viewYear, viewMonth, currentSessions]);
 
   const handleDateClick = (year: number, month: number, day: number) => {
+    // Drill down one level per click: year → month → day. At the day level, open the lesson or create one.
+    if (viewMode === 'year') {
+      setViewYear(year); setViewMonth(month); setViewMode('month');
+      return;
+    }
+    if (viewMode === 'month') {
+      setViewYear(year); setViewMonth(month); setViewDay(day); setViewMode('day');
+      return;
+    }
     const dateStr = formatDate(year, month, day);
     const daySessions = sessionsByDate[dateStr] ?? [];
-    if (daySessions.length > 0) {
-      if (viewMode === 'month') {
-        setViewYear(year);
-        setViewMonth(month);
-        setViewDay(day);
-        setViewMode('day');
-      } else {
-        onSelectSession(daySessions[0].id);
-      }
-    } else {
-      onCreateSession(dateStr);
-    }
+    if (daySessions.length > 0) onSelectSession(daySessions[0].id);
+    else onCreateSession(dateStr);
   };
 
   const handleMonthCardClick = (month: number) => {

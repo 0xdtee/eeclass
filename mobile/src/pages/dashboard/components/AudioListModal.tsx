@@ -71,7 +71,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                 <i className="ri-mic-off-line text-foreground-300 text-xl"></i>
               </div>
               <p className="text-sm text-foreground-400">
-                {sessions.length === 0 ? '还没有录音。去录一节课吧。' : '未找到匹配的课程'}
+                {sessions.length === 0 ? '暂无录音。请先录制一节课。' : '未找到匹配的课程'}
               </p>
             </div>
           ) : (

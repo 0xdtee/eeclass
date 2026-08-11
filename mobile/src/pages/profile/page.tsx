@@ -7,6 +7,7 @@ import {
   getMicGain, setMicGain, MIC_GAIN_MIN, MIC_GAIN_MAX,
   getTheme, setTheme as saveTheme, type Theme,
 } from '@/lib/settings';
+import { CHANGELOG } from '@/lib/changelog';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const [showAiDefaults, setShowAiDefaults] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [showMicGain, setShowMicGain] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
 
   // AI default toggles
   const [aiCorrect, setAiCorrect] = useState(() => getAiDefault('aiCorrect'));
@@ -88,6 +90,7 @@ export default function ProfilePage() {
   );
 
   const menuItems = [
+    { icon: 'ri-megaphone-line', label: '更新日志', action: () => setShowChangelog(true) },
     { icon: 'ri-book-2-line', label: '使用说明', action: () => navigate('/help') },
     { icon: 'ri-settings-3-line', label: 'AI 处理默认开关', action: () => setShowAiDefaults(true) },
     { icon: 'ri-palette-line', label: '深浅色主题', action: () => setShowTheme(true) },
@@ -278,6 +281,38 @@ export default function ProfilePage() {
                   <span className={`text-sm flex-1 ${theme === opt.v ? 'text-accent-700 font-medium' : 'text-foreground-700'}`}>{opt.label}</span>
                   {theme === opt.v && <i className="ri-check-line text-accent-600"></i>}
                 </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Changelog Modal */}
+      {showChangelog && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40">
+          <div className="bg-background-50 rounded-t-2xl md:rounded-2xl w-full max-w-md p-5 m-0 md:m-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-foreground-900">更新日志</h3>
+              <button
+                onClick={() => setShowChangelog(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 cursor-pointer"
+              >
+                <i className="ri-close-line text-foreground-400"></i>
+              </button>
+            </div>
+            <div className="space-y-5">
+              {CHANGELOG.map((rel) => (
+                <div key={rel.date}>
+                  <span className="px-2 py-0.5 bg-accent-100 text-accent-700 rounded-full text-xs font-semibold">{rel.date}</span>
+                  <ul className="mt-2 space-y-1.5">
+                    {rel.items.map((it, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-foreground-700 leading-relaxed">
+                        <i className="ri-checkbox-circle-line text-accent-500 mt-0.5 flex-shrink-0"></i>
+                        <span>{it}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
             </div>
           </div>
