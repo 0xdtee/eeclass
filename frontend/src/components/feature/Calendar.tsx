@@ -306,7 +306,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
               >
                 <i className="ri-arrow-left-s-line"></i>
               </button>
-              <span className="text-sm font-semibold text-foreground-800 min-w-[140px] text-center">
+              <span className="text-sm font-semibold text-foreground-800 w-[200px] flex-shrink-0 text-center whitespace-nowrap">
                 {headerLabel}
               </span>
               <button
@@ -317,11 +317,14 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
               </button>
             </div>
 
-            {viewCount > 0 && (
-              <span className="px-2.5 py-1 bg-accent-50 text-accent-700 text-xs font-semibold rounded-full whitespace-nowrap">
-                {t('{n} 课时', { n: viewCount })}
-              </span>
-            )}
+            {/* fixed-width slot so a changing/absent count never shifts the nav arrows (the header is justify-between) */}
+            <div className="w-[72px] flex justify-end flex-shrink-0">
+              {viewCount > 0 && (
+                <span className="px-2.5 py-1 bg-accent-50 text-accent-700 text-xs font-semibold rounded-full whitespace-nowrap">
+                  {t('{n} 课时', { n: viewCount })}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
