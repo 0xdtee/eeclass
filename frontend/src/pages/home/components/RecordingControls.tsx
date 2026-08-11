@@ -5,6 +5,7 @@ import { loadSettings } from '@/lib/settings';
 import { useAuth } from '@/hooks/useAuth';
 import { useT, t } from '@/lib/i18n';
 import { TRANS_LANGS, type TransLang } from '@/lib/translateLangs';
+import Select from '@/components/base/Select';
 
 // Cloud models regular users may pick; local/technical models are admin-only.
 const CLOUD_MODELS = ['aliyun', 'aliyun_wu', 'aliyun_multi'] as const;
@@ -146,12 +147,7 @@ export default function RecordingControls({
 
   const [tokenInput, setTokenInput] = useState('');
 
-  // Consistent style: dropdowns are appearance-none pills with a leading line-icon + a chevron; toggles are filled/outlined pills.
-  // selCls leaves room on the left (pl-8) for the leading icon; selBare (pl-3) is for pills that don't carry one (the translation pair).
-  const selCls = 'appearance-none text-xs pl-8 pr-8 py-2 rounded-full bg-background-100 border border-background-200 text-foreground-700 cursor-pointer hover:bg-background-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 max-w-[240px] truncate';
-  const selBare = 'appearance-none text-xs pl-3 pr-8 py-2 rounded-full bg-background-100 border border-background-200 text-foreground-700 cursor-pointer hover:bg-background-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 max-w-[240px] truncate';
-  const chevron = 'ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm';
-  const leadIcon = 'absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground-400 pointer-events-none text-sm';
+  // Dropdowns use the custom <Select> (native <select> can't be styled and its popup covers content); toggles are filled/outlined pills.
   const pillCls = (on: boolean) =>
     `inline-flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full border cursor-pointer transition-colors whitespace-nowrap ${on ? 'bg-accent-500 text-background-50 border-accent-500 font-medium' : 'bg-background-100 text-foreground-500 border-background-200 hover:bg-background-200'}`;
 
@@ -331,59 +327,62 @@ export default function RecordingControls({
 
         {uiStatus === 'idle' && (
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative inline-flex items-center">
-              <i className={`ri-mic-line ${leadIcon}`}></i>
-              <select value={device ?? ''} onChange={(e) => setDevice(e.target.value)} className={selCls} title={t('声音来源:本设备麦克风 / 电脑声卡 / 电脑系统声音(网课)')}>
-                <option value="browser">{t('本设备麦克风')}</option>
-                <option value="browser-system">{t('本设备系统声音')}</option>
-                {devices.map((d) => (
-                  <option key={d.id} value={d.id}>{d.shaky ? '⚠ ' : ''}{d.name}</option>
-                ))}
-              </select>
-              <i className={chevron}></i>
-            </div>
+            <Select
+              value={device ?? ''}
+              onChange={setDevice}
+              icon="ri-mic-line"
+              maxTrigger="max-w-[150px]"
+              title={t('声音来源:本设备麦克风 / 电脑声卡 / 电脑系统声音(网课)')}
+              options={[
+                { value: 'browser', label: t('本设备麦克风') },
+                { value: 'browser-system', label: t('本设备系统声音') },
+                ...devices.map((d) => ({ value: d.id, label: (d.shaky ? '⚠ ' : '') + d.name })),
+              ]}
+            />
 
-            <div className="relative inline-flex items-center">
-              <i className={`ri-speak-line ${leadIcon}`}></i>
-              <select value={model} onChange={(e) => setModel(e.target.value as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi')} className={selCls} title={isAdmin ? t('普通话/英语·方言·多语言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别') : t('普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话;多语言=云端识别法/德/意/西/俄/日/韩等,再配合右侧翻译出字幕')}>
-                <option value="aliyun">{t('普通话/英语')}</option>
-                <option value="aliyun_wu">{t('方言')}</option>
-                <option value="aliyun_multi">{t('多语言')}</option>
-                {isAdmin && (
-                  <>
-                    <option value="sensevoice">SenseVoice</option>
-                    <option value="paraformer">Paraformer</option>
-                    <option value="stream">{t('流式')}</option>
-                    <option value="shanghainese">{t('上海话(本地)')}</option>
-                  </>
-                )}
-              </select>
-              <i className={chevron}></i>
-            </div>
+            <Select
+              value={model}
+              onChange={(v) => setModel(v as 'sensevoice' | 'paraformer' | 'stream' | 'shanghainese' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi')}
+              icon="ri-speak-line"
+              title={isAdmin ? t('普通话/英语·方言·多语言=云端识别(需联网);SenseVoice=整句·最准;Paraformer=整句·对照;流式=边说边出字;上海话(本地)=本机吴语识别') : t('普通话/英语=云端普通话/英语识别;方言=云端多方言识别(粤/吴/闽/客/川等16种),自动转普通话;多语言=云端识别法/德/意/西/俄/日/韩等,再配合右侧翻译出字幕')}
+              options={[
+                { value: 'aliyun', label: t('普通话/英语') },
+                { value: 'aliyun_wu', label: t('方言') },
+                { value: 'aliyun_multi', label: t('多语言') },
+                ...(isAdmin ? [
+                  { value: 'sensevoice', label: 'SenseVoice' },
+                  { value: 'paraformer', label: 'Paraformer' },
+                  { value: 'stream', label: t('流式') },
+                  { value: 'shanghainese', label: t('上海话(本地)') },
+                ] : []),
+              ]}
+            />
 
-            {/* Live translation: [translate icon] [source 原文] ⇄ [target 译文]. Off when source === target. */}
-            <div className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full border border-background-200 bg-background-100" title={t('给字幕加一行翻译:左边说的语言,右边译成的语言;相同则不翻译')}>
-              <i className="ri-translate-2 text-foreground-400 text-sm flex-shrink-0"></i>
-              <div className="relative inline-flex items-center">
-                <select value={translateFrom} onChange={(e) => setTranslateFrom(e.target.value as TransLang)} className={selBare} title={t('原文语言(说的是什么语言)')}>
-                  {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{t(l.label)}</option>)}
-                </select>
-                <i className={chevron}></i>
-              </div>
+            {/* Live translation: [🌐 source 原文] ⇄ [target 译文]. Off when source === target. */}
+            <div className="inline-flex items-center gap-1" title={t('给字幕加一行翻译:左边说的语言,右边译成的语言;相同则不翻译')}>
+              <Select
+                value={translateFrom}
+                onChange={(v) => setTranslateFrom(v as TransLang)}
+                icon="ri-translate-2"
+                maxTrigger="max-w-[96px]"
+                title={t('原文语言(说的是什么语言)')}
+                options={TRANS_LANGS.map((l) => ({ value: l.code, label: t(l.label) }))}
+              />
               <button
                 type="button"
                 onClick={() => { setTranslateFrom(translateTo); setTranslateTo(translateFrom); }}
                 title={t('交换原文和译文')}
-                className="w-6 h-6 flex items-center justify-center rounded-full text-foreground-500 hover:bg-background-200 cursor-pointer flex-shrink-0"
+                className="w-7 h-7 flex items-center justify-center rounded-full text-foreground-500 hover:bg-background-200 cursor-pointer flex-shrink-0"
               >
                 <i className="ri-arrow-left-right-line text-sm"></i>
               </button>
-              <div className="relative inline-flex items-center">
-                <select value={translateTo} onChange={(e) => setTranslateTo(e.target.value as TransLang)} className={selBare} title={t('译文语言(翻译成什么语言)')}>
-                  {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{t(l.label)}</option>)}
-                </select>
-                <i className={chevron}></i>
-              </div>
+              <Select
+                value={translateTo}
+                onChange={(v) => setTranslateTo(v as TransLang)}
+                maxTrigger="max-w-[96px]"
+                title={t('译文语言(翻译成什么语言)')}
+                options={TRANS_LANGS.map((l) => ({ value: l.code, label: t(l.label) }))}
+              />
             </div>
 
             {/* Subject tags: check the subjects this session covers (syllabus names) to give AI correction/translation context, for better accuracy */}
@@ -399,8 +398,8 @@ export default function RecordingControls({
               </button>
               {subjOpen && (
                 <>
-                  <div className="fixed inset-0 z-20" onClick={() => setSubjOpen(false)}></div>
-                  <div className="absolute z-30 top-full mt-1.5 left-0 w-72 max-h-72 overflow-y-auto bg-background-50 border border-background-200 rounded-xl shadow-lg p-2.5">
+                  <div className="fixed inset-0 z-40" onClick={() => setSubjOpen(false)}></div>
+                  <div className="absolute z-50 top-full mt-1.5 left-0 w-72 max-h-[60vh] overflow-y-auto bg-background-50 border border-background-200 rounded-xl shadow-lg p-2.5">
                     <p className="text-[11px] text-foreground-400 px-1 pb-2 leading-relaxed">{t('勾选这节课涉及的学科,AI 纠错会往对应学科术语方向纠(可多选)。')}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(subjectTags ?? []).map((name) => {
@@ -430,15 +429,17 @@ export default function RecordingControls({
               )}
             </div>
 
-            <div className="relative inline-flex items-center">
-              <i className={`ri-equalizer-line ${leadIcon}`}></i>
-              <select value={sensitivity} onChange={(e) => setSensitivity(e.target.value as 'std' | 'high' | 'max')} className={selCls} title={t('老师声音小或坐得远就调高')}>
-                <option value="std">{t('灵敏度·标准')}</option>
-                <option value="high">{t('灵敏度·灵敏')}</option>
-                <option value="max">{t('灵敏度·最灵敏')}</option>
-              </select>
-              <i className={chevron}></i>
-            </div>
+            <Select
+              value={sensitivity}
+              onChange={(v) => setSensitivity(v as 'std' | 'high' | 'max')}
+              icon="ri-equalizer-line"
+              title={t('老师声音小或坐得远就调高')}
+              options={[
+                { value: 'std', label: t('灵敏度·标准') },
+                { value: 'high', label: t('灵敏度·灵敏') },
+                { value: 'max', label: t('灵敏度·最灵敏') },
+              ]}
+            />
 
             <button type="button" data-guide="ai-correct" onClick={() => setAiCorrect(!aiCorrect)} className={pillCls(aiCorrect)} title={t('出字后让 DeepSeek 异步改同音错字(如影射→映射),消耗少量 API 额度')}>
               <i className="ri-sparkling-2-line"></i>{t('AI 实时纠错')}
