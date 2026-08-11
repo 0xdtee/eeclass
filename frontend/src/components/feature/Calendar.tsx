@@ -198,28 +198,23 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   }, [viewMode, sessions, sessionsByMonth, sessionsByDate, viewYear, viewMonth, currentSessions, weekDates]);
 
   const handleDateClick = (year: number, month: number, day: number) => {
-    const dateStr = formatDate(year, month, day);
-    const daySessions = sessionsByDate[dateStr] ?? [];
-    // Clicking any day in year view → enter that day's "day" view (don't jump straight into a session's recording)
+    // Drill down one level per click: year → month → week → day. At the day level, open the session or create one.
     if (viewMode === 'year') {
-      setViewYear(year);
-      setViewMonth(month);
-      setViewDay(day);
-      setViewMode('day');
+      setViewYear(year); setViewMonth(month); setViewMode('month');
       return;
     }
-    if (daySessions.length > 0) {
-      if (viewMode === 'month') {
-        setViewYear(year);
-        setViewMonth(month);
-        setViewDay(day);
-        setViewMode('day');
-      } else {
-        onSelectSession(daySessions[0].id);
-      }
-    } else {
-      onCreateSession(dateStr);
+    if (viewMode === 'month') {
+      setViewYear(year); setViewMonth(month); setViewDay(day); setViewMode('week');
+      return;
     }
+    if (viewMode === 'week') {
+      setViewYear(year); setViewMonth(month); setViewDay(day); setViewMode('day');
+      return;
+    }
+    const dateStr = formatDate(year, month, day);
+    const daySessions = sessionsByDate[dateStr] ?? [];
+    if (daySessions.length > 0) onSelectSession(daySessions[0].id);
+    else onCreateSession(dateStr);
   };
 
   const handleMonthCardClick = (month: number) => {
@@ -367,8 +362,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
           sessionsByDate={sessionsByDate}
           tagLabels={tagLabels}
           tagColorMap={tagColorMap}
-          onSelectSession={onSelectSession}
-          onCreateSession={onCreateSession}
+          onDateClick={handleDateClick}
         />
       )}
 
@@ -397,14 +391,14 @@ interface WeekViewProps {
   sessionsByDate: Record<string, SessionRef[]>;
   tagLabels: Record<string, string>;
   tagColorMap: Record<string, string>;
-  onSelectSession: (id: string) => void;
-  onCreateSession: (date: string) => void;
+  onDateClick: (year: number, month: number, day: number) => void;   // drill down into that day's view
 }
 
 const WEEK_HEAD = ['一', '二', '三', '四', '五', '六', '日'];
 
-function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onSelectSession, onCreateSession }: WeekViewProps) {
+function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick }: WeekViewProps) {
   const t = useT();
+  const drill = (d: Date) => onDateClick(d.getFullYear(), d.getMonth(), d.getDate());   // week → that day's view
   const cols = weekDates.map((d) => {
     const key = formatDate(d.getFullYear(), d.getMonth(), d.getDate());
     const list = (sessionsByDate[key] ?? []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
@@ -422,14 +416,14 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
         <div className="grid" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
           <div></div>
           {cols.map((c, i) => (
-            <div key={c.key} className={`text-center pb-2 ${isToday(c.d) ? '' : ''}`}>
+            <button key={c.key} type="button" onClick={() => drill(c.d)} className="p-0 pb-2 text-center cursor-pointer group bg-transparent" title={t('查看这一天')}>
               <div className="text-xs text-foreground-400">{t('周{w}', { w: t(WEEK_HEAD[i]) })}</div>
-              <div className={`text-sm font-semibold mt-0.5 mx-auto w-7 h-7 flex items-center justify-center rounded-full ${
-                isToday(c.d) ? 'bg-accent-500 text-background-50' : 'text-foreground-700'
+              <div className={`text-sm font-semibold mt-0.5 mx-auto w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
+                isToday(c.d) ? 'bg-accent-500 text-background-50' : 'text-foreground-700 group-hover:bg-background-100'
               }`}>
                 {c.d.getDate()}
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -446,7 +440,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                     {cell.map((s) => (
                       <button
                         key={s.id}
-                        onClick={() => onSelectSession(s.id)}
+                        onClick={() => drill(c.d)}
                         className={`w-full text-left mb-0.5 px-1.5 py-1 rounded-md border text-[11px] leading-tight cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
                         title={`${s.title}${s.description ? ' · ' + s.description : ''}`}
                       >
@@ -462,9 +456,9 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                     ))}
                     {cell.length === 0 && (
                       <button
-                        onClick={() => onCreateSession(c.key)}
+                        onClick={() => drill(c.d)}
                         className="w-full h-full min-h-[52px] rounded-md hover:bg-background-100/60 cursor-pointer"
-                        aria-label={t('新建')}
+                        aria-label={t('查看这一天')}
                       />
                     )}
                   </div>
