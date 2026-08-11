@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Modal from '@/components/base/Modal';
+import Select from '@/components/base/Select';
 import { shareUrl } from '@/hooks/useRecords';
 import type { ShareInfo } from '@/hooks/useRecords';
 import { useT } from '@/lib/i18n';
@@ -98,16 +99,13 @@ export default function SharePanel({
               {t('还没有已录好的课可共享。先录一节课再来。')}
             </div>
           ) : (
-            <select
+            <Select
+              variant="block"
               value={selectedSid}
-              onChange={(e) => { setSelectedSid(e.target.value); setShare(null); }}
+              onChange={(v) => { setSelectedSid(v); setShare(null); }}
               disabled={!!share}
-              className="w-full px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all cursor-pointer disabled:opacity-60"
-            >
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>{s.title}</option>
-              ))}
-            </select>
+              options={sessions.map((s) => ({ value: s.id, label: s.title }))}
+            />
           )}
         </div>
 

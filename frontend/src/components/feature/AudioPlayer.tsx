@@ -5,6 +5,7 @@
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useT } from '@/lib/i18n';
+import Select from '@/components/base/Select';
 
 export interface AudioPlayerHandle {
   seek: (seconds: number, play?: boolean) => void;
@@ -103,14 +104,14 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
         className="flex-1 h-1 accent-primary-500 cursor-pointer"
       />
       <span className="text-xs font-mono text-foreground-400 w-12 flex-shrink-0">{fmt(total)}</span>
-      <select
-        value={speed}
-        onChange={(e) => setSpeed(Number(e.target.value))}
-        className="text-xs px-2 py-1 rounded border border-background-200 bg-background-50 text-foreground-600 cursor-pointer flex-shrink-0"
+      <Select
+        value={String(speed)}
+        onChange={(v) => setSpeed(Number(v))}
         title={t('倍速')}
-      >
-        {SPEEDS.map((s) => (<option key={s} value={s}>{s}x</option>))}
-      </select>
+        menuAlign="right"
+        maxTrigger="max-w-[48px]"
+        options={SPEEDS.map((s) => ({ value: String(s), label: `${s}x` }))}
+      />
     </div>
   );
 

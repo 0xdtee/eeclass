@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Modal from '@/components/base/Modal';
+import Select from '@/components/base/Select';
 import { tags as allTags } from '@/mocks/courseData';
 import TagBadge from '@/components/base/TagBadge';
 import { useT } from '@/lib/i18n';
@@ -96,49 +97,33 @@ export default function NewSessionModal({ isOpen, onClose, preselectedDate, date
         <div>
           <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('上课时间')}</label>
           <div className="flex items-center gap-2">
-            <select
-              value={timeHour}
-              onChange={(e) => setTimeHour(e.target.value)}
-              className="flex-1 px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all cursor-pointer"
-            >
-              {['08', '09', '10', '13', '14', '15', '16', '18', '19'].map((h) => (
-                <option key={h} value={h}>{h}:00</option>
-              ))}
-            </select>
+            <Select
+              variant="block" className="flex-1"
+              value={timeHour} onChange={setTimeHour}
+              options={['08', '09', '10', '13', '14', '15', '16', '18', '19'].map((h) => ({ value: h, label: `${h}:00` }))}
+            />
             <span className="text-foreground-400 text-sm">—</span>
-            <select
-              value={timeMinute}
-              onChange={(e) => setTimeMinute(e.target.value)}
-              className="flex-1 px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all cursor-pointer"
-            >
-              {['00', '15', '30', '45'].map((m) => (
-                <option key={m} value={m}>:{m}</option>
-              ))}
-            </select>
+            <Select
+              variant="block" className="flex-1"
+              value={timeMinute} onChange={setTimeMinute}
+              options={['00', '15', '30', '45'].map((m) => ({ value: m, label: `:${m}` }))}
+            />
           </div>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('预计时长')}</label>
           <div className="flex items-center gap-2">
-            <select
-              value={durationHours}
-              onChange={(e) => setDurationHours(e.target.value)}
-              className="flex-1 px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all cursor-pointer"
-            >
-              {['0', '1', '2', '3'].map((h) => (
-                <option key={h} value={h}>{t('{h} 小时', { h })}</option>
-              ))}
-            </select>
-            <select
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(e.target.value)}
-              className="flex-1 px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 transition-all cursor-pointer"
-            >
-              {['00', '15', '30', '45'].map((m) => (
-                <option key={m} value={m}>{t('{m} 分', { m })}</option>
-              ))}
-            </select>
+            <Select
+              variant="block" className="flex-1"
+              value={durationHours} onChange={setDurationHours}
+              options={['0', '1', '2', '3'].map((h) => ({ value: h, label: t('{h} 小时', { h }) }))}
+            />
+            <Select
+              variant="block" className="flex-1"
+              value={durationMinutes} onChange={setDurationMinutes}
+              options={['00', '15', '30', '45'].map((m) => ({ value: m, label: t('{m} 分', { m }) }))}
+            />
           </div>
         </div>
 

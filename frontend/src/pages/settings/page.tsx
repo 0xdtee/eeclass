@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
 import { t, useLang, setLang, LANGS } from '@/lib/i18n';
 import { TRANS_LANGS } from '@/lib/translateLangs';
+import Select from '@/components/base/Select';
 
 // Labels/hints are stored as their Simplified source string and translated at render via t(),
 // so switching language updates them live (don't pre-translate at module load).
@@ -138,15 +139,19 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-foreground-800">{t('翻译字幕')}</p>
                   <p className="text-xs text-foreground-400 mt-1 mb-2.5 leading-relaxed">{t('给字幕加一行翻译:左边说的语言,右边译成的语言,相同则不翻译。切换界面语言会自动设为对应方向。')}</p>
                   <div className="flex items-center gap-2">
-                    <select value={s.translateFrom} onChange={(e) => set('translateFrom', e.target.value as AppSettings['translateFrom'])} className="flex-1 min-w-0 px-3 py-2 bg-background-100 rounded-xl text-sm text-foreground-800 outline-none cursor-pointer">
-                      {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{t(l.label)}</option>)}
-                    </select>
+                    <Select
+                      variant="block" className="flex-1 min-w-0"
+                      value={s.translateFrom} onChange={(v) => set('translateFrom', v as AppSettings['translateFrom'])}
+                      options={TRANS_LANGS.map((l) => ({ value: l.code, label: t(l.label) }))}
+                    />
                     <button type="button" onClick={() => { const f = s.translateFrom; set('translateFrom', s.translateTo); set('translateTo', f); }} title={t('交换原文和译文')} className="w-9 h-9 flex items-center justify-center rounded-full text-foreground-500 hover:bg-background-200 cursor-pointer flex-shrink-0">
                       <i className="ri-arrow-left-right-line"></i>
                     </button>
-                    <select value={s.translateTo} onChange={(e) => set('translateTo', e.target.value as AppSettings['translateTo'])} className="flex-1 min-w-0 px-3 py-2 bg-background-100 rounded-xl text-sm text-foreground-800 outline-none cursor-pointer">
-                      {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{t(l.label)}</option>)}
-                    </select>
+                    <Select
+                      variant="block" className="flex-1 min-w-0"
+                      value={s.translateTo} onChange={(v) => set('translateTo', v as AppSettings['translateTo'])}
+                      options={TRANS_LANGS.map((l) => ({ value: l.code, label: t(l.label) }))}
+                    />
                   </div>
                 </div>
               </div>
