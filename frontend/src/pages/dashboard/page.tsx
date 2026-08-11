@@ -377,7 +377,7 @@ export default function DashboardHome() {
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary-50/40 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
         <div className="relative z-10 max-w-6xl mx-auto px-6 py-10 md:py-14">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-3">
                 <span className="px-3 py-1 bg-accent-100 text-accent-700 text-xs font-semibold rounded-full">
                   {t('2026年秋季学期')}
@@ -386,7 +386,7 @@ export default function DashboardHome() {
               <h1 className="text-3xl md:text-4xl font-bold text-foreground-900 mb-2">
                 {t('课堂纪要控制台')}
               </h1>
-              <p className="text-sm text-foreground-400 max-w-lg mb-4">
+              <p className="text-sm text-foreground-400 max-w-2xl mb-4">
                 {t('智能管理你的课堂录音、AI摘要与学习资料。实时转写、一键总结、师生共享——让知识管理更高效。')}
               </p>
               <SearchBar sessions={allSessions} tagLabels={tagLabels} />

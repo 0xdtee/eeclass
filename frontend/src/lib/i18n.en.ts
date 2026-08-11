@@ -535,7 +535,7 @@ export const EN: Record<string, string> = {
   "智能录音转写、AI 摘要生成、日历课程管理——课堂纪要帮你高效记录、整理与共享每一堂课的精彩内容。": "Smart audio transcription, AI summaries, and calendar course management — Class Notes helps you efficiently capture, organize, and share the best of every class.",
   "智能录音转写、AI摘要生成、师生共享协作——让每一堂课都留下清晰的印记。": "Smart recording & transcription, AI summaries, and teacher–student sharing — leave a clear record of every class.",
   "智能生成摘要": "Smart summary generation",
-  "智能管理你的课堂录音、AI摘要与学习资料。实时转写、一键总结、师生共享——让知识管理更高效。": "Smartly manage your class recordings, AI summaries and study materials. Real-time transcription, one-click summaries, teacher-student sharing — knowledge management made more efficient.",
+  "智能管理你的课堂录音、AI摘要与学习资料。实时转写、一键总结、师生共享——让知识管理更高效。": "Manage class recordings, AI summaries and study materials — real-time transcription, one-click summaries and teacher-student sharing.",
   "暂停": "Pause",
   "暂停录制": "Pause recording",
   "暂无": "None",
