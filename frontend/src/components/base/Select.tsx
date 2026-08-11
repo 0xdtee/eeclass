@@ -37,6 +37,7 @@ export default function Select({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<MenuPos | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const current = options.find((o) => o.value === value);
   const block = variant === 'block';
 
@@ -62,16 +63,21 @@ export default function Select({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const close = () => setOpen(false);   // scrolling/resizing would strand the fixed menu — just close it
+    // Reposition when the PAGE scrolls (the trigger moves), but ignore scrolling INSIDE the menu itself —
+    // otherwise scrolling the option list would move/close the menu you're trying to use.
+    const onScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      measure();
+    };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open]);
+  }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const triggerCls = block
     ? 'w-full inline-flex items-center gap-2 text-sm px-3 py-2.5 rounded-lg bg-background-100 border border-background-200 text-foreground-800 cursor-pointer hover:bg-background-200/60 transition-colors focus:outline-none focus:border-accent-400 focus:ring-2 focus:ring-accent-100 disabled:opacity-60 disabled:cursor-not-allowed'
@@ -88,6 +94,7 @@ export default function Select({
         <>
           <div className="fixed inset-0" style={{ zIndex: 2000 }} onClick={() => setOpen(false)}></div>
           <div
+            ref={menuRef}
             className="fixed overflow-y-auto bg-background-50 border border-background-200 rounded-xl shadow-lg p-1"
             style={{
               zIndex: 2001,
