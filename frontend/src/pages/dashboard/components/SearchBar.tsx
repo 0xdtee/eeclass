@@ -246,7 +246,7 @@ export default function SearchBar({ sessions, tagLabels }: SearchBarProps) {
                 <i className="ri-search-line text-foreground-300 text-xl"></i>
               </div>
               <p className="text-sm text-foreground-400">{t('未找到匹配的课时记录')}</p>
-              <p className="text-xs text-foreground-300 mt-1">{t('试试换个关键词或切换搜索模式')}</p>
+              <p className="text-xs text-foreground-300 mt-1">{t('请更换关键词或切换搜索模式')}</p>
             </div>
           ) : (
             <>

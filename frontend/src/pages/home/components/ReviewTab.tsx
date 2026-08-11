@@ -151,7 +151,7 @@ export default function ReviewTab({
       <div className="bg-background-50 border border-background-200 rounded-xl p-12 text-center">
         <i className="ri-book-read-line text-foreground-300 text-3xl"></i>
         <p className="text-sm text-foreground-400 mt-3">{t('这节课还没有转写内容')}</p>
-        <p className="text-xs text-foreground-300 mt-1">{t('先录一节课，或去「历史课程」选一节已录好的')}</p>
+        <p className="text-xs text-foreground-300 mt-1">{t('请先录制一节课,或从「历史课程」中选择一节已录制的课程')}</p>
       </div>
     );
   }
@@ -192,7 +192,7 @@ export default function ReviewTab({
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           {cards.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-sm text-foreground-500">{t('让 DeepSeek 把这节课做成闪卡')}</p>
+              <p className="text-sm text-foreground-500">{t('由 DeepSeek 将本节课生成复习闪卡')}</p>
               <button
                 data-guide="make-flashcard"
                 onClick={genCards}
@@ -264,7 +264,7 @@ export default function ReviewTab({
         <div className="bg-background-50 border border-background-200 rounded-xl p-6">
           {quiz.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-sm text-foreground-500">{t('让 DeepSeek 出一套这节课的自测题')}</p>
+              <p className="text-sm text-foreground-500">{t('由 DeepSeek 生成一套本节课的自测题')}</p>
               <button
                 data-guide="make-quiz"
                 onClick={genQuiz}
@@ -360,12 +360,12 @@ export default function ReviewTab({
           <div className="min-h-[240px] max-h-[440px] overflow-y-auto space-y-4 mb-4">
             {chat.length === 0 && (
               <div className="text-center py-10">
-                <p className="text-sm text-foreground-500">{t('拿这节课的内容问 DeepSeek')}</p>
+                <p className="text-sm text-foreground-500">{t('就本节课内容提问 DeepSeek')}</p>
                 <p className="text-xs text-foreground-400 mt-2">
                   {t('比如「老师讲格林公式时强调了什么」「这节课有哪些是明说要考的」')}
                 </p>
                 <p className="text-xs text-foreground-300 mt-2">
-                  {t('它只根据这节课的转写回答，没讲到的会直说没讲到')}
+                  {t('它仅依据本节课的转写内容作答,未讲到的会明确说明未涉及')}
                 </p>
               </div>
             )}

@@ -63,13 +63,13 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
       const dataUrl: string = await new Promise((res, rej) => {
         const r = new FileReader();
         r.onload = () => res(r.result as string);
-        r.onerror = () => rej(new Error(t('读图失败')));
+        r.onerror = () => rej(new Error(t('图片读取失败')));
         r.readAsDataURL(file);
       });
       const out = await onImportImage(dataUrl);
       if (out.error) { setErrorMsg(out.error); setStage('error'); return; }
       const cs = out.courses ?? [];
-      if (cs.length === 0) { setErrorMsg(t('没在图里识别到课程,换张更清晰的课表截图试试')); setStage('error'); return; }
+      if (cs.length === 0) { setErrorMsg(t('未能从图片中识别到课程,请更换更清晰的课表截图重试')); setStage('error'); return; }
       setCourses(cs);
       setPicked(cs.map(() => true));
       setAnchorMonday(out.anchor_monday || '');
@@ -169,7 +169,7 @@ export default function ImportModal({ isOpen, onClose, onConfirm, onImportImage,
 
       {stage === 'courses' && (
         <div className="space-y-3">
-          <p className="text-xs text-foreground-500">{t('识别到')} <b className="text-accent-600">{courses.length}</b> {t('门课,勾选要加进日历的(每周重复):')}</p>
+          <p className="text-xs text-foreground-500">{t('识别到')} <b className="text-accent-600">{courses.length}</b> {t('门课,请勾选要加入日历的课程(每周重复):')}</p>
           <div className="max-h-[46vh] overflow-y-auto space-y-1.5 -mx-1 px-1">
             {courses.map((c, i) => (
               <label key={i} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${picked[i] ? 'bg-accent-50 border-accent-200' : 'bg-background-100 border-background-200 opacity-60'}`}>

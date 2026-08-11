@@ -164,7 +164,7 @@ export default function RecordingControls({
           {!getToken() && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-red-700">
-                {t('需要访问令牌（启动服务的那个黑窗口里有）：')}
+                {t('需要访问令牌（可在启动服务的命令行窗口中查看）：')}
               </span>
               <input
                 value={tokenInput}
@@ -215,7 +215,7 @@ export default function RecordingControls({
                   }
                 }}
                 placeholder={t('课程名称(如 高数第3讲)')}
-                title={t('这节课的名字,可以直接改')}
+                title={t('本节课名称,可直接修改')}
                 className="px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 w-[190px]"
               />
               <button
@@ -391,7 +391,7 @@ export default function RecordingControls({
                 type="button"
                 onClick={() => setSubjOpen((v) => !v)}
                 className={`text-xs pl-3 pr-8 py-2 rounded-full border cursor-pointer transition-colors relative ${subjects.length ? 'bg-accent-500 text-background-50 border-accent-500 font-medium' : 'bg-background-100 text-foreground-600 border-background-200 hover:bg-background-200'}`}
-                title={t('勾选这节课涉及的学科,纠错会往对应学科的术语方向纠,更准(可多选)')}
+                title={t('勾选本节课涉及的学科,纠错将侧重相应学科术语,识别更准确(可多选)')}
               >
                 <i className="ri-price-tag-3-line mr-1"></i>{subjects.length ? t('学科·{n}', { n: subjects.length }) : t('学科标签')}
                 <i className="ri-arrow-down-s-line absolute right-2.5 top-1/2 -translate-y-1/2 text-sm"></i>
@@ -400,7 +400,7 @@ export default function RecordingControls({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setSubjOpen(false)}></div>
                   <div className="absolute z-50 top-full mt-1.5 left-0 w-72 max-h-[60vh] overflow-y-auto bg-background-50 border border-background-200 rounded-xl shadow-lg p-2.5">
-                    <p className="text-[11px] text-foreground-400 px-1 pb-2 leading-relaxed">{t('勾选这节课涉及的学科,AI 纠错会往对应学科术语方向纠(可多选)。')}</p>
+                    <p className="text-[11px] text-foreground-400 px-1 pb-2 leading-relaxed">{t('勾选本节课涉及的学科,AI 纠错将侧重相应学科术语(可多选)。')}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(subjectTags ?? []).map((name) => {
                         const on = subjects.includes(name);
@@ -433,7 +433,7 @@ export default function RecordingControls({
               value={sensitivity}
               onChange={(v) => setSensitivity(v as 'std' | 'high' | 'max')}
               icon="ri-equalizer-line"
-              title={t('老师声音小或坐得远就调高')}
+              title={t('老师声音较小或距离较远时,可调高灵敏度')}
               options={[
                 { value: 'std', label: t('灵敏度·标准') },
                 { value: 'high', label: t('灵敏度·灵敏') },
@@ -441,7 +441,7 @@ export default function RecordingControls({
               ]}
             />
 
-            <button type="button" data-guide="ai-correct" onClick={() => setAiCorrect(!aiCorrect)} className={pillCls(aiCorrect)} title={t('出字后让 DeepSeek 异步改同音错字(如影射→映射),消耗少量 API 额度')}>
+            <button type="button" data-guide="ai-correct" onClick={() => setAiCorrect(!aiCorrect)} className={pillCls(aiCorrect)} title={t('出字后由 DeepSeek 异步纠正同音错字(如影射→映射),会消耗少量 API 额度')}>
               <i className="ri-sparkling-2-line"></i>{t('AI 实时纠错')}
             </button>
             <button type="button" data-guide="ai-seg" onClick={() => setSmartSeg(!smartSeg)} className={pillCls(smartSeg)} title={t('让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)')}>
@@ -479,7 +479,7 @@ export default function RecordingControls({
           {uiStatus !== 'idle' && (
             <>
               <span className={`text-xs ${backlogWarn ? 'text-red-600 font-medium' : 'text-foreground-400'}`}
-                    title={t('识别积压。持续大于 3 说明 CPU 跟不上')}>
+                    title={t('识别积压。数值持续大于 3 表示 CPU 处理能力不足')}>
                 {t('积压')} {status.backlog}
               </span>
               <span className="text-xs text-foreground-400" title={t('实时率，需要小于 1')}>

@@ -224,7 +224,7 @@ export default function TranscriptionTab({
             <p className="text-xs text-accent-600 mt-1">
               <span className="bg-yellow-100 px-1 rounded">{t('黄色')}</span>{t(' 为老师强调的重点，')}
               <span className="bg-green-100 px-1 rounded">{t('浅绿')}</span>{t(' 为定义句。')}
-              {t('黑板上有内容就点「拍板书」，会自动对齐到当前时间点。')}
+              {t('黑板上有内容时,点击「拍板书」,会自动对齐到当前时间点。')}
             </p>
           </div>
         </div>
@@ -256,7 +256,7 @@ export default function TranscriptionTab({
                 key={sp.id}
                 onClick={() => { setEditSpk(sp.id); setSpkDraft(/^(老师|同学\d+)$/.test(sp.name) ? '' : sp.name); }}
                 className="group inline-flex items-center gap-1 pl-2.5 pr-2 py-1 bg-accent-100 text-accent-700 rounded-full text-xs font-medium hover:bg-accent-200 cursor-pointer"
-                title={t('点击改名(改后自动记进声纹库,以后自动认这个人)')}
+                title={t('点击修改姓名(修改后自动存入声纹库,后续自动识别此人)')}
               >
                 {sp.name || t('某人')}
                 {sp.seconds != null && <span className="text-[10px] text-accent-500">{Math.round(sp.seconds)}s</span>}
@@ -424,7 +424,7 @@ export default function TranscriptionTab({
             ) : (
               <p className="text-foreground-400 italic text-sm">
                 {live.running
-                  ? t('已开麦，等待第一句话…')
+                  ? t('已开启麦克风,等待第一句话…')
                   : t('暂无转写内容，点上方「开始录音」，或去「历史课程」选一节已录好的课。')}
               </p>
             )}
@@ -439,7 +439,7 @@ export default function TranscriptionTab({
               <i className="ri-sticky-note-line text-accent-500"></i>{t('我的笔记')}
             </h3>
             <span className="text-xs text-foreground-400">
-              {noteStatus === 'saving' ? t('保存中…') : noteStatus === 'saved' ? t('✓ 已保存') : t('随手记,自动保存')}
+              {noteStatus === 'saving' ? t('保存中…') : noteStatus === 'saved' ? t('✓ 已保存') : t('随时记录,自动保存')}
             </span>
           </div>
           <textarea

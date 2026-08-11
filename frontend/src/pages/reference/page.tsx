@@ -136,7 +136,7 @@ export default function ReferencePage() {
           ) : schools.length === 0 ? (
             <div className="text-center py-24 bg-background-50 border border-background-200 rounded-xl">
               <i className="ri-file-search-line text-3xl text-foreground-300"></i>
-              <p className="text-sm text-foreground-400 mt-3">{t('官方大纲正在整理中,稍后再来看看。')}</p>
+              <p className="text-sm text-foreground-400 mt-3">{t('官方大纲整理中,请稍后再查看。')}</p>
             </div>
           ) : item ? (
             <div className="space-y-3">

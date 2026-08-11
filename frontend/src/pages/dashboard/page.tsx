@@ -290,7 +290,7 @@ export default function DashboardHome() {
     void records.saveSchedule(merged).catch(() => {});
     const first = newEvents.map((e) => e.date).sort()[0];
     if (first) setCalendarFocus(`${first}|${Date.now()}`);
-    setCreatedMessage(t('已把 {n} 节课加进日历', { n: newEvents.length }));
+    setCreatedMessage(t('已将 {n} 节课加入日历', { n: newEvents.length }));
     setTimeout(() => setCreatedMessage(''), 4000);
   };
 
@@ -356,7 +356,7 @@ export default function DashboardHome() {
 
     const tagged = nameToTag.size;
     const tagTxt = tagged ? t(',已给 {tagged} 门课打上标签(新建 {created} 个 / 沿用已有 {grouped} 个)', { tagged, created: createdNames.length, grouped: groupedNames.length }) : '';
-    setCreatedMessage(t('已把 {n} 门课加进日历', { n: courses.length }) + (monthTxt ? `(${monthTxt})` : '') + tagTxt);
+    setCreatedMessage(t('已将 {n} 门课加入日历', { n: courses.length }) + (monthTxt ? `(${monthTxt})` : '') + tagTxt);
     setTimeout(() => setCreatedMessage(''), 4000);
   };
 
@@ -567,7 +567,7 @@ export default function DashboardHome() {
               <div className="bg-background-50 rounded-2xl border border-background-200 overflow-hidden">
                 {recentSessions.length === 0 && (
                   <div className="px-5 py-8 text-center text-sm text-foreground-400">
-                    {t('还没有课程。点上面「开始录音」录第一节课吧。')}
+                    {t('暂无课程。点击上方「开始录音」,录制第一节课。')}
                   </div>
                 )}
                 {recentSessions.map((session, idx) => (

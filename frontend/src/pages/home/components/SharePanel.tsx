@@ -87,8 +87,8 @@ export default function SharePanel({
     <Modal isOpen={isOpen} onClose={onClose} title={t('共享这节课')} width="max-w-lg">
       <div className="space-y-4">
         <p className="text-xs text-foreground-500 leading-relaxed">
-          {t('生成一个')}<b>{t('只读链接')}</b>{t('，同一 WiFi 下的同学不需要令牌就能打开看这节课的文字。')}
-          {t('他们看不到别的课、不能录音、不能修改。')}
+          {t('生成一个')}<b>{t('只读链接')}</b>{t('，同一 WiFi 下的同学无需令牌即可打开查看本节课的文字记录。')}
+          {t('他们无法查看其他课程、无法录音、无法修改。')}
         </p>
 
         {/* Choose which session to share */}
@@ -96,7 +96,7 @@ export default function SharePanel({
           <label className="block text-xs font-medium text-foreground-600 mb-1.5">{t('选择要共享的课')}</label>
           {sessions.length === 0 ? (
             <div className="p-3 bg-background-100 rounded-lg text-xs text-foreground-400">
-              {t('还没有已录好的课可共享。先录一节课再来。')}
+              {t('暂无可共享的课程。请先录制一节课。')}
             </div>
           ) : (
             <Select
@@ -145,7 +145,7 @@ export default function SharePanel({
               </button>
             </div>
             <p className="text-xs text-foreground-400 leading-relaxed">
-              {t('创建于 {created}。对方要和你在同一个 WiFi；第一次打开会提示证书不受信任，选「继续访问」即可。', { created: share.created })}
+              {t('创建于 {created}。对方需与您处于同一 WiFi；首次打开时会提示证书不受信任,选择「继续访问」即可。', { created: share.created })}
             </p>
             <button
               onClick={revoke}

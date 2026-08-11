@@ -48,7 +48,7 @@ export default function SharedPage() {
           <i className="ri-link-unlink text-foreground-300 text-3xl"></i>
           <p className="text-sm text-foreground-600 mt-3">{error}</p>
           <p className="text-xs text-foreground-400 mt-2">
-            {t('链接可能已被停止共享，或者你没和分享者在同一个 WiFi。')}
+            {t('链接可能已停止共享,或您与分享者不在同一 WiFi。')}
           </p>
         </div>
       </div>

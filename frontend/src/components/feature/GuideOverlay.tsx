@@ -131,7 +131,7 @@ export default function GuideOverlay() {
         </div>
 
         <p className="text-sm leading-relaxed text-background-50/95 mb-1">{text}</p>
-        {rect && <p className="text-[11px] text-accent-300 mb-2.5">{t('↑ 点上面高亮的按钮,或点「下一步」')}</p>}
+        {rect && <p className="text-[11px] text-accent-300 mb-2.5">{t('↑ 点击上方高亮的按钮,或点击「下一步」')}</p>}
         {!rect && <div className="mb-2.5" />}
 
         <div className="flex items-center gap-2">

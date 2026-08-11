@@ -201,7 +201,7 @@ export default function CourseDetailPage() {
         <i className="ri-magic-line text-accent-600 text-2xl"></i>
       </div>
       <p className="text-sm text-foreground-600 mb-1">{t('这门课还没有课堂录音')}</p>
-      <p className="text-xs text-foreground-400 mb-5 max-w-xs">{t('可以让 AI 仅凭《{name}》{scope}的通用大纲和常见{kind}先生成一份参考;之后录了课再"重新生成"会更贴合你老师讲的内容。', { name: displayName, scope: byTag ? t('这个标签下') : t('这门课'), kind })}</p>
+      <p className="text-xs text-foreground-400 mb-5 max-w-xs">{t('AI 可仅凭《{name}》{scope}的通用大纲与常见{kind}先生成一份参考;录制课程后再点击"重新生成",内容将更贴合老师的实际讲授。', { name: displayName, scope: byTag ? t('这个标签下') : t('这门课'), kind })}</p>
       <button onClick={onGen} className="flex items-center gap-1.5 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer">
         <i className="ri-sparkling-line"></i>{t('AI 一键生成{kind}', { kind })}
       </button>
@@ -211,7 +211,7 @@ export default function CourseDetailPage() {
   const Spinner = (
     <div className="flex flex-col items-center justify-center py-20 gap-3">
       <div className="w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-sm text-foreground-400">{t('AI 正在分析这门课的所有录音…(首次会慢一点)')}</p>
+      <p className="text-sm text-foreground-400">{t('AI 正在分析本课程的全部录音…(首次较慢)')}</p>
     </div>
   );
 
@@ -327,7 +327,7 @@ export default function CourseDetailPage() {
                       <p className="text-xs text-foreground-400 mt-0.5">{sessionDate(s)} · {fmtDuration(s.duration_s)} · {s.lines ?? 0} {t('句')}</p>
                     </div>
                     <button onClick={() => navigate(`/course?sid=${encodeURIComponent(s.id)}`)} className="px-3 py-1.5 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 cursor-pointer whitespace-nowrap flex-shrink-0">
-                      <i className="ri-file-text-line mr-1"></i>{t('看转写')}
+                      <i className="ri-file-text-line mr-1"></i>{t('查看转写')}
                     </button>
                     <a href={audioDownloadUrl(s.id, `${sessionTitle(s).replace(/[\\/:*?"<>|]/g, '_')}.wav`)} className="px-3 py-1.5 bg-primary-100 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                       <i className="ri-download-2-line mr-1"></i>{t('导出')}
@@ -365,7 +365,7 @@ export default function CourseDetailPage() {
                           onClick={() => navigate('/tags')}
                           className="text-xs text-accent-600 hover:text-accent-700 cursor-pointer"
                         >
-                          {t('还没有标签,去创建 →')}
+                          {t('暂无标签,前往创建 →')}
                         </button>
                       ) : (
                         allTags.map((tg) => {

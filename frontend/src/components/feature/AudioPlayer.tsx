@@ -73,7 +73,7 @@ const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ src, onTi
       }}
       onPause={() => setPlaying(false)}
       onEnded={() => { setPlaying(false); }}
-      onError={() => setError(t('这节课的录音文件读不到'))}
+      onError={() => setError(t('无法读取本节课的录音文件'))}
     />
   );
 

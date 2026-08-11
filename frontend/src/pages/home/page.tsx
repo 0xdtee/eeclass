@@ -424,7 +424,7 @@ export default function HomePage() {
       const r = await records.renameSpeaker(activeSessionId, speakerId, name);
       setHistLines((prev) => prev.map((l) => (l.speaker_id === speakerId ? { ...l, speaker: name } : l)));
       const n = (r as { propagated_sessions?: number }).propagated_sessions ?? 0;
-      if (name && n >= 1) say(t('已把「{name}」同步到过去 {n} 节课里的同一个人', { name, n }));
+      if (name && n >= 1) say(t('已将「{name}」同步至此前 {n} 节课中的同一说话人', { name, n }));
     },
     [activeSessionId, records, say]
   );
@@ -602,7 +602,7 @@ export default function HomePage() {
                 onClick={() => setJustEnded(false)}
                 className="px-3 py-2 text-sm text-foreground-500 hover:text-foreground-700 cursor-pointer whitespace-nowrap"
               >
-                {t('留在这')}
+                {t('留在此页')}
               </button>
             </div>
           </div>

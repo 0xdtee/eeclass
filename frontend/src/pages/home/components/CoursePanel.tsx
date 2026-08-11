@@ -64,7 +64,7 @@ export default function CoursePanel({ course, isOpen, onClose, onSave }: CourseP
         <label className="block">
           <span className="text-xs font-semibold text-foreground-600">{t('专业术语表')}</span>
           <p className="text-xs text-foreground-400 mt-1">
-            {t('空格分隔。识别时会优先往这些词上靠——「格林公式」「傅里叶」这种词不加进来很容易听错。')}
+            {t('以空格分隔。识别时会优先匹配这些词——「格林公式」「傅里叶」等专业词若不加入,容易识别有误。')}
           </p>
           <textarea
             value={hotwords}

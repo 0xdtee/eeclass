@@ -82,14 +82,14 @@ export default function VoicePrintModal({ isOpen, onClose }: { isOpen: boolean; 
     <Modal isOpen={isOpen} onClose={() => { stopAudio(); onClose(); }} title={t('语音标记 · 声纹库')} width="max-w-lg">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto">
         <p className="text-xs text-foreground-400 leading-relaxed">
-          {t('从你过去的录音里提取出每个人的声音。试听后给他打个名字,存进声纹库;之后录到')}<b>{t('相同声纹')}</b>{t('的人,会自动用这个名字记录。同一个人可能出现在多节课里,')}<b>{t('标一次即可')}</b>{t(',其余会自动识别。')}
+          {t('从你过去的录音里提取出每个人的声音。试听后为其命名,存入声纹库;之后录制到')}<b>{t('相同声纹')}</b>{t('的人,会自动用这个名字记录。同一个人可能出现在多节课里,')}<b>{t('标一次即可')}</b>{t(',其余会自动识别。')}
         </p>
 
         {/* Voiceprint library */}
         <div>
           <p className="text-xs font-semibold text-foreground-500 mb-1.5">{t('声纹库({n})', { n: library.length })}</p>
           {library.length === 0 ? (
-            <p className="text-xs text-foreground-300">{t('还没标记过声音。下面选一个试听、打标签。')}</p>
+            <p className="text-xs text-foreground-300">{t('尚未标记任何声音。请在下方选择一段试听并标注。')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {library.map((v) => (

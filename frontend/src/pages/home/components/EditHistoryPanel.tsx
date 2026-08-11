@@ -96,7 +96,7 @@ export default function EditHistoryPanel({
                 className="text-xs text-accent-600 hover:text-accent-700 cursor-pointer"
               >
                 <i className="ri-arrow-go-back-line mr-1"></i>
-                {t('恢复成改之前')}
+                {t('恢复到修改前')}
               </button>
             </div>
           ))}

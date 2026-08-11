@@ -428,7 +428,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
         </div>
 
         {times.length === 0 ? (
-          <div className="py-16 text-center text-sm text-foreground-400">{t('这一周还没有课。翻到有课的周,或导入课表。')}</div>
+          <div className="py-16 text-center text-sm text-foreground-400">{t('本周暂无课程。请切换到有课程的周,或导入课表。')}</div>
         ) : (
           times.map((time) => (
             <div key={time} className="grid border-t border-background-100" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>

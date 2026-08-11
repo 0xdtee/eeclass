@@ -47,7 +47,7 @@ export default function RegisterPage() {
     e.preventDefault();
     if (busy) return;
     if (!name || !email || !password || !code) {
-      setErr(t('请把姓名、邮箱、密码和验证码都填好'));
+      setErr(t('请填写姓名、邮箱、密码和验证码'));
       return;
     }
     if (password !== confirmPassword) {
@@ -210,7 +210,7 @@ export default function RegisterPage() {
                   {sending ? t('发送中…') : cooldown > 0 ? t('{n}s 后重发', { n: cooldown }) : t('发送验证码')}
                 </button>
               </div>
-              <p className="text-[11px] text-foreground-400 mt-1">{t('验证码会发到上面填的邮箱,10 分钟内有效。')}</p>
+              <p className="text-[11px] text-foreground-400 mt-1">{t('验证码将发送至上方填写的邮箱,10 分钟内有效。')}</p>
             </div>
 
             {info && (

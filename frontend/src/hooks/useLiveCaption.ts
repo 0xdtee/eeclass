@@ -270,7 +270,7 @@ export function useLiveCaption() {
       getDisplayMedia?: (c: MediaStreamConstraints) => Promise<MediaStream>;
     }) | undefined;
     if (!md?.getDisplayMedia) {
-      throw new Error(t('这个浏览器不支持采集系统声音。请在电脑上用 Chrome 或 Edge（手机浏览器不行）。'));
+      throw new Error(t('当前浏览器不支持采集系统声音。请在电脑上使用 Chrome 或 Edge（手机浏览器不支持）。'));
     }
     // Must pass video:true for the browser to offer the "share audio" option; the audio track is what we actually want.
     const stream = await md.getDisplayMedia({ video: true, audio: true });

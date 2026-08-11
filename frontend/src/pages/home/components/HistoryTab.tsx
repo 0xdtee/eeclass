@@ -84,7 +84,7 @@ export default function HistoryTab({
     <div className="space-y-4">
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-xs text-red-700">{t('读不到本机记录：')}{error}</p>
+          <p className="text-xs text-red-700">{t('无法读取本机记录：')}{error}</p>
         </div>
       )}
 

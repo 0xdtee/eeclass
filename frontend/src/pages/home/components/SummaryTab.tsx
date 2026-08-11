@@ -93,7 +93,7 @@ export default function SummaryTab({
         <div className="bg-accent-50 border border-accent-200 rounded-xl p-4">
           <p className="text-xs text-accent-700 leading-relaxed">
             <i className="ri-information-line mr-1"></i>
-            {t('服务端还没配 DeepSeek API key，「生成AI摘要」会退回本机规则提取的重点。')}
+            {t('服务端尚未配置 DeepSeek API key,「生成AI摘要」将退回为本机规则提取的要点。')}
             {t(' 把 key 填到 ')}<code>service/config.json</code>{t(' 的 ')}<code>deepseek.api_key</code>{t(' 后重启服务即可。')}
           </p>
         </div>

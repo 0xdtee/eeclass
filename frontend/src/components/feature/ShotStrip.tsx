@@ -73,7 +73,7 @@ export default function ShotStrip({ shots, onSeek, onDelete, onNote }: ShotStrip
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
                 onBlur={() => onNote?.(cur.id, noteDraft)}
-                placeholder={t('加一句备注…')}
+                placeholder={t('添加备注…')}
                 className="flex-1 min-w-[140px] text-xs px-3 py-1.5 rounded-full bg-background-50/20 text-background-50 placeholder:text-background-50/60 border-0"
               />
               <button

@@ -69,7 +69,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                 <i className="ri-mic-off-line text-foreground-300 text-xl"></i>
               </div>
               <p className="text-sm text-foreground-400">
-                {sessions.length === 0 ? t('还没有录音。去录一节课吧。') : t('未找到匹配的课程')}
+                {sessions.length === 0 ? t('暂无录音。请先录制一节课。') : t('未找到匹配的课程')}
               </p>
             </div>
           ) : (
@@ -100,7 +100,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                       title={t('查看这节课的转写全文')}
                     >
                       <i className="ri-file-text-line"></i>
-                      {t('查看转写')}
+                      {t('查查看转写')}
                     </button>
                     {/* Export recording: download the raw audio.wav directly */}
                     <a
