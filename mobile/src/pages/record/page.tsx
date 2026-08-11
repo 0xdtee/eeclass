@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveCaption } from '@/hooks/useLiveCaption';
 import { getAiDefault } from '@/lib/settings';
+import { TRANS_LANGS, type TransLang } from '@/lib/translateLangs';
 
 // Default subject tags from the national syllabus (ticked to give AI subject context for correction/translation)
 const NATIONAL_TAGS = [
@@ -28,7 +29,9 @@ export default function RecordPage() {
   const [title, setTitle] = useState(defaultTitle());
   const [aiCorrect, setAiCorrect] = useState(() => getAiDefault('aiCorrect'));
   const [smartSeg, setSmartSeg] = useState(() => getAiDefault('smartSeg'));
-  const [translateEn, setTranslateEn] = useState(() => getAiDefault('translateEn'));
+  const [model, setModel] = useState<'aliyun' | 'aliyun_wu' | 'aliyun_multi'>('aliyun');
+  const [translateFrom, setTranslateFrom] = useState<TransLang>('en');   // source (原文); off when from === to
+  const [translateTo, setTranslateTo] = useState<TransLang>('zh');       // target (译文)
   const [subjects, setSubjects] = useState<string[]>([]);
   const [showTags, setShowTags] = useState(false);
   const [justSaved, setJustSaved] = useState<string>('');
@@ -46,7 +49,7 @@ export default function RecordPage() {
 
   const onStart = () => {
     setJustSaved('');
-    void live.start({ title: title.trim() || defaultTitle(), aiCorrect, smartSeg, translateEn, subjects });
+    void live.start({ title: title.trim() || defaultTitle(), aiCorrect, smartSeg, model, translateFrom, translateTo, subjects });
   };
 
   const toggleTag = (t: string) =>
@@ -164,7 +167,41 @@ export default function RecordPage() {
         <div className="space-y-2">
           <Toggle on={aiCorrect} set={setAiCorrect} icon="ri-sparkling-line" label="AI 实时纠错" desc="出字后自动改同音错字" />
           <Toggle on={smartSeg} set={setSmartSeg} icon="ri-scissors-cut-line" label="AI 智能分句" desc="按语意把碎片合并成完整句" />
-          <Toggle on={translateEn} set={setTranslateEn} icon="ri-translate-2" label="英文自动翻译" desc="英文句下面加一行中文字幕" />
+        </div>
+
+        {/* Recognition model: cloud Mandarin/English, cloud dialects, or cloud multilingual */}
+        <div>
+          <label className="text-xs text-foreground-500">识别模型</label>
+          <div className="flex gap-1.5 mt-1.5">
+            {([['aliyun', '普通话/英语'], ['aliyun_wu', '方言'], ['aliyun_multi', '多语言']] as const).map(([v, l]) => (
+              <button key={v} onClick={() => setModel(v)}
+                className={`flex-1 px-3 py-2 rounded-xl text-xs border ${model === v ? 'bg-accent-500 text-white border-accent-500 font-medium' : 'bg-background-50 text-foreground-600 border-background-200'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {model === 'aliyun_multi' && (
+            <p className="text-[11px] text-foreground-400 mt-1.5">可识别法/德/意/西/俄/日/韩等,配合下方翻译出字幕</p>
+          )}
+        </div>
+
+        {/* Live translation: source (原文) ⇄ target (译文); off when equal */}
+        <div>
+          <label className="text-xs text-foreground-500">翻译字幕(左说的语言，右译成的语言，相同则不翻译)</label>
+          <div className="flex items-center gap-2 mt-1.5">
+            <select value={translateFrom} onChange={(e) => setTranslateFrom(e.target.value as TransLang)}
+              className="flex-1 px-3 py-2 rounded-xl bg-background-50 border border-background-200 text-sm focus:outline-none focus:border-accent-400">
+              {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+            <button onClick={() => { setTranslateFrom(translateTo); setTranslateTo(translateFrom); }}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-background-100 text-foreground-500 flex-shrink-0" title="交换原文和译文">
+              <i className="ri-arrow-left-right-line"></i>
+            </button>
+            <select value={translateTo} onChange={(e) => setTranslateTo(e.target.value as TransLang)}
+              className="flex-1 px-3 py-2 rounded-xl bg-background-50 border border-background-200 text-sm focus:outline-none focus:border-accent-400">
+              {TRANS_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          </div>
         </div>
 
         <div>

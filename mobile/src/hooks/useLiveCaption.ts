@@ -65,10 +65,12 @@ export interface AiSummary {
 export interface StartOptions {
   title?: string | null;
   sensitivity?: 'std' | 'high' | 'max';
-  model?: 'sensevoice' | 'paraformer' | 'stream';
+  model?: 'sensevoice' | 'paraformer' | 'stream' | 'aliyun' | 'aliyun_wu' | 'aliyun_multi';
   aiCorrect?: boolean;
   smartSeg?: boolean;
-  translateEn?: boolean;
+  /** Live translation: source (原文) and target (译文) language codes; off when equal */
+  translateFrom?: string;
+  translateTo?: string;
   subjects?: string[];
   appendSid?: string | null;
 }
@@ -312,7 +314,14 @@ export function useLiveCaption() {
     } catch (e) {
       setStarting(false); setError(e instanceof Error ? e.message : String(e)); return;
     }
-    const model = opts.model ?? 'sensevoice';
+    const model = opts.model ?? 'aliyun';
+    // Map the picked model to a backend: cloud Mandarin/English, cloud dialects, cloud multilingual (Gummy), or a local model.
+    const backend =
+      model === 'stream' ? 'zipformer'
+      : model === 'aliyun' ? 'aliyun_paraformer'
+      : model === 'aliyun_wu' ? 'aliyun_funasr'
+      : model === 'aliyun_multi' ? 'aliyun_gummy'
+      : model;
     send({
       cmd: 'start',
       title: opts.title ?? null,
@@ -320,11 +329,12 @@ export function useLiveCaption() {
       loopback: false,
       to_word: false,
       vad: SENS[opts.sensitivity ?? 'high'],
-      backend: model === 'stream' ? 'zipformer' : model,
+      backend,
       streaming: model === 'stream',
       ai_correct: !!opts.aiCorrect,
       smart_seg: opts.smartSeg !== false,
-      translate_en: opts.translateEn !== false,
+      translate_from: opts.translateFrom ?? 'en',   // live translation source (原文)
+      translate_to: opts.translateTo ?? 'zh',       // live translation target (译文); off when equal
       subjects: opts.subjects ?? [],
       append_sid: opts.appendSid ?? null,
     });
