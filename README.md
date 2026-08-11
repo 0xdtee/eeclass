@@ -58,16 +58,17 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - 🧬 **A voiceprint library that recognizes people** — name someone once and future recordings of the same voice are recognized automatically; each person is stored once, and renaming propagates **back across all past classes**.
 - 🧠 **Course-level AI** — beyond per-class summaries, it **aggregates a whole course's classes into a grand summary**, predicts exam points (with a share pie chart), and generates a mock paper.
 - 📱 **One codebase, many devices** — web app + native iPad app (Capacitor), from the single `mobile/` source.
-- 🌏 **Multilingual + auto-translation** — zh/en/ja/ko/yue recognition; English lines get a Chinese subtitle underneath automatically.
+- 🌏 **Multilingual recognition + live translation** — recognizes Chinese (plus 16 dialects), English, French, German, Italian, Spanish, Russian, Japanese and Korean; add a translated caption line between any two of 9 languages with a **source ⇄ target picker** (recognition on a continuous cloud stream, translation via the LLM).
 - 🏠 **Open source (MIT), self-hosted** — runs on one ordinary machine + a LAN.
 - 📖 **Built-in animated manual** — every feature ships with a CSS-animated demo + step-by-step guide; zero learning curve.
 
 ## Features
 
-- **Real-time transcription** — streaming captions with punctuation, CPU-only (sherpa-onnx SenseVoice, ~0.05 RTF).
+- **Real-time transcription** — streaming captions with punctuation, CPU-only (sherpa-onnx SenseVoice, ~0.05 RTF). Optional cloud recognition (Alibaba Cloud) adds Mandarin/English, 16 Chinese dialects (auto-converted to Mandarin), and a continuous-streaming multilingual model (fr/de/it/es/ru/ja/ko + zh/en).
 - **Speaker separation + voiceprint library** — tells speakers apart on the fly; name a person once and future recordings recognize the same voice. Same person is stored once (deduplicated), and renaming propagates back across past classes.
 - **Highlight detection** — auto-marks key points, definitions and formulas the teacher stresses.
-- **AI assist (via DeepSeek, optional)** — homophone correction, smart sentence segmentation, English→Chinese subtitles, per-class summary, whole-course grand summary, exam-point prediction, mock exam, flashcards / quiz, and "ask the lecture" Q&A.
+- **Live translation** — attach a translated caption line under each sentence, any direction among 9 languages (Chinese/English/French/German/Italian/Spanish/Russian/Japanese/Korean) via a source ⇄ target picker; the default follows the interface language.
+- **AI assist (via DeepSeek, optional)** — homophone correction, smart sentence segmentation, dialect-to-Mandarin polish, per-class summary (in the interface language), whole-course grand summary, exam-point prediction, mock exam, flashcards / quiz, and "ask the lecture" Q&A.
 - **Board capture** — snap the blackboard/slide; shots are aligned to the timeline.
 - **Accounts & access** — real login (pbkdf2), strict per-account data isolation, admin-only voiceprint management, read-only share links.
 - **Export** — PDF export; live write-into-Word via an Office add-in (Windows only).
@@ -79,11 +80,12 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 ```
 Web / iPad app / Word add-in ──WSS──►  Python backend (aiohttp, HTTPS :5901)
                                         ├─ sherpa-onnx SenseVoice   (ASR, CPU)
+                                        ├─ Alibaba Cloud DashScope  (ASR, optional: dialects / multilingual streaming)
                                         ├─ silero VAD               (segmentation)
                                         ├─ 3D-Speaker eres2netv2    (voiceprints)
                                         ├─ PostgreSQL   (accounts / sessions / class metadata)
                                         ├─ records/     (audio / transcripts / board shots, files)
-                                        └─ DeepSeek API (text only, optional)
+                                        └─ DeepSeek API (text + translation, optional)
 ```
 
 - **Frontend / mobile** — React 19 + Vite + TypeScript + Tailwind (`frontend/` desktop web, `mobile/` mobile); `mobile/` builds both the web `/m` app and, via Capacitor, the native iPad app.
