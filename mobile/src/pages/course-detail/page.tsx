@@ -214,7 +214,7 @@ export default function CourseDetailPage() {
         <i className="ri-magic-line text-accent-600 text-2xl"></i>
       </div>
       <p className="text-sm text-foreground-600 mb-1">《{name}》暂无课堂录音</p>
-      <p className="text-xs text-foreground-400 mb-5 max-w-xs">可以让 AI 仅凭这门课的通用大纲和常见{kind}先生成一份参考;之后录了课再"重新生成"会更贴合你老师讲的内容。</p>
+      <p className="text-xs text-foreground-400 mb-5 max-w-xs">可以让 AI 仅凭这门课的通用大纲和常见{kind}先生成一份参考;录制课程后再重新生成,会更贴合任课老师讲授的内容。</p>
       <button onClick={onGen} className="flex items-center gap-1.5 px-5 py-2.5 bg-accent-500 text-background-50 rounded-full text-sm font-semibold hover:bg-accent-600 cursor-pointer">
         <i className="ri-sparkling-line"></i>纯 AI 生成{kind}
       </button>
@@ -312,7 +312,7 @@ export default function CourseDetailPage() {
         {/* ===== Recordings ===== */}
         {tab === 'audio' && (
           courseSessions.length === 0 ? (
-            <p className="text-sm text-foreground-400 py-14 text-center">这门课还没有录音。</p>
+            <p className="text-sm text-foreground-400 py-14 text-center">本课程暂无录音。</p>
           ) : (
             <div className="space-y-3">
               {courseSessions.map((s) => (
@@ -380,7 +380,7 @@ export default function CourseDetailPage() {
 
                   {exam.points[sel].refs && exam.points[sel].refs!.length > 0 && (
                     <div className="mt-4 border-t border-background-100 pt-3">
-                      <p className="text-xs font-semibold text-foreground-500 mb-2"><i className="ri-mic-line mr-1"></i>老师讲到这个考点的录音片段(点击听)</p>
+                      <p className="text-xs font-semibold text-foreground-500 mb-2"><i className="ri-mic-line mr-1"></i>老师讲到该考点的录音片段(点击收听)</p>
                       <div className="space-y-1.5">
                         {exam.points[sel].refs!.map((r, i) => {
                           const key = `${sel}-${i}`;

@@ -56,7 +56,7 @@ export default function RecordPage() {
     setSubjects((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
 
   const renameSpeaker = (id: number, cur: string) => {
-    const name = window.prompt('这个说话人是谁?', /^(老师|同学\d+)$/.test(cur) ? '' : cur);
+    const name = window.prompt('请为该说话人命名', /^(老师|同学\d+)$/.test(cur) ? '' : cur);
     if (name && name.trim()) live.rename(id, name.trim());
   };
 
@@ -84,7 +84,7 @@ export default function RecordPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-              <span className="text-sm font-semibold text-foreground-900">{live.starting ? '正在开麦…' : '录音中'}</span>
+              <span className="text-sm font-semibold text-foreground-900">{live.starting ? '正在开启麦克风…' : '录音中'}</span>
               <span className="text-sm text-foreground-400 font-mono">{fmtTime(live.status.elapsed)}</span>
             </div>
             <span className="text-xs text-foreground-400">{live.status.lines} 句</span>
@@ -104,7 +104,7 @@ export default function RecordPage() {
 
         <div ref={boxRef} className="flex-1 overflow-y-auto px-5 pb-4 space-y-3">
           {live.lines.length === 0 && !live.partial && (
-            <p className="text-sm text-foreground-400 italic mt-6">已开麦,等待第一句话…</p>
+            <p className="text-sm text-foreground-400 italic mt-6">麦克风已开启,等待第一句话…</p>
           )}
           {live.lines.map((l) => (
             <div key={l.id} className={l.new_para ? 'pt-1' : ''}>
@@ -130,7 +130,7 @@ export default function RecordPage() {
             <span className="text-[11px]">{live.paused ? '继续' : '暂停'}</span>
           </button>
           <button onClick={() => live.mark()} className="flex flex-col items-center gap-1 text-yellow-600 w-16">
-            <i className="ri-star-fill text-2xl"></i><span className="text-[11px]">标重点</span>
+            <i className="ri-star-fill text-2xl"></i><span className="text-[11px]">标记重点</span>
           </button>
           <button onClick={() => live.stop()}
             className="flex flex-col items-center gap-1 text-red-600 w-16">
@@ -153,7 +153,7 @@ export default function RecordPage() {
         <div className="mt-4 flex items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
           <span className="text-sm text-green-800"><i className="ri-checkbox-circle-fill mr-1"></i>{live.notice}</span>
           <button onClick={() => navigate(`/summary/${encodeURIComponent(justSaved)}`)}
-            className="px-3 py-1.5 bg-accent-500 text-white rounded-full text-xs font-semibold whitespace-nowrap">看摘要</button>
+            className="px-3 py-1.5 bg-accent-500 text-white rounded-full text-xs font-semibold whitespace-nowrap">查看摘要</button>
         </div>
       )}
 
@@ -165,8 +165,8 @@ export default function RecordPage() {
         </div>
 
         <div className="space-y-2">
-          <Toggle on={aiCorrect} set={setAiCorrect} icon="ri-sparkling-line" label="AI 实时纠错" desc="出字后自动改同音错字" />
-          <Toggle on={smartSeg} set={setSmartSeg} icon="ri-scissors-cut-line" label="AI 智能分句" desc="按语意把碎片合并成完整句" />
+          <Toggle on={aiCorrect} set={setAiCorrect} icon="ri-sparkling-line" label="AI 实时纠错" desc="出字后自动纠正同音错字" />
+          <Toggle on={smartSeg} set={setSmartSeg} icon="ri-scissors-cut-line" label="AI 智能分句" desc="按语义将碎片合并为完整句" />
         </div>
 
         {/* Recognition model: cloud Mandarin/English, cloud dialects, or cloud multilingual */}
@@ -181,13 +181,13 @@ export default function RecordPage() {
             ))}
           </div>
           {model === 'aliyun_multi' && (
-            <p className="text-[11px] text-foreground-400 mt-1.5">可识别法/德/意/西/俄/日/韩等,配合下方翻译出字幕</p>
+            <p className="text-[11px] text-foreground-400 mt-1.5">可识别法/德/意/西/俄/日/韩等语言,配合下方翻译生成字幕</p>
           )}
         </div>
 
         {/* Live translation: source (原文) ⇄ target (译文); off when equal */}
         <div>
-          <label className="text-xs text-foreground-500">翻译字幕(左说的语言，右译成的语言，相同则不翻译)</label>
+          <label className="text-xs text-foreground-500">翻译字幕(左侧为源语言，右侧为目标语言，相同则不翻译)</label>
           <div className="flex items-center gap-2 mt-1.5">
             <select value={translateFrom} onChange={(e) => setTranslateFrom(e.target.value as TransLang)}
               className="flex-1 px-3 py-2 rounded-xl bg-background-50 border border-background-200 text-sm focus:outline-none focus:border-accent-400">
@@ -232,7 +232,7 @@ export default function RecordPage() {
         </button>
         <span className="mt-3 text-sm text-foreground-500">点击开始录音</span>
         <p className="mt-4 text-[11px] text-foreground-400 text-center max-w-xs leading-relaxed">
-          录音、识别、说话人区分都在你自己的服务器上完成,音频不上传第三方。
+          录音、识别、说话人区分均在你自己的服务器上完成,音频不会上传至第三方。
         </p>
       </div>
     </div>

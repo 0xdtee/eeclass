@@ -60,7 +60,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
 
         <div className="flex items-center gap-2 px-1 mb-3">
           <i className="ri-information-line text-foreground-300 text-xs"></i>
-          <p className="text-[11px] text-foreground-300">点播放条即可听这节课的原始录音;可拖动进度、变速。</p>
+          <p className="text-[11px] text-foreground-300">点击播放条即可收听本节课的原始录音;可拖动进度、调整倍速。</p>
         </div>
 
         {/* Recording list */}

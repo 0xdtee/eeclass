@@ -75,7 +75,7 @@ export default function SessionDetailPage() {
             <div className="w-12 h-12 flex items-center justify-center bg-background-100 rounded-xl mb-3">
               <i className="ri-file-text-line text-foreground-300 text-xl"></i>
             </div>
-            <p className="text-sm text-foreground-400">这节课还没有转写内容</p>
+            <p className="text-sm text-foreground-400">本节课暂无转写内容</p>
           </div>
         )}
 

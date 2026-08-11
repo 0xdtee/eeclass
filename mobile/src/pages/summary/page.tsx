@@ -29,7 +29,7 @@ export default function SummaryPage() {
   const handleGenerate = async () => {
     if (!sid || !detail) return;
     if (!detail.transcription.length) {
-      setGenError('这节课还没有转写内容，无法生成摘要');
+      setGenError('本节课暂无转写内容，无法生成摘要');
       return;
     }
     setGenerating(true);
@@ -46,7 +46,7 @@ export default function SummaryPage() {
       });
       const keyPoints = [
         ...(ai.key_points ?? []),
-        ...(ai.exam_hints ?? []).map((x) => `【老师说要考】${x}`),
+        ...(ai.exam_hints ?? []).map((x) => `【老师强调考点】${x}`),
         ...(ai.formulas ?? []).map((x) => `【公式/定理】${x}`),
         ...(ai.questions ?? []).map((x) => `【课堂问答】${x}`),
       ];

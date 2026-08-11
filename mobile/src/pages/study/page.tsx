@@ -39,7 +39,7 @@ export default function StudyPage() {
           {sessLoading ? (
             <div className="mt-1 h-11 rounded-xl bg-background-100 animate-pulse" />
           ) : sessions.length === 0 ? (
-            <p className="mt-1 text-sm text-foreground-400">还没有课时,先去录一节课吧</p>
+            <p className="mt-1 text-sm text-foreground-400">还没有课时,请先录制一节课</p>
           ) : (
             <select
               value={sid}
@@ -100,7 +100,7 @@ export default function StudyPage() {
               <i className="ri-brain-line text-primary-600 text-2xl"></i>
             </div>
             <p className="text-sm text-foreground-400 max-w-xs leading-relaxed">
-              选好课时,点上面的「闪卡」或「自测题」,AI 会根据这节课的内容出题。
+              选择课时后,点击上方的「闪卡」或「自测题」,AI 会根据本节课内容出题。
             </p>
           </div>
         )}
@@ -121,7 +121,7 @@ export default function StudyPage() {
 
 function FlashcardDeck({ cards }: { cards: { front: string; back: string; ts: string }[] }) {
   if (!cards || cards.length === 0) {
-    return <p className="text-sm text-foreground-400 text-center py-8">这节课没有生成闪卡</p>;
+    return <p className="text-sm text-foreground-400 text-center py-8">本节课暂未生成闪卡</p>;
   }
   return (
     <div className="space-y-3">
@@ -153,7 +153,7 @@ function Flashcard({ card }: { card: { front: string; back: string; ts: string }
 
 function QuizList({ items }: { items: { question: string; options: string[]; answer: number; why: string; ts: string }[] }) {
   if (!items || items.length === 0) {
-    return <p className="text-sm text-foreground-400 text-center py-8">这节课没有生成自测题</p>;
+    return <p className="text-sm text-foreground-400 text-center py-8">本节课暂未生成自测题</p>;
   }
   return (
     <div className="space-y-4">

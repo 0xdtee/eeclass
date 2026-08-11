@@ -236,12 +236,12 @@ export default function ProfilePage() {
                 <i className="ri-close-line text-foreground-400"></i>
               </button>
             </div>
-            <p className="text-xs text-foreground-400 mb-3">新录音默认用这套开关,录音页仍可临时改。</p>
+            <p className="text-xs text-foreground-400 mb-3">新录音默认采用以上开关设置,录音页仍可临时调整。</p>
             <div className="space-y-2">
               <AiSwitch on={aiCorrect} set={() => toggleAiDefault('aiCorrect', aiCorrect, setAiCorrect)}
-                icon="ri-sparkling-line" label="AI 实时纠错" desc="出字后自动改同音错字" />
+                icon="ri-sparkling-line" label="AI 实时纠错" desc="出字后自动纠正同音错字" />
               <AiSwitch on={smartSeg} set={() => toggleAiDefault('smartSeg', smartSeg, setSmartSeg)}
-                icon="ri-scissors-cut-line" label="AI 智能分句" desc="按语意把碎片合并成完整句" />
+                icon="ri-scissors-cut-line" label="AI 智能分句" desc="按语义将碎片合并为完整句" />
               <AiSwitch on={translateEn} set={() => toggleAiDefault('translateEn', translateEn, setTranslateEn)}
                 icon="ri-translate-2" label="英文自动翻译" desc="英文句下面加一行中文字幕" />
             </div>
@@ -351,7 +351,7 @@ export default function ProfilePage() {
                 <span>{MIC_GAIN_MAX.toFixed(1)}×</span>
               </div>
               <p className="text-xs text-foreground-400 leading-relaxed">
-                声音太小听不清就调高,爆音/太吵就调低。改动下次开麦生效。
+                声音太小听不清时可调高,音量过大或环境嘈杂时调低。调整将在下次开启麦克风时生效。
               </p>
             </div>
           </div>

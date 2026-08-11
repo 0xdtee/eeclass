@@ -129,7 +129,7 @@ export function useLiveCaption() {
 
   const startMic = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('这个浏览器不给用麦克风。页面必须用 https 打开才有麦克风权限。');
+      throw new Error('当前浏览器无法使用麦克风。请通过 https 打开页面以获取麦克风权限。');
     }
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
@@ -212,7 +212,7 @@ export function useLiveCaption() {
       if (!ev.wasClean && ev.code === 1006 && getToken() === '') { setAuthFailed(true); clearToken(); }
       if (aliveRef.current) retryRef.current = setTimeout(connect, 3000);
     };
-    ws.onerror = () => setError('连不上字幕服务。确认后端在跑、用的是 https 且证书已信任。');
+    ws.onerror = () => setError('无法连接字幕服务。请确认后端已启动、使用 https 访问且证书已受信任。');
 
     ws.onmessage = (ev) => {
       if (typeof ev.data !== 'string') return;

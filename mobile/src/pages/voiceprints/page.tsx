@@ -65,7 +65,7 @@ export default function VoiceprintsPage() {
               <i className="ri-fingerprint-line text-primary-600 text-2xl"></i>
             </div>
             <p className="text-sm text-foreground-400 max-w-xs leading-relaxed">
-              声纹库还是空的。在课时详情里给说话人命名后，其声纹会自动入库。
+              声纹库暂为空。在课时详情中为说话人命名后，其声纹会自动入库。
             </p>
           </div>
         )}

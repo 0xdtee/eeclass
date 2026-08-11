@@ -77,7 +77,7 @@ const CATEGORIES: Category[] = [
       {
         icon: 'ri-camera-line',
         name: '拍板书',
-        desc: '录制中随手拍下当前板书 / PPT,截图与转写的时间点一一对应保存。复习时对照文字与画面一起看,不漏黑板上的推导。',
+        desc: '录制中即可拍下当前板书 / PPT,截图与转写的时间点一一对应保存。复习时可对照文字与画面一起查看,不遗漏黑板上的推导。',
         route: '/record',
         demo: 'photo',
         steps: [
@@ -92,7 +92,7 @@ const CATEGORIES: Category[] = [
     id: 'ai',
     label: 'AI 智能功能',
     icon: 'ri-sparkling-2-line',
-    intro: '借助 DeepSeek 让字幕更准、更好读,并把一节课自动整理成可复习的知识。',
+    intro: '借助 DeepSeek 让字幕更准确、更易读,并将一节课自动整理成可复习的知识。',
     features: [
       {
         icon: 'ri-eraser-line',
@@ -102,7 +102,7 @@ const CATEGORIES: Category[] = [
         demo: 'correction',
         steps: [
           '录制中开启「AI 实时纠错」(或在「我的」设置里设为默认)。',
-          '字幕先按原样快速出现,保证不卡顿。',
+          '字幕先按原样快速显示,确保流畅不卡顿。',
           'DeepSeek 在后台校对,几秒后把同音错字替换为正确写法。',
         ],
       },
@@ -121,7 +121,7 @@ const CATEGORIES: Category[] = [
       {
         icon: 'ri-translate-2',
         name: '英文自动翻译',
-        desc: '识别到英文句(或上英语课)时,在该句下面自动补一行中文字幕,中英对照,听不懂的地方立刻看懂。',
+        desc: '识别到英文句子(或英语课)时,在该句下方自动补一行中文字幕,中英对照,遇到听不懂的内容也能即时理解。',
         route: '/record',
         demo: 'translate',
         steps: [
@@ -145,7 +145,7 @@ const CATEGORIES: Category[] = [
       {
         icon: 'ri-book-read-line',
         name: '复习闪卡与自测',
-        desc: '用这节课内容生成问答闪卡(带艾宾浩斯遗忘曲线排期)与自测题,点卡片翻面看答案;还能拿本课内容直接追问 DeepSeek。',
+        desc: '基于本节课内容生成问答闪卡(带艾宾浩斯遗忘曲线排期)与自测题,点击卡片翻面查看答案;还可就本课内容直接追问 DeepSeek。',
         route: '/courses',
         cta: '前往课程',
         demo: 'flashcard',
@@ -269,7 +269,7 @@ const CATEGORIES: Category[] = [
       {
         icon: 'ri-sparkling-line',
         name: 'AI 处理默认项',
-        desc: '设置每次开录音默认开启哪些 AI 处理:实时纠错、智能分句、英文翻译,一次设好每次省心。',
+        desc: '设置每次录音默认开启哪些 AI 处理:实时纠错、智能分句、英文翻译,一次设置,后续自动沿用。',
         route: '/profile',
         cta: '前往设置',
         demo: 'toggle',
@@ -319,7 +319,7 @@ export default function HelpPage() {
           <i className="ri-book-2-line text-accent-500"></i>使用说明
         </h1>
         <p className="text-xs md:text-sm text-foreground-400 mt-1">
-          每个功能都配有动态演示、详细说明和操作步骤,点「前往使用」直接跳到对应页面。
+          每个功能均配有动态演示、详细说明与操作步骤,点击「前往使用」即可跳转至对应页面。
         </p>
       </div>
 
