@@ -57,7 +57,7 @@ eeclass 是一套课堂转写与 AI 笔记系统。老师在台上讲,它实时�
 - ⚡ **纯 CPU 实时** —— ASR、说话人、声纹都在 CPU 上跑(sherpa-onnx SenseVoice,RTF≈0.05),不需要 GPU,一台普通机器就能带。
 - 🧬 **声纹库会"认人"** —— 给某人起一次名字,以后录到同一个声音自动认出;同一个人只存一份,改名会**回溯更新过去所有课**。
 - 🧠 **课程级 AI** —— 不只单节摘要,还能把一整门课的多节课**聚合成大总结**,并预测考点(带占比饼图)、生成模拟卷。
-- 📱 **多端一套** —— 网页版 + iPad 原生 App(Capacitor 打包),同一份 `mobile/` 源码。
+- 📱 **网页 + iPad 原生 App** —— 手机/iPad 客户端(网页 `/m` + Capacitor 打包的 iPad App)在独立仓库 [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile)。
 - 🌏 **多语种识别 + 实时翻译** —— 识别中文(含 16 种方言)、英、法、德、意、西、俄、日、韩;可在 9 种语言间任意方向加一行翻译字幕,用**「原文 ⇄ 译文」下拉**选择(识别走持续云端流,翻译走大模型)。
 - 🏠 **开源(MIT)、自托管** —— 一台普通机器 + 局域网即可跑起来。
 - 📖 **内置动态说明书** —— 每个功能配 CSS 动画演示 + 操作步骤,上手零门槛。
@@ -88,7 +88,7 @@ eeclass 是一套课堂转写与 AI 笔记系统。老师在台上讲,它实时�
                                         └─ DeepSeek API (文本 + 翻译,可选)
 ```
 
-- **前端 / 移动端** —— React 19 + Vite + TypeScript + Tailwind(`frontend/` 桌面网页、`mobile/` 移动端);`mobile/` 既构建成网页 `/m`,也用 Capacitor 打包成 iPad 原生 App。
+- **前端** —— React 19 + Vite + TypeScript + Tailwind(`frontend/` 桌面网页)。手机/iPad 客户端在独立仓库 [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile),它既构建成网页 `/m`,也用 Capacitor 打包成 iPad 原生 App。
 - **后端** —— Python + aiohttp(`backend/service/`)。账号、登录会话、课程元数据存 PostgreSQL;音频、逐句转写、板书图片存 `records/` 文件、被库引用。
 - **Word 加载项** —— Office.js 任务窗格(`backend/addin/`,仅 Windows)。
 
@@ -150,8 +150,9 @@ npm run dev
 
 ```bash
 cd frontend && BASE_PATH=/app/ npm run build     # 桌面版 → out/
-cd mobile   && BASE_PATH=/     npm run build      # 移动版 → out/(供 /m 与 iPad App)
 ```
+
+移动版 `/m` 由独立仓库 [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile) 构建(`BASE_PATH=/ npm run build`),把它的 `out/` 放到后端提供 `/m` 的位置即可。
 
 后端随后在 **https://localhost:5901/app/course** 提供网页版,在 `/m` 提供移动版。同一 Wi-Fi 下,手机/平板可开 `https://<局域网IP>:5901/app/course`(自签证书,接受警告即可)。开启 `server.require_token` 后需令牌访问。
 
@@ -166,7 +167,7 @@ cd mobile   && BASE_PATH=/     npm run build      # 移动版 → out/(供 /m �
 
 ```
 frontend/                  桌面网页前端(React + Vite + TS + Tailwind)
-mobile/                    移动端(同栈;构建成网页 /m + Capacitor 打包 iPad App)
+                           (手机/iPad 客户端 → 独立仓库 0xdtee/eeclass-mobile)
 backend/
   service/                   后端(Python,aiohttp,sherpa-onnx,PostgreSQL,DeepSeek)
     config.example.json      复制成 config.json 再改

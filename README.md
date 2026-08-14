@@ -57,7 +57,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - ⚡ **CPU-only, real-time** — ASR, speaker separation and voiceprints all run on CPU (sherpa-onnx SenseVoice, RTF ≈ 0.05); no GPU needed, an ordinary machine handles it.
 - 🧬 **A voiceprint library that recognizes people** — name someone once and future recordings of the same voice are recognized automatically; each person is stored once, and renaming propagates **back across all past classes**.
 - 🧠 **Course-level AI** — beyond per-class summaries, it **aggregates a whole course's classes into a grand summary**, predicts exam points (with a share pie chart), and generates a mock paper.
-- 📱 **One codebase, many devices** — web app + native iPad app (Capacitor), from the single `mobile/` source.
+- 📱 **Web + native iPad app** — the phone/iPad client (web `/m` + Capacitor iPad app) lives in its own repo, [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile).
 - 🌏 **Multilingual recognition + live translation** — recognizes Chinese (plus 16 dialects), English, French, German, Italian, Spanish, Russian, Japanese and Korean; add a translated caption line between any two of 9 languages with a **source ⇄ target picker** (recognition on a continuous cloud stream, translation via the LLM).
 - 🏠 **Open source (MIT), self-hosted** — runs on one ordinary machine + a LAN.
 - 📖 **Built-in animated manual** — every feature ships with a CSS-animated demo + step-by-step guide; zero learning curve.
@@ -88,7 +88,7 @@ Web / iPad app / Word add-in ──WSS──►  Python backend (aiohttp, HTTPS 
                                         └─ DeepSeek API (text + translation, optional)
 ```
 
-- **Frontend / mobile** — React 19 + Vite + TypeScript + Tailwind (`frontend/` desktop web, `mobile/` mobile); `mobile/` builds both the web `/m` app and, via Capacitor, the native iPad app.
+- **Frontend** — React 19 + Vite + TypeScript + Tailwind (`frontend/`, desktop web). The phone/iPad client is a separate repo, [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile), which builds the web `/m` app and, via Capacitor, the native iPad app.
 - **Backend** — Python + aiohttp (`backend/service/`). Accounts, sessions and class metadata live in PostgreSQL; audio, per-line transcripts and board shots are files under `records/`, referenced by the DB.
 - **Word add-in** — Office.js task pane (`backend/addin/`), Windows only.
 
@@ -150,8 +150,9 @@ Open **http://localhost:3000/course**. The frontend auto-detects dev mode and ta
 
 ```bash
 cd frontend && BASE_PATH=/app/ npm run build     # desktop → out/
-cd mobile   && BASE_PATH=/     npm run build      # mobile  → out/ (serves /m and the iPad app)
 ```
+
+The mobile `/m` app is built from the separate [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile) repo (`BASE_PATH=/ npm run build`); drop its `out/` where the backend serves `/m`.
 
 The backend then serves the desktop app at **https://localhost:5901/app/course** and the mobile app at `/m`. On the same Wi-Fi, phones/tablets can open `https://<your-LAN-ip>:5901/app/course` (self-signed cert — accept the warning). Access is gated by a token when `server.require_token` is on.
 
@@ -166,7 +167,7 @@ The backend then serves the desktop app at **https://localhost:5901/app/course**
 
 ```
 frontend/                  Desktop web frontend (React + Vite + TS + Tailwind)
-mobile/                    Mobile app (same stack; builds web /m + Capacitor iPad app)
+                           (mobile/iPad client → separate repo: 0xdtee/eeclass-mobile)
 backend/
   service/                   Backend (Python, aiohttp, sherpa-onnx, PostgreSQL, DeepSeek)
     config.example.json      Copy to config.json and edit
