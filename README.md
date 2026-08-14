@@ -100,6 +100,8 @@ Web / iPad app / Word add-in ──WSS──►  Python backend (aiohttp, HTTPS 
 
 ## Quick start
 
+> 📖 For a full walkthrough (install · configure · use), see [docs/安装配置使用.md](docs/安装配置使用.md).
+
 ### macOS
 
 ```bash
