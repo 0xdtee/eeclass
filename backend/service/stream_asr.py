@@ -378,3 +378,55 @@ class GummyStreamingASR:
             return None
         text = " ".join(i[0] for i in items)
         return self._finish(text, items[0][1], items[-1][2])
+
+
+class ParaformerStreamingASR(GummyStreamingASR):
+    """Streaming Mandarin recognition via DashScope paraformer-realtime-v2.
+
+    Same continuous-stream design as GummyStreamingASR (one realtime stream kept open for the whole session,
+    live interim partials + self-marked sentence ends) but Mandarin-only and no translation. It replaces the
+    old per-VAD-segment one-shot Recognition.call() path, which only emitted a whole sentence after each pause
+    (batchy, high latency). Only _open() differs — push()/flush()/slicing/speaker-id windowing are inherited.
+    """
+    _model = "paraformer-realtime-v2"
+
+    def _open(self):
+        from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
+        outer = self
+        model = self._model
+
+        class _CB(RecognitionCallback):
+            def on_event(self, result):
+                try:
+                    sentence = result.get_sentence()
+                except Exception:
+                    return
+                if not sentence or not isinstance(sentence, dict):
+                    return
+                text = (sentence.get("text") or "").strip()
+                if not text:
+                    return
+                if RecognitionResult.is_sentence_end(sentence):
+                    outer._q.put((text, sentence.get("begin_time"), sentence.get("end_time")))
+                else:
+                    # interim result -> live preview (thread-safe emit downstream)
+                    if outer.on_partial and text != outer._last_partial:
+                        outer._last_partial = text
+                        outer.partial = text
+                        outer.on_partial(text)
+
+            def on_error(self, result):
+                outer._closed = True
+
+            def on_close(self):
+                outer._closed = True
+
+        # Segmentation: break on PAUSES (max_sentence_silence ~1s) rather than pure semantics -- pure semantic
+        # mode over-merges into run-on sentences, while a short silence threshold chops into fragments.
+        # ~1000ms end-of-sentence silence gives natural pause-based breaks; intra-sentence punctuation (commas)
+        # is still added, so the effect combines pause timing with meaning.
+        self._r = Recognition(model=model, callback=_CB(), format="pcm", sample_rate=SR,
+                              semantic_punctuation_enabled=False, max_sentence_silence=1000)
+        self._r.start()
+        self._stream_base = self.samples   # this stream's timestamps are relative to audio sent from here on
+        self._closed = False

@@ -23,6 +23,7 @@ import db
 _ITERS = 600_000                   # OWASP-current for pbkdf2-hmac-sha256; each hash stores its own iter
                                    # count, so existing 200k hashes still verify and re-hash on next change
 _SESSION_TTL = 30 * 86400          # sessions expire after 30 days
+_DELETE_COOLDOWN = 3 * 86400       # a deleted account's email can't re-register for 3 days
 
 
 def _hash_pw(pw: str, salt: bytes = None) -> str:
@@ -62,6 +63,9 @@ class Accounts:
             raise ValueError("邮箱格式不对")
         if len((password or "")) < 6:
             raise ValueError("密码至少 6 位")
+        msg = self.cooldown_error(email)
+        if msg:
+            raise ValueError(msg)
         name = (name or email.split("@")[0]).strip()
         role = role or "user"
         pw = _hash_pw(password)
@@ -143,3 +147,59 @@ class Accounts:
         with db.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM auth_sessions WHERE token = %s", (token,))
+
+    def verify(self, email, password):
+        """Check an account's password (used to confirm irreversible actions like account deletion)."""
+        email = self._norm(email)
+        with db.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pw FROM accounts WHERE email = %s", (email,))
+                row = cur.fetchone()
+        return bool(row and _verify_pw(password or "", row[0]))
+
+    def delete(self, email):
+        """Permanently remove an account and all its login sessions. Callers must delete the
+        account's on-disk data (recordings, tags, settings, voiceprints...) separately."""
+        email = self._norm(email)
+        if not email:
+            return
+        with db.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM auth_sessions WHERE email = %s", (email,))
+                cur.execute("DELETE FROM accounts WHERE email = %s", (email,))
+                # remember the deletion time so this email can't immediately re-register
+                cur.execute(
+                    "INSERT INTO deleted_emails (email, deleted_at) VALUES (%s, %s) "
+                    "ON CONFLICT (email) DO UPDATE SET deleted_at = EXCLUDED.deleted_at",
+                    (email, time.time()))
+
+    def cooldown_left(self, email):
+        """Seconds left before a just-deleted email may register again (0 if none / expired)."""
+        email = self._norm(email)
+        if not email:
+            return 0
+        with db.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT deleted_at FROM deleted_emails WHERE email = %s", (email,))
+                row = cur.fetchone()
+        if not row or not row[0]:
+            return 0
+        left = _DELETE_COOLDOWN - (time.time() - row[0])
+        return left if left > 0 else 0
+
+    @staticmethod
+    def _fmt_left(secs):
+        secs = int(secs)
+        d, h = secs // 86400, (secs % 86400) // 3600
+        if d and h:
+            return f"{d} 天 {h} 小时"
+        if d:
+            return f"{d} 天"
+        return f"{max(1, h)} 小时"
+
+    def cooldown_error(self, email):
+        """Friendly error string if the email is still in its post-deletion cooldown, else None."""
+        left = self.cooldown_left(email)
+        if left <= 0:
+            return None
+        return f"该邮箱已注销,3 天内无法重新注册(还需约 {self._fmt_left(left)})"

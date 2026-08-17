@@ -102,6 +102,7 @@ class SpeakerID:
     # ---- online clustering ----
     def identify(self, audio):
         """Return (speaker_index, confidence). Index starts at 0."""
+        self.last_emb = None    # this utterance's raw voiceprint (None if too short) -- collected for post-hoc re-clustering
         if not self.enabled or self.ex is None:
             return 0, 0.0
         if audio.size < self.min_samples:
@@ -111,6 +112,7 @@ class SpeakerID:
             emb = self.embed(audio)
         except Exception:
             return self.last_id, 0.0
+        self.last_emb = emb
 
         dur = audio.size / SR
         if not self.centroids:
@@ -209,6 +211,23 @@ class SpeakerID:
             return None
         return self.centroids[idx].copy()
 
+    def add_speaker(self, emb, dur=0.0):
+        """Force a brand-new speaker centroid from this embedding and return its index. Used by the overlap-separation
+        path to guarantee the two simultaneously-speaking streams are kept as two distinct speakers, even when their
+        (separation-artifacted) voiceprints look similar to the online clusterer."""
+        if emb is None:
+            return self.last_id
+        self._add(emb, dur)
+        return len(self.centroids) - 1
+
+    def lib_sim(self, emb, name):
+        """Cosine similarity of `emb` to the (best) library entry tagged `name`; -1 if no such entry."""
+        best = -1.0
+        for nm, e in self.library:
+            if nm == name:
+                best = max(best, float(np.dot(emb, e)))
+        return best
+
     def take_merges(self):
         """Take the pending merges; the server uses them to replace names already written into the document."""
         m, self._merges = self._merges, []
@@ -223,3 +242,197 @@ class SpeakerID:
     def stats(self):
         return [{"id": i, "seconds": round(d, 1), "utterances": self.counts[i]}
                 for i, d in enumerate(self.durations)]
+
+
+def recluster_session(session_dir, cfg, utt_recs, spk, name_fn):
+    """Post-hoc GLOBAL re-clustering of a finished recording's speakers, rewriting transcript.jsonl.
+
+    Online clustering is greedy (first centroid absorbs later utterances) and reuses the previous speaker for
+    short (<min_audio_ms) sentences -- on far-field/quiet audio this collapses several people into one. Here we
+    take the per-utterance voiceprints collected DURING recording (utt_recs = [(start, emb), ...], matched to
+    transcript lines by start time -- no dependency on audio.wav, which may be disabled/offloaded) and cluster
+    ALL utterances together (agglomerative on cosine), which separates speakers far better. Names: clusters
+    ordered by total speech (most talkative -> teacher), with voiceprint-store matches kept. Returns True if it
+    rewrote the transcript. name_fn(rank)->display name; spk provides the voiceprint library for naming.
+    """
+    import json as _json
+    sc = cfg.get("speaker", {}) or {}
+    if not sc.get("enabled", True) or spk is None or not getattr(spk, "enabled", False):
+        return False
+    tp = os.path.join(session_dir, "transcript.jsonl")
+    if not os.path.exists(tp):
+        return False
+    lines = []
+    with open(tp, encoding="utf-8") as f:
+        for ln in f:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                lines.append(_json.loads(ln))
+            except Exception:
+                return False   # unparseable transcript -> don't risk rewriting
+    if len(lines) < 2:
+        return False
+
+    # match each line to the voiceprint captured for it during recording, keyed by start time
+    by_start = {}
+    for st, em in (utt_recs or []):
+        if em is not None:
+            by_start[round(float(st), 2)] = em
+    if len(by_start) < 2:
+        return False
+    embs = []
+    for L in lines:
+        st = round(float(L.get("start", 0) or 0), 2)
+        em = by_start.get(st)
+        if em is None:                       # tolerate tiny rounding drift
+            cand = [(abs(k - st), k) for k in by_start if abs(k - st) <= 0.15]
+            em = by_start[min(cand)[1]] if cand else None
+        embs.append(em)
+    idxs = [i for i, em in enumerate(embs) if em is not None]
+    if len(idxs) < 2:
+        return False
+
+    thr = float(sc.get("recluster_threshold", sc.get("threshold", 0.35)))
+    maxs = int(sc.get("max_speakers", 8))
+
+    def _n(v):
+        nn = np.linalg.norm(v)
+        return v / nn if nn > 0 else v
+
+    members = [[i] for i in idxs]                 # each cluster = list of line indices
+    cents = [embs[i].copy() for i in idxs]
+    while len(members) > 1:
+        bi = bj = -1
+        bs = -2.0
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                sim = float(np.dot(_n(cents[i]), _n(cents[j])))
+                if sim > bs:
+                    bi, bj, bs = i, j, sim
+        # stop once nothing is similar enough AND we're within the speaker cap; otherwise force-merge closest
+        if bs < thr and len(members) <= maxs:
+            break
+        wi, wj = len(members[bi]), len(members[bj])
+        cents[bi] = _n(cents[bi] * wi + cents[bj] * wj)
+        members[bi] += members[bj]
+        del members[bj]
+        del cents[bj]
+
+    # order clusters by total speech duration (desc) -> rank 0 is the teacher
+    def _dur(members_of):
+        tot = 0.0
+        for i in members_of:
+            tot += max(0.0, float(lines[i].get("end", 0) or 0) - float(lines[i].get("start", 0) or 0))
+        return tot
+    order = sorted(range(len(members)), key=lambda k: _dur(members[k]), reverse=True)
+
+    rank_of_line = {}
+    cent_of_rank = {}
+    for rank, k in enumerate(order):
+        cent_of_rank[rank] = cents[k]
+        for i in members[k]:
+            rank_of_line[i] = rank
+
+    # short lines (no embedding): carry the previous assigned line's speaker, else the main speaker
+    labels = []
+    last = 0
+    for i in range(len(lines)):
+        if i in rank_of_line:
+            last = rank_of_line[i]
+        labels.append(last)
+
+    # names: voiceprint-store match first, else 老师/同学A...
+    names = {}
+    for rank in range(len(order)):
+        nm = None
+        lib = getattr(spk, "library", None)
+        if lib:
+            c = cent_of_rank.get(rank)
+            best, bscore = None, -1.0
+            for lname, le in lib:
+                sc2 = float(np.dot(c, le))
+                if sc2 > bscore:
+                    bscore, best = sc2, lname
+            if best is not None and bscore >= getattr(spk, "vp_threshold", thr):
+                nm = best
+        names[rank] = nm or name_fn(rank)
+
+    # nothing changed? skip the rewrite
+    changed = any(int(lines[i].get("speaker_id", -999)) != labels[i] for i in range(len(lines)))
+    if not changed:
+        return False
+    for i, L in enumerate(lines):
+        L["speaker_id"] = labels[i]
+        L["speaker"] = names[labels[i]]
+    tmp = tp + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        for L in lines:
+            f.write(_json.dumps(L, ensure_ascii=False) + "\n")
+    os.replace(tmp, tp)
+    return True
+
+
+def cluster_utterances(lines, utt_recs, cfg):
+    """Global agglomerative voiceprint clustering of a session's lines. Returns a list of group ids (one per
+    line, ints from 0 by first appearance) or None if there isn't enough usable voiceprint. Same matching +
+    clustering as recluster_session, exposed so the LLM relabeler can pass it as an audio-grounded hint."""
+    sc = cfg.get("speaker", {}) or {}
+    by_start = {}
+    for st, em in (utt_recs or []):
+        if em is not None:
+            by_start[round(float(st), 2)] = em
+    if len(by_start) < 2:
+        return None
+    embs = []
+    for L in lines:
+        st = round(float(L.get("start", 0) or 0), 2)
+        em = by_start.get(st)
+        if em is None:
+            cand = [(abs(k - st), k) for k in by_start if abs(k - st) <= 0.15]
+            em = by_start[min(cand)[1]] if cand else None
+        embs.append(em)
+    idxs = [i for i, em in enumerate(embs) if em is not None]
+    if len(idxs) < 2:
+        return None
+    thr = float(sc.get("recluster_threshold", sc.get("threshold", 0.35)))
+    maxs = int(sc.get("max_speakers", 8))
+
+    def _n(v):
+        nn = np.linalg.norm(v)
+        return v / nn if nn > 0 else v
+
+    members = [[i] for i in idxs]
+    cents = [embs[i].copy() for i in idxs]
+    while len(members) > 1:
+        bi = bj = -1
+        bs = -2.0
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                s = float(np.dot(_n(cents[i]), _n(cents[j])))
+                if s > bs:
+                    bi, bj, bs = i, j, s
+        if bs < thr and len(members) <= maxs:
+            break
+        wi, wj = len(members[bi]), len(members[bj])
+        cents[bi] = _n(cents[bi] * wi + cents[bj] * wj)
+        members[bi] += members[bj]
+        del members[bj]
+        del cents[bj]
+
+    gid_of_line = {}
+    for gid, mem in enumerate(members):
+        for i in mem:
+            gid_of_line[i] = gid
+    order = {}
+    groups = []
+    last = 0
+    for i in range(len(lines)):
+        if i in gid_of_line:
+            g = gid_of_line[i]
+            if g not in order:
+                order[g] = len(order)
+            last = order[g]
+        groups.append(last)
+    return groups

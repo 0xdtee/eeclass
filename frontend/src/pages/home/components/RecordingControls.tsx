@@ -45,6 +45,7 @@ interface RecordingControlsProps {
     title: string;
     aiCorrect: boolean;
     smartSeg: boolean;
+    separateMulti: boolean;
     translateFrom: TransLang;
     translateTo: TransLang;
     subjects: string[];
@@ -102,6 +103,7 @@ export default function RecordingControls({
   const nameRef = useRef<HTMLInputElement>(null);
   const [aiCorrect, setAiCorrect] = useState(defaults.aiCorrect);  // AI real-time correction toggle (defaults from settings)
   const [smartSeg, setSmartSeg] = useState(defaults.smartSeg);     // AI smart sentence splitting (defaults from settings)
+  const [separateMulti, setSeparateMulti] = useState(false);       // experimental: split simultaneous speakers (GPU separation)
   const [translateFrom, setTranslateFrom] = useState(defaults.translateFrom);   // source language (原文); off when from === to
   const [translateTo, setTranslateTo] = useState(defaults.translateTo);         // target language (译文); default follows the UI language
   const [subjects, setSubjects] = useState<string[]>([]);         // Checked subject tags
@@ -211,7 +213,7 @@ export default function RecordingControls({
                 onChange={(e) => setCourseName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && connected && !starting) {
-                    onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateFrom, translateTo, subjects });
+                    onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, separateMulti, translateFrom, translateTo, subjects });
                   }
                 }}
                 placeholder={t('课程名称(如 高数第3讲)')}
@@ -220,7 +222,7 @@ export default function RecordingControls({
               />
               <button
                 data-guide="rec-start"
-                onClick={() => onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, translateFrom, translateTo, subjects })}
+                onClick={() => onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, separateMulti, translateFrom, translateTo, subjects })}
                 disabled={!connected || starting}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -446,6 +448,9 @@ export default function RecordingControls({
             </button>
             <button type="button" data-guide="ai-seg" onClick={() => setSmartSeg(!smartSeg)} className={pillCls(smartSeg)} title={t('让 DeepSeek 按语意把停顿切碎的句子合并成完整句再断句(整句模式生效)')}>
               <i className="ri-scissors-cut-line"></i>{t('AI 智能分句')}
+            </button>
+            <button type="button" onClick={() => setSeparateMulti(!separateMulti)} className={pillCls(separateMulti)} title={t('多人同时说话时用 GPU 把各自的话分开成两条字幕(实验功能;开启后仍用你选的识别模型,但每句会慢一两拍)')}>
+              <i className="ri-group-line"></i>{t('多人分离(实验)')}
             </button>
           </div>
         )}

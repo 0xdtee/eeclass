@@ -55,6 +55,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 ## Highlights
 
 - ⚡ **CPU-only, real-time** — ASR, speaker separation and voiceprints all run on CPU (sherpa-onnx SenseVoice, RTF ≈ 0.05); no GPU needed, an ordinary machine handles it.
+- 🗣️ **Overlapping-speech separation (experimental, opt-in)** — when two people talk at once, an optional GPU separation service splits the mixture into per-speaker streams, each recognized (with your chosen model) and attributed separately; falls back to normal recognition when the service is unavailable.
 - 🧬 **A voiceprint library that recognizes people** — name someone once and future recordings of the same voice are recognized automatically; each person is stored once, and renaming propagates **back across all past classes**.
 - 🧠 **Course-level AI** — beyond per-class summaries, it **aggregates a whole course's classes into a grand summary**, predicts exam points (with a share pie chart), and generates a mock paper.
 - 📱 **Web + native iPad app** — the phone/iPad client (web `/m` + Capacitor iPad app) lives in its own repo, [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile).

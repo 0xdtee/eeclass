@@ -152,6 +152,10 @@ export default function HomePage() {
     }, 800);
   }, [noteSid, records]);
 
+  // Clear any pending debounced auto-save when leaving the page, so a timer scheduled inside the
+  // 0.8s window doesn't fire post-unmount (stray saveNote + a misleading "已保存" flash).
+  useEffect(() => () => { if (noteTimer.current) window.clearTimeout(noteTimer.current); }, []);
+
   // Subject tags: include courses from the 「全国版课程大纲(教育部·教指委 全国基本要求)」 by default, always checkable;
   // then merge in other syllabi downloaded on this device, deduped, for selection (as subject context for AI correction/translation).
   useEffect(() => {

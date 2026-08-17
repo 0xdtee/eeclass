@@ -224,10 +224,18 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 
   const switchToView = (mode: CalendarView) => {
     setViewMode(mode);
-    if ((mode === 'day' || mode === 'week') && viewMode === 'year') {
-      setViewYear(today.getFullYear());
-      setViewMonth(today.getMonth());
-      setViewDay(today.getDate());
+    if (mode === 'day' || mode === 'week') {
+      if (viewMode === 'year') {
+        // entering week/day from the year overview: land on today
+        setViewYear(today.getFullYear());
+        setViewMonth(today.getMonth());
+        setViewDay(today.getDate());
+      } else {
+        // clamp the day to the current month's length, or a stale viewDay (e.g. 31) would build an
+        // invalid date when the month has fewer days: "2026-02-31" / a week that overflows into March.
+        const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+        if (viewDay > daysInMonth) setViewDay(daysInMonth);
+      }
     }
   };
 

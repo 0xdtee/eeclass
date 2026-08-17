@@ -125,6 +125,14 @@ def course_base_name(title):
     return t.strip()
 
 
+def _jaccard(a, b):
+    """Char-set overlap of two strings (0..1). Used to tell whether two separated streams say the same thing."""
+    sa, sb = set(a), set(b)
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / len(sa | sb)
+
+
 def speaker_name(idx):
     if idx == 0:
         return "老师"          # whoever speaks first and speaks the most in a class is almost certainly the teacher
@@ -158,7 +166,6 @@ class Session:
         self.course_id = None
         self.course_name = None    # course name when bound, used as subject context for AI correction (more reliable than a hand-typed title)
         self.subjects = []         # selected subject tags (Advanced Mathematics/College Physics...), used as context for AI correction/translation
-        self.user_key = None       # which account this recording belongs to -- decides which private voiceprint library to use/write
         self.ai_correct = False    # DeepSeek real-time correction (fixes homophone typos), toggled from the frontend
         self.corrector = None
         self.correct_pool = None
@@ -173,6 +180,10 @@ class Session:
         self.smart_seg = False
         self.segmenter_ds = None
         self.seg_pool = None
+        # opt-in overlapping-speech separation (whole-sentence/VAD mode only): each segment goes through
+        # the GPU separation service, splitting simultaneous speakers into two attributed lines.
+        self.separate_multi = False
+        self.sepworker = None
         self._seg_frags = []       # buffer: fragments not yet formed into sentences [{text,start,end,sid,gap,conf}]
         self._seg_lock = threading.Lock()
         self._seg_busy = False
@@ -198,13 +209,15 @@ class Session:
             print(f"⚠️ 同音术语纠正未启用: {e}")
 
         # two mutually exclusive paths: streaming (the model segments as it listens) or VAD segmentation + whole-sentence recognition
-        self.streaming = (bool(cfg["asr"].get("streaming")) and cfg["asr"].get("backend") == "zipformer") \
-            or cfg["asr"].get("backend") == "aliyun_gummy"   # Gummy is a continuous streaming cloud recognizer
+        self.streaming = (not cfg["asr"].get("force_offline")) and (
+            (bool(cfg["asr"].get("streaming")) and cfg["asr"].get("backend") == "zipformer")
+            or cfg["asr"].get("backend") in ("aliyun_gummy", "aliyun_paraformer"))   # continuous streaming cloud recognizers; force_offline (overlap separation) drops back to per-segment recognition with the same model
         # Shanghainese backend: output is in Wu characters; auto-translate each line to Mandarin and attach below as subtitles
         self.translate_wu = cfg["asr"].get("backend") == "wenet_ctc"
         self.seg = None if self.streaming else Segmenter(cfg)
         self.sasr = None
         self.spk = SpeakerID(cfg)
+        self._utt_recs = []        # [(line_start_sec, voiceprint)] per utterance, for post-hoc global re-clustering at stop
         self.hl = Highlighter(cfg)
         self.asr = ASRWorker(cfg, self._on_text, self._on_status)
         records_root = os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"]))
@@ -336,6 +349,10 @@ class Session:
                 from stream_asr import GummyStreamingASR
                 self.sasr = GummyStreamingASR(
                     self.cfg, on_partial=lambda t: self.emit({"type": "partial", "text": t}))
+            elif self.cfg["asr"].get("backend") == "aliyun_paraformer":
+                from stream_asr import ParaformerStreamingASR
+                self.sasr = ParaformerStreamingASR(
+                    self.cfg, on_partial=lambda t: self.emit({"type": "partial", "text": t}))
             else:
                 from stream_asr import StreamingASR
                 self.sasr = StreamingASR(
@@ -344,6 +361,20 @@ class Session:
         else:
             load_s = self.asr.load()
             self.asr.start()
+            # opt-in overlapping-speech separation: route segments through the GPU separator + dual ASR
+            if self.separate_multi:
+                try:
+                    from sep_worker import SepWorker
+                    self.sepworker = SepWorker(self.cfg, self.asr.backend, self, self._on_status)
+                    if self.sepworker.ready:
+                        self.sepworker.start()
+                        self._on_status("多人分离已启用（实验）")
+                    else:
+                        self.sepworker = None
+                        self._on_status("多人分离未配置（缺 SEP_HOST/SEP_TOKEN），按普通模式识别")
+                except Exception as e:
+                    self.sepworker = None
+                    self._on_status(f"多人分离启动失败: {type(e).__name__}，按普通模式识别")
         word_info = None
         if self.to_word and WordWriter is None:
             self._on_status("这台机器上没有 Word（服务器部署），已跳过写入 Word，转写照常落盘。")
@@ -376,6 +407,12 @@ class Session:
         if tail is not None:
             self._dispatch(tail)
         time.sleep(0.3)
+        if self.sepworker is not None:
+            # let the separation worker finish the segments still in its queue before we tear down (its ASR backend is self.asr's)
+            _deadline = time.time() + 30
+            while (self.sepworker.backlog > 0 or self.sepworker.busy) and time.time() < _deadline:
+                time.sleep(0.2)
+            self.sepworker.stop()
         self.asr.stop()
         # smart segmentation: don't wait on in-flight DeepSeek calls (or stop would hang for a dozen seconds); _seg_stopping is already set,
         # so when that worker returns it won't emit either. Just flush the not-yet-formed fragments in the buffer one by one, don't lose the last half-sentence.
@@ -423,7 +460,33 @@ class Session:
                 voiceprint.save_registry(root, reg)
         except Exception:
             traceback.print_exc()
-        return self.rec.finish(meta), meta
+        res = self.rec.finish(meta)
+        # Global speaker re-clustering: online clustering is greedy + reuses the previous speaker for short
+        # sentences, which on far-field/quiet audio collapses several people into one. Re-embed every line and
+        # cluster them all together for a better split. Runs async so it never delays stop; it rewrites
+        # transcript.jsonl in place and the session page shows the corrected speakers on reload.
+        if self.cfg.get("speaker", {}).get("recluster", True):
+            sess_dir, spk, recs, cfg_ref = self.rec.dir, self.spk, list(self._utt_recs), self.cfg
+            def _rc():
+                try:
+                    # Far-field voiceprints are too noisy to cluster reliably, so first try DeepSeek relabeling
+                    # by conversation logic (who asks/answers, addressing, coherence). Fall back to voiceprint
+                    # global re-clustering if that's off / DeepSeek isn't ready / the model output doesn't line up.
+                    if cfg_ref.get("speaker", {}).get("llm_relabel", True):
+                        try:
+                            from summarize import relabel_session
+                            if relabel_session(sess_dir, cfg_ref, recs):
+                                print(f"[relabel] {os.path.basename(sess_dir)} 说话人已按对话逻辑重排(DeepSeek)", flush=True)
+                                return
+                        except Exception:
+                            traceback.print_exc()
+                    from speaker import recluster_session
+                    if recluster_session(sess_dir, cfg_ref, recs, spk, speaker_name):
+                        print(f"[recluster] {os.path.basename(sess_dir)} 说话人已全局重排(声纹)", flush=True)
+                except Exception:
+                    traceback.print_exc()
+            threading.Thread(target=_rc, daemon=True).start()
+        return res, meta
 
     # ---------- capture -> segmentation ----------
     def _pump(self):
@@ -444,7 +507,13 @@ class Session:
                 self._dispatch(utt)
 
     def _dispatch(self, utt):
+        if self.sepworker is not None and not self.streaming:
+            # overlapping-speech mode: hand the raw segment to the sep worker; it separates, recognizes and
+            # does speaker id on the separated streams (voiceprint touched only from that one thread here).
+            self.sepworker.submit(utt, None)
+            return
         sid, conf = self.spk.identify(utt.audio)
+        self._utt_recs.append((utt.start, self.spk.last_emb))   # keep this utterance's voiceprint for stop-time re-clustering
         self._apply_merges()
         meta = {"speaker_id": sid, "speaker_conf": round(conf, 3)}
         if self.streaming:
@@ -452,6 +521,60 @@ class Session:
             self._on_text(utt, meta, utt.text, utt.proc_s)
         else:
             self.asr.submit(utt, meta)
+
+    def _safe_embed(self, audio):
+        try:
+            return self.spk.embed(audio) if (self.spk.enabled and self.spk.ex is not None) else None
+        except Exception:
+            return None
+
+    def _emit_separated(self, utt, pairs, t0):
+        """Called from the SepWorker thread. `pairs` is [(audio, text), ...] -- one entry (single speaker /
+        fail-open) or two (candidate overlap). Assign speaker ids on the separated streams, force the two
+        overlapping streams to two DISTINCT speakers (so simultaneous voices don't both collapse onto the
+        one enrolled voiceprint, e.g. everyone showing up as 'dtee'), then emit."""
+        mc = self.cfg["asr"].get("min_chars", 2)
+        proc = time.time() - t0
+        pairs = [(a, t) for (a, t) in pairs if a is not None and len(t) >= mc]
+        if not pairs:
+            return
+        if len(pairs) == 1:
+            a, txt = pairs[0]
+            sid, conf = self.spk.identify(utt.audio)   # single speaker: use the clean MIXED audio, not the artifacted separated stream (better library match, no drift)
+            self._utt_recs.append((utt.start, self.spk.last_emb))
+            self._apply_merges()
+            self._on_text(utt, {"speaker_id": sid, "speaker_conf": round(conf, 3)}, txt, proc)
+            return
+        (a1, t1), (a2, t2) = pairs[0], pairs[1]
+        e1, e2 = self._safe_embed(a1), self._safe_embed(a2)
+        # collapse to a single speaker when the two streams are really the same voice (separation duplicated it)
+        # or say near the same thing -- avoids a spurious second line on non-overlapping segments.
+        same_voice = (e1 is not None and e2 is not None
+                      and float(np.dot(e1, e2)) >= self.spk.merge_threshold)
+        if same_voice or _jaccard(t1, t2) > 0.5:
+            a, txt = (a1, t1) if len(t1) >= len(t2) else (a2, t2)
+            sid, conf = self.spk.identify(utt.audio)   # single speaker: use the clean MIXED audio, not the artifacted separated stream (better library match, no drift)
+            self._utt_recs.append((utt.start, self.spk.last_emb))
+            self._apply_merges()
+            self._on_text(utt, {"speaker_id": sid, "speaker_conf": round(conf, 3)}, txt, proc)
+            return
+        # genuine overlap: two different people. Assign each stream a speaker, forced distinct.
+        sid1, c1 = self.spk.identify(a1)
+        self._utt_recs.append((utt.start, self.spk.last_emb))
+        sid2, c2 = self.spk.identify(a2)
+        self._utt_recs.append((utt.start, self.spk.last_emb))
+        if sid2 == sid1:                       # online clusterer merged them -> force stream 2 to its own centroid
+            sid2 = self.spk.add_speaker(e2, a2.size / 16000.0)
+        # both matched the same enrolled name (e.g. both -> 'dtee')? keep the closer one, demote the other to a default name.
+        n1, n2 = self.spk.match_name(sid1), self.spk.match_name(sid2)
+        if n1 and n1 == n2:
+            s1 = self.spk.lib_sim(e1, n1) if e1 is not None else -1.0
+            s2 = self.spk.lib_sim(e2, n2) if e2 is not None else -1.0
+            loser = sid2 if s1 >= s2 else sid1
+            self.names.setdefault(loser, speaker_name(loser))   # override the wrong library match, keep them distinct
+        self._apply_merges()
+        self._on_text(utt, {"speaker_id": sid1, "speaker_conf": round(c1, 3)}, t1, proc)
+        self._on_text(utt, {"speaker_id": sid2, "speaker_conf": round(c2, 3)}, t2, proc)
 
     # ---------- recognition result -> Word ----------
     def _on_text(self, utt, meta, text, proc_s, translation=""):
@@ -1021,6 +1144,12 @@ class App:
                 else:
                     # not recording (or still just a reserved slot) -> free it
                     self.sessions.pop(cid, None)
+                # drop this connection's cid-scoped lookups so they don't accumulate forever
+                # (clients that reconnect with a fresh cid would otherwise leak an entry each time);
+                # a reconnect with the same cid re-populates them at connect. Guarded by "ws is ws"
+                # so a reconnect that already took over this cid keeps its own entries.
+                self.cid_user.pop(cid, None)
+                self.cid_admin.pop(cid, None)
         return ws
 
     async def handle_cmd(self, m, ws, cid):
@@ -1058,6 +1187,12 @@ class App:
             if not self.cid_admin.get(cid, False) and cfg["asr"].get("backend") not in ("aliyun_paraformer", "aliyun_funasr", "aliyun_gummy"):
                 cfg["asr"]["backend"] = "aliyun_paraformer"
                 cfg["asr"]["streaming"] = False
+            # overlapping-speech separation works per VAD segment, so it can't ride the continuous streaming path.
+            # When it's on, keep the user's chosen model but run it in its offline whole-sentence form (same model,
+            # segment-by-segment) -- so any model, including the cloud ones, can be used with separation.
+            if m.get("separate_multi"):
+                cfg["asr"]["force_offline"] = True
+                cfg["asr"]["streaming"] = False
             if m.get("new_para_gap_ms") is not None:
                 cfg["paragraph"]["new_para_gap_ms"] = int(m["new_para_gap_ms"])
             # pickup sensitivity: varies with environment and distance, so tune this on site
@@ -1084,6 +1219,7 @@ class App:
             s.only_key = bool(m.get("only_key"))
             s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
             s.smart_seg = bool(m.get("smart_seg"))      # AI smart segmentation toggle
+            s.separate_multi = bool(m.get("separate_multi"))  # opt-in overlapping-speech separation (experimental)
             # live translation subtitles: source/target language codes; off when equal.
             _valid_langs = ('zh', 'en', 'fr', 'de', 'it', 'ja', 'ko', 'es', 'ru')
             tf = m.get("translate_from")
@@ -1362,6 +1498,12 @@ class App:
                 return web.json_response({"error": "这个邮箱已经注册过了,直接登录即可"}, status=409)
         except Exception:
             pass
+        try:
+            _cd = self.accounts.cooldown_error(email)
+            if _cd:
+                return web.json_response({"error": _cd}, status=403)
+        except Exception:
+            pass
         if not mailer.ready():
             return web.json_response({"error": "服务端还没配置邮件服务,暂时无法发送验证码"}, status=503)
         now = time.time()
@@ -1441,6 +1583,53 @@ class App:
         self.accounts.logout(self._bearer(request))
         return web.json_response({"ok": True})
 
+    async def api_account_delete(self, request):
+        """Permanently delete the caller's OWN account and all of its data (irreversible).
+        Re-requires the account password as a safety confirmation. Only deletes your own data."""
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        if self._is_super(request):     # the machine's global-token owner is not a deletable account
+            return web.json_response({"error": "主账号不支持注销"}, status=400)
+        user = self.accounts.session_user(self._bearer(request))
+        if not user or not user.get("email"):
+            return web.json_response({"error": "请先登录"}, status=401)
+        email = user["email"]
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not self.accounts.verify(email, body.get("password") or ""):
+            return web.json_response({"error": "密码不对"}, status=403)
+
+        import shutil, glob
+        owner_id = self._owner_id(request)          # email hash: on-disk ownership id
+        root = self._records_root()
+        removed = 0
+        # 1) every session directory this account owns
+        for name in os.listdir(root):
+            d = os.path.join(root, name)
+            if os.path.isdir(d) and self._session_owner(name) == owner_id:
+                shutil.rmtree(d, ignore_errors=True)
+                removed += 1
+        # 2) this account's per-account json files (tags_/settings_/learned_terms_/...) + voiceprint library
+        for p in glob.glob(os.path.join(root, f"*_{owner_id}.json")):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+        try:
+            os.remove(os.path.join(root, "voiceprints", f"lib_{owner_id}.json"))
+        except OSError:
+            pass
+        # 3) recording index rows, then the account row + its login sessions
+        try:
+            recordings_db.delete_by_owner(owner_id)
+        except Exception as e:
+            print(f"[account-delete] recordings cleanup failed: {e}", flush=True)
+        self.accounts.delete(email)
+        print(f"[account-delete] {email} removed ({removed} sessions)", flush=True)
+        return web.json_response({"ok": True})
+
     # ---------- HTTP endpoints ----------
     async def api_summarize(self, request):
         if not self.check_token(request):
@@ -1456,8 +1645,10 @@ class App:
             return web.json_response({"error": "无权访问这节课"}, status=403)
         lines = body.get("lines") or []
         if not lines:
-            # if no transcript is provided, read the one stored on the server
-            d = body.get("dir")
+            # if no transcript is provided, read the one stored on the server.
+            # build the path from the ownership-checked ref_sid (basename), never the raw client `dir`,
+            # so the read stays inside this owner's own session directory.
+            d = self._session_dir(ref_sid) if ref_sid else None
             if d and os.path.isdir(d):
                 p = os.path.join(d, "transcript.jsonl")
                 raw = self._read_bytes(p)
@@ -1475,7 +1666,7 @@ class App:
         # recognize this session's blackboard shots and fold them into the summary
         board = ""
         sid = body.get("sid")
-        sdir = self._session_dir(sid) if sid else body.get("dir")
+        sdir = self._session_dir(ref_sid) if ref_sid else None   # ownership-checked sid, not raw client `dir`
         if sdir and os.path.isdir(sdir):
             try:
                 from board import board_content
@@ -2498,12 +2689,15 @@ class App:
         limit = min(int(request.query.get("limit", 50)), 200)
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._reindex_all)
-        results, total = await loop.run_in_executor(None, self.lib.search, q, limit)
-        # data isolation: keep only hits from your own sessions (the index is global, filtered by ownership after querying)
-        if not self._is_super(request):
+        # data isolation: the FTS index is global, so a non-super caller must constrain the query
+        # to their own sessions **before** ORDER BY rank + LIMIT -- otherwise other users' higher-
+        # ranked hits fill the limit and the caller loses their own genuine matches.
+        if self._is_super(request):
+            results, total = await loop.run_in_executor(None, self.lib.search, q, limit)
+        else:
             me = self._owner_id(request)
-            results = [r for r in results if self._session_owner(r["sid"]) == me]
-            total = len(results)
+            owned = [r["sid"] for r in recordings_db.list_recordings(owner=me, superuser=False)]
+            results, total = await loop.run_in_executor(None, self.lib.search, q, limit, owned)
         # fill in the course name and date; the frontend groups by session
         meta_cache = {}
         for r in results:
@@ -2907,6 +3101,7 @@ class App:
         app.router.add_post("/api/login", self.api_login)
         app.router.add_get("/api/me", self.api_me)
         app.router.add_post("/api/logout", self.api_logout)
+        app.router.add_post("/api/account/delete", self.api_account_delete)
         app.router.add_post("/api/summarize", self.api_summarize)
         app.router.add_get("/api/sessions", self.api_sessions)
         app.router.add_get("/api/transcript/{sid}", self.api_transcript)

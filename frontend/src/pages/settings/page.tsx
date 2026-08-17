@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import BackButton from '@/components/feature/BackButton';
 import { loadSettings, saveSettings, DEFAULT_SETTINGS, type AppSettings } from '@/lib/settings';
 import { useAuth } from '@/hooks/useAuth';
-import { SERVICE_ORIGIN } from '@/hooks/useLiveCaption';
+import { SERVICE_ORIGIN, getToken } from '@/hooks/useLiveCaption';
 import { t, useLang, setLang, LANGS } from '@/lib/i18n';
 import { TRANS_LANGS } from '@/lib/translateLangs';
 import Select from '@/components/base/Select';
@@ -48,6 +48,30 @@ export default function SettingsPage() {
   const set = (k: keyof AppSettings, v: AppSettings[keyof AppSettings]) => {
     setS((prev) => ({ ...prev, [k]: v }));
     saveSettings({ [k]: v } as Partial<AppSettings>);
+  };
+
+  // Delete account (irreversible): confirm with the password, wipe all data, then sign out.
+  const [showDel, setShowDel] = useState(false);
+  const [delPw, setDelPw] = useState('');
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState('');
+  const doDelete = async () => {
+    setDelBusy(true); setDelErr('');
+    try {
+      const r = await fetch(SERVICE_ORIGIN + '/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
+        body: JSON.stringify({ password: delPw }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || t('注销失败'));
+      logout();
+      navigate('/');
+    } catch (e) {
+      setDelErr(e instanceof Error ? e.message : t('注销失败'));
+    } finally {
+      setDelBusy(false);
+    }
   };
 
   const segBtn = (active: boolean) =>
@@ -224,6 +248,15 @@ export default function SettingsPage() {
                 >
                   <i className="ri-logout-box-line"></i>{t('退出登录')}
                 </button>
+                <div className="border-t border-background-100 pt-3 mt-1">
+                  <button
+                    onClick={() => { setDelErr(''); setDelPw(''); setShowDel(true); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full text-sm font-medium hover:bg-red-700 cursor-pointer"
+                  >
+                    <i className="ri-delete-bin-line"></i>{t('注销账号')}
+                  </button>
+                  <p className="text-xs text-foreground-400 mt-2">{t('永久删除账号及全部数据,不可恢复。')}</p>
+                </div>
               </div>
             </section>
           )}
@@ -236,6 +269,48 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {showDel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => { if (!delBusy) setShowDel(false); }}
+        >
+          <div className="bg-background-50 rounded-2xl shadow-xl max-w-sm w-full p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-red-600 flex items-center gap-2">
+              <i className="ri-error-warning-line"></i>{t('注销账号')}
+            </h3>
+            <p className="text-sm text-foreground-600 mt-3 leading-relaxed">
+              {t('此操作不可恢复。将永久删除你的账号,以及全部录音、转写、概要、标签、声纹与设置。')}
+            </p>
+            <p className="text-xs text-red-500 mt-2">{t('注销后,同一邮箱 3 天内无法重新注册。')}</p>
+            <input
+              type="password"
+              value={delPw}
+              onChange={(e) => setDelPw(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && delPw && !delBusy) void doDelete(); }}
+              placeholder={t('请输入登录密码以确认')}
+              className="mt-4 w-full h-10 px-3 bg-background-100 border border-background-300 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-red-400"
+            />
+            {delErr && <p className="text-xs text-red-500 mt-2">{delErr}</p>}
+            <div className="flex gap-2 mt-5">
+              <button
+                disabled={delBusy || !delPw}
+                onClick={() => void doDelete()}
+                className="flex-1 h-10 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                {delBusy ? t('注销中…') : t('确认注销')}
+              </button>
+              <button
+                disabled={delBusy}
+                onClick={() => setShowDel(false)}
+                className="flex-1 h-10 bg-background-100 text-foreground-600 rounded-lg text-sm font-semibold hover:bg-background-200 cursor-pointer"
+              >
+                {t('取消')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

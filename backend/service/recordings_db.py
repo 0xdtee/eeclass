@@ -61,6 +61,15 @@ def upsert_recording(sid, *, title=None, owner=None, duration_s=None,
     return True
 
 
+def delete_by_owner(owner):
+    """Delete all recording index rows belonging to one account (used by account deletion)."""
+    if not owner:
+        return
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM recordings WHERE owner = %s", (owner,))
+
+
 def list_recordings(owner=None, superuser=False):
     """History list: non-superusers see only their own (owner==their hashed id); superusers see all.
 

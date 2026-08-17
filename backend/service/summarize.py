@@ -20,7 +20,7 @@ SYSTEM = """你是一个帮学生整理课堂笔记的助手。你会收到一�
 每行格式是 [时间 说话人] 内容。转写来自自动语音识别，**会有错别字和同音词错误**，
 请结合上下文和学科常识判断真实意思，不要把识别错误当成老师的原话引用。
 
-**极其重要：只能根据转写里真实出现的内容来总结，绝对不许编造、脑补、或添加转写中根本没提到的知识点、术语或内容。** 转写讲了什么就总结什么——哪怕不是正式上课、只是日常对话或闲聊，也要如实把说到的话题和要点概括出来（比如聊了坐地铁、逛街、几家店，就照实写成"聊了坐地铁的花费、逛街和几家咖啡店餐厅"这类）。只有当转写里几乎没有任何有意义的内容（只有极短的几个字、纯噪声、或反复的无意义口水）时，才把 summary 写成「本次录音内容过少，无法生成摘要」，并把 key_points、formulas、exam_hints、questions、corrections 全部返回空数组 `[]`。总之：有内容就如实总结，绝不凭空捏造转写里没有的东西。
+**极其重要：只能根据转写里真实出现的内容来总结，绝对不许编造、脑补、或添加转写中根本没提到的知识点、术语或内容。** 转写讲了什么就总结什么——哪怕不是正式上课、只是日常对话或闲聊，也要如实把说到的话题和要点概括出来（比如聊了坐地铁、逛街、几家店，就照实写成"聊了坐地铁的花费、逛街和几家咖啡店餐厅"这类）。**只要转写里有任何话（哪怕只是打招呼、测试麦克风、问「能听到吗」、说几句闲话），都必须如实把说了什么概括成摘要**（例如「测试录音：打招呼、确认麦克风是否正常、测试识别与断句效果」）——绝不要因为内容简短或随意就拒绝总结。只有当转写**完全是空的、一个字都没有**时，才把 summary 写成「本次录音内容过少，无法生成摘要」，并把 key_points、formulas、exam_hints、questions、corrections 全部返回空数组 `[]`。总之：有内容就如实总结，绝不凭空捏造转写里没有的东西。
 
 请输出严格的 JSON，不要有任何额外文字、不要用 markdown 代码块包裹，字段如下：
 {
@@ -562,3 +562,96 @@ class DeepSeek:
         out["_usage"] = usage
         out["_model"] = self.model
         return out
+
+
+def _llm_relabel_speakers(ds, lines, vp_groups=None):
+    """Re-assign each line's speaker from CONVERSATIONAL LOGIC (who asks/answers, addressing, first person,
+    topic/tone coherence), grounded by an optional per-line voiceprint group hint (AG-LSEC style: text logic +
+    audio cue). `ds` is a ready DeepSeek. Returns a list of speaker-name strings (one per line) or None."""
+    rows = [(i, (l.get("text") or "").strip()) for i, l in enumerate(lines) if (l.get("text") or "").strip()]
+    if len(rows) < 2 or not getattr(ds, "ready", False):
+        return None
+    if vp_groups:
+        body = "\n".join(f"{n}. [声纹组{vp_groups[i]}] {t}" for n, (i, t) in enumerate(rows, 1))
+        hint = ("\n每句前的【声纹组N】是按音色初步聚的类(远场时不准,仅供参考):同组更可能是同一个人、不同组更可能是不同人;"
+                "请以【对话逻辑】为主、声纹组为辅综合判断,声纹组明显和对话逻辑冲突时以对话逻辑为准。")
+    else:
+        body = "\n".join(f"{n}. {t}" for n, (_i, t) in enumerate(rows, 1))
+        hint = ""
+    system = (
+        "你在整理一段课堂/对话的逐句转写,判断每一句到底是谁说的。原有的说话人标注可能因为远场声纹不准而错乱,"
+        "请忽略它,主要根据【对话逻辑】重新判断:谁在提问谁在回答、彼此的称呼(老师/同学/名字)、第一人称视角、"
+        "话题与语气的连贯、上下句的衔接。规则:讲解/提问/主导最多的人标为「老师」;其他人按出场先后标为"
+        "「同学A」「同学B」…;如果整段其实基本是同一个人在说,就全部标同一个人,不要硬凑出多个。" + hint +
+        "\n严格输出 JSON:{\"speakers\": [\"老师\", \"同学A\", ...]},数组长度必须与我给的句子数完全一致、"
+        "顺序一一对应,不要多不要少、不要任何解释。")
+    user = f"共 {len(rows)} 句,逐句如下:\n{body}"
+    try:
+        out = ds._chat(system, user, temperature=0.2)
+    except Exception:
+        return None
+    sp = out.get("speakers") if isinstance(out, dict) else None
+    if not isinstance(sp, list) or len(sp) != len(rows):
+        return None
+    res = [None] * len(lines)
+    for (i, _t), name in zip(rows, sp):
+        res[i] = (str(name).strip() or "老师")
+    last = "老师"
+    for k in range(len(res)):
+        if res[k] is None:
+            res[k] = last
+        else:
+            last = res[k]
+    return res
+
+
+def relabel_session(session_dir, cfg, utt_recs=None):
+    """Post-hoc speaker relabeling of a finished recording via DeepSeek (DiarizationLM-style), rewriting
+    transcript.jsonl. Robust to the noisy far-field voiceprints that make clustering chaotic. Returns True on
+    a successful rewrite. Safe/no-op if DeepSeek isn't configured or the model output doesn't line up."""
+    import os as _os
+    tp = _os.path.join(session_dir, "transcript.jsonl")
+    if not _os.path.exists(tp):
+        return False
+    lines = []
+    with open(tp, encoding="utf-8") as f:
+        for ln in f:
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                lines.append(json.loads(ln))
+            except Exception:
+                return False
+    if len(lines) < 2:
+        return False
+    ds = DeepSeek(cfg)
+    if not ds.ready:
+        return False
+    vp_groups = None
+    if utt_recs:
+        try:
+            from speaker import cluster_utterances
+            vp_groups = cluster_utterances(lines, utt_recs, cfg)
+        except Exception:
+            vp_groups = None
+    labels = _llm_relabel_speakers(ds, lines, vp_groups)
+    if not labels:
+        return False
+    # unique labels -> speaker_id by first appearance (teacher tends to appear first)
+    order = {}
+    for nm in labels:
+        if nm not in order:
+            order[nm] = len(order)
+    changed = any((lines[i].get("speaker") != labels[i]) for i in range(len(lines)))
+    if not changed:
+        return False
+    for i, L in enumerate(lines):
+        L["speaker"] = labels[i]
+        L["speaker_id"] = order[labels[i]]
+    tmp = tp + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        for L in lines:
+            f.write(json.dumps(L, ensure_ascii=False) + "\n")
+    _os.replace(tmp, tp)
+    return True

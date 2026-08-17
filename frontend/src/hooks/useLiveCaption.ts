@@ -134,6 +134,8 @@ export interface StartOptions {
   aiCorrect?: boolean;
   /** AI smart sentence segmentation: let DeepSeek merge VAD fragments into complete sentences by meaning (full-sentence mode only) */
   smartSeg?: boolean;
+  /** Experimental: split simultaneous speakers via the GPU separation service (full-sentence mode only; adds latency) */
+  separateMulti?: boolean;
   /** Live translation subtitles: source (原文) and target (译文) language codes; off when from === to */
   translateFrom?: string;
   translateTo?: string;
@@ -564,6 +566,7 @@ export function useLiveCaption() {
         streaming,
         ai_correct: !!opts.aiCorrect,
         smart_seg: opts.smartSeg !== false,   // AI smart sentence segmentation (on by default)
+        separate_multi: !!opts.separateMulti, // experimental: split simultaneous speakers via GPU separation
         translate_from: opts.translateFrom ?? 'en',   // live translation source language (原文)
         translate_to: opts.translateTo ?? 'zh',       // live translation target language (译文); off when equal
         subjects: opts.subjects ?? [],        // Selected subject tags

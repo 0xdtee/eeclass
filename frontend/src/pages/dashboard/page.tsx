@@ -119,7 +119,9 @@ export default function DashboardHome() {
   // Read back the saved course events
   useEffect(() => {
     void records.loadSchedule().then((r) => setScheduleEvents(r.events || [])).catch(() => {});
-  }, [records]);
+    // depend on the stable loadSchedule callback, NOT the whole `records` object -- useRecords()
+    // returns a fresh object every render, so [records] would refetch on every commit (request storm).
+  }, [records.loadSchedule]);
 
   // Map course events onto the calendar: number sessions of the same course by time as 「第1课/第2课…」, so they're distinguishable and their recordings don't clash.
   const scheduleSessions = useMemo(() => {

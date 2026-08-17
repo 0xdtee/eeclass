@@ -169,7 +169,7 @@ class Library:
         con.close()
         return n_new
 
-    def search(self, q, limit=50):
+    def search(self, q, limit=50, sids=None):
         q = (q or "").strip()
         if not q:
             return [], 0
@@ -178,14 +178,27 @@ class Library:
         toks = self._tok(q)
         if not toks:
             return [], 0
+        # data isolation: when sids is given (a non-super caller), constrain to the caller's own
+        # sessions **inside SQL**, so ORDER BY rank + LIMIT rank/truncate among only their hits.
+        # (filtering after LIMIT would drop the caller's genuine matches behind other users'.)
+        if sids is not None:
+            sids = list(sids)
+            if not sids:
+                return [], 0
         expr = 'body : "' + toks.replace('"', "") + '"'
         con = self._db()
         try:
+            sid_clause, sid_params = "", []
+            if sids is not None:
+                sid_clause = " AND sid IN (%s)" % ",".join("?" * len(sids))
+                sid_params = sids
             rows = con.execute(
                 "SELECT sid,line_id,ts,start,speaker,kind,text FROM lines "
-                "WHERE lines MATCH ? ORDER BY rank LIMIT ?", (expr, limit)).fetchall()
-            total = con.execute("SELECT count(*) FROM lines WHERE lines MATCH ?",
-                                (expr,)).fetchone()[0]
+                "WHERE lines MATCH ?" + sid_clause + " ORDER BY rank LIMIT ?",
+                (expr, *sid_params, limit)).fetchall()
+            total = con.execute(
+                "SELECT count(*) FROM lines WHERE lines MATCH ?" + sid_clause,
+                (expr, *sid_params)).fetchone()[0]
         except sqlite3.OperationalError:
             return [], 0
         finally:

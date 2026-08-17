@@ -111,6 +111,12 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
     last    double precision NOT NULL
 );
 
+-- Emails that recently deleted their account: blocks re-registration for a cooldown window.
+CREATE TABLE IF NOT EXISTS deleted_emails (
+    email      text PRIMARY KEY,
+    deleted_at double precision NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS recordings (
     sid         text PRIMARY KEY,
     title       text,
