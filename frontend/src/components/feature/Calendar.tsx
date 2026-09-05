@@ -20,7 +20,6 @@ interface CalendarProps {
   onSelectSession: (id: string) => void;
   onCreateSession: (date: string) => void;
   onImport?: () => void;
-  onSyncShu?: () => void;
   /** When changed, the calendar jumps to the month containing this date (e.g. jump to the course's month after importing a schedule) */
   focusDate?: string;
 }
@@ -71,7 +70,7 @@ function getColorClass(color: string, type: 'bg' | 'border' | 'text' | 'dot' | '
   return map[color]?.[type] ?? map.accent[type];
 }
 
-export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, onImport, onSyncShu, focusDate }: CalendarProps) {
+export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, onImport, focusDate }: CalendarProps) {
   const t = useT();
   const today = new Date();
   const [viewMode, setViewMode] = useState<CalendarView>('week');
@@ -268,15 +267,6 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                 {t('导入文档')}
               </button>
             )}
-            {onSyncShu && (
-              <button
-                onClick={onSyncShu}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap border border-background-200"
-              >
-                <i className="ri-graduation-cap-line"></i>
-                {t('同步上大课表')}
-              </button>
-            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -452,7 +442,9 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                         className={`w-full text-left mb-0.5 px-1.5 py-1 rounded-md border text-[11px] leading-tight cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
                         title={`${s.title}${s.description ? ' · ' + s.description : ''}`}
                       >
-                        <div className="font-semibold line-clamp-2">{s.title}</div>
+                        <div className="font-semibold line-clamp-2">
+                          {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
+                        </div>
                         {s.tags[0] && tagLabels[s.tags[0]] && (
                           <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1 rounded text-[9px] font-medium ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
                             <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
@@ -704,7 +696,9 @@ function MonthView({
                     <div key={session.id} className="space-y-0.5">
                       <div className={`flex items-center gap-1 px-1 py-0.5 rounded text-[10px] leading-tight ${bgClass} bg-background-50/60`}>
                         <span className={`w-1 h-1 rounded-full ${dotClass} flex-shrink-0`}></span>
-                        <span className={`truncate font-medium ${textClass}`}>{displayTitle}</span>
+                        <span className={`truncate font-medium ${textClass}`}>
+                          {session.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{displayTitle}
+                        </span>
                       </div>
                       {idx === 0 && session.summary && (
                         <p className="text-[9px] leading-tight text-foreground-400 px-1 line-clamp-2">
@@ -863,7 +857,9 @@ function DayView({
                             </div>
 
                             {/* Title */}
-                            <h5 className="text-sm font-semibold text-foreground-800 mb-1.5">{session.title}</h5>
+                            <h5 className="text-sm font-semibold text-foreground-800 mb-1.5">
+                              {session.id.startsWith('mtg-') && <i className="ri-translate-2 mr-1 text-accent-500"></i>}{session.title}
+                            </h5>
 
                             {/* Tag chip (label carried by imported courses) */}
                             {session.tags[0] && tagLabels[session.tags[0]] && (

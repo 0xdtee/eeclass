@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useT } from '@/lib/i18n';
 
@@ -7,6 +7,10 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const t = useT();
   const { register, sendRegisterCode } = useAuth();
+  // Return to a ?redirect= path after registering (e.g. from the meeting page); internal paths only.
+  const [sp] = useSearchParams();
+  const rawRedirect = sp.get('redirect') || '/';
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,7 +66,7 @@ export default function RegisterPage() {
     setBusy(true);
     try {
       await register(name, email, password, code);
-      navigate('/');
+      navigate(redirect);
     } catch (e) {
       setErr(e instanceof Error ? e.message : t('注册失败'));
     } finally {
@@ -234,7 +238,10 @@ export default function RegisterPage() {
 
             <p className="text-center text-sm text-foreground-400">
               {t('已有账户？')}{' '}
-              <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">
+              <Link
+                to={redirect !== '/' ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'}
+                className="text-primary-600 font-medium hover:text-primary-700"
+              >
                 {t('立即登录')}
               </Link>
             </p>

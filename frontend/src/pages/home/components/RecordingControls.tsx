@@ -31,6 +31,8 @@ interface RecordingControlsProps {
   notice: string;
   sessionTitle: string;
   micActive: boolean;
+  gain: number;
+  onGainChange: (v: number) => void;
   courses: { id: string; name: string }[];
   /** Subject tags (syllabus names), checkable, providing subject context for correction */
   subjectTags?: string[];
@@ -55,6 +57,9 @@ interface RecordingControlsProps {
   onMark: () => void;
   autoStartNaming?: boolean;
   initialCourseName?: string;
+  /** When viewing a saved session (not recording): its id + a rename callback, so the name box renames it. */
+  renameSid?: string;
+  onRenameSession?: (title: string) => Promise<void> | void;
 }
 
 const formatTime = (seconds: number) => {
@@ -78,6 +83,8 @@ export default function RecordingControls({
   error,
   notice,
   micActive,
+  gain,
+  onGainChange,
   courses,
   subjectTags,
   onShoot,
@@ -87,6 +94,8 @@ export default function RecordingControls({
   onMark,
   autoStartNaming,
   initialCourseName,
+  renameSid,
+  onRenameSession,
 }: RecordingControlsProps) {
   const t = useT();
   const { user } = useAuth();
@@ -101,6 +110,18 @@ export default function RecordingControls({
   const [confirm, setConfirm] = useState<'' | 'pause' | 'stop'>('');   // Confirmation: pause / stop
   const [courseName, setCourseName] = useState(() => initialCourseName?.trim() || defaultCourseName());   // Inline course name, prefilled and editable
   const nameRef = useRef<HTMLInputElement>(null);
+  const [renamed, setRenamed] = useState(false);
+  // Viewing a saved session -> show its title in the box so it can be renamed in place.
+  useEffect(() => {
+    if (renameSid) setCourseName(initialCourseName?.trim() || '');
+  }, [renameSid, initialCourseName]);
+  const doRename = async () => {
+    const name = courseName.trim();
+    if (!renameSid || !name || !onRenameSession) return;
+    await onRenameSession(name);
+    setRenamed(true);
+    window.setTimeout(() => setRenamed(false), 1600);
+  };
   const [aiCorrect, setAiCorrect] = useState(defaults.aiCorrect);  // AI real-time correction toggle (defaults from settings)
   const [smartSeg, setSmartSeg] = useState(defaults.smartSeg);     // AI smart sentence splitting (defaults from settings)
   const [separateMulti, setSeparateMulti] = useState(false);       // experimental: split simultaneous speakers (GPU separation)
@@ -212,22 +233,35 @@ export default function RecordingControls({
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && connected && !starting) {
-                    onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, separateMulti, translateFrom, translateTo, subjects });
-                  }
+                  if (e.key !== 'Enter' || starting) return;   // allow while the socket is still connecting; start() waits for it
+                  // Viewing a saved session: Enter renames it (don't accidentally start a new recording).
+                  if (renameSid) { void doRename(); return; }
+                  onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, separateMulti, translateFrom, translateTo, subjects });
                 }}
                 placeholder={t('课程名称(如 高数第3讲)')}
-                title={t('本节课名称,可直接修改')}
+                title={renameSid ? t('改这节课的名称,回车保存') : t('本节课名称,可直接修改')}
                 className="px-3 py-2.5 bg-background-100 border border-background-200 rounded-lg text-sm text-foreground-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 w-[190px]"
               />
+              {renameSid && (
+                <button
+                  type="button"
+                  onClick={() => void doRename()}
+                  disabled={!courseName.trim()}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-background-100 text-foreground-700 border border-background-200 rounded-full text-sm font-medium hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-40"
+                  title={t('保存这节课的新名称')}
+                >
+                  <i className={renamed ? 'ri-check-line text-green-600' : 'ri-edit-line'}></i>
+                  {renamed ? t('已改名') : t('改名')}
+                </button>
+              )}
               <button
                 data-guide="rec-start"
                 onClick={() => onStart({ device, sensitivity, toWord, courseId: courseId || null, model, title: courseName.trim() || defaultCourseName(), aiCorrect, smartSeg, separateMulti, translateFrom, translateTo, subjects })}
-                disabled={!connected || starting}
+                disabled={starting}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-semibold hover:bg-primary-600 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <i className={`${starting ? 'ri-loader-4-line animate-spin' : 'ri-mic-line'} text-lg`}></i>
-                {starting ? t('正在启动…') : t('开始录音')}
+                {starting ? t('正在启动…') : renameSid ? t('继续录音') : t('开始录音')}
               </button>
             </>
           )}
@@ -431,17 +465,19 @@ export default function RecordingControls({
               )}
             </div>
 
-            <Select
-              value={sensitivity}
-              onChange={(v) => setSensitivity(v as 'std' | 'high' | 'max')}
-              icon="ri-equalizer-line"
-              title={t('老师声音较小或距离较远时,可调高灵敏度')}
-              options={[
-                { value: 'std', label: t('灵敏度·标准') },
-                { value: 'high', label: t('灵敏度·灵敏') },
-                { value: 'max', label: t('灵敏度·最灵敏') },
-              ]}
-            />
+            <label
+              className="inline-flex items-center gap-2 text-xs text-foreground-600 bg-background-100 border border-background-200 rounded-full px-3.5 py-2 whitespace-nowrap"
+              title={t('老师声音较小或距离较远时,把收音增益调大')}
+            >
+              <i className="ri-mic-line text-foreground-500"></i>
+              <span>{t('收音增益')}</span>
+              <input
+                type="range" min={1} max={6} step={0.5} value={gain}
+                onChange={(e) => onGainChange(Number(e.target.value))}
+                className="w-24 cursor-pointer accent-primary-500"
+              />
+              <span className="tabular-nums w-9 text-foreground-800 font-semibold">{gain.toFixed(1)}×</span>
+            </label>
 
             <button type="button" data-guide="ai-correct" onClick={() => setAiCorrect(!aiCorrect)} className={pillCls(aiCorrect)} title={t('出字后由 DeepSeek 异步纠正同音错字(如影射→映射),会消耗少量 API 额度')}>
               <i className="ri-sparkling-2-line"></i>{t('AI 实时纠错')}
@@ -456,6 +492,17 @@ export default function RecordingControls({
         )}
 
         <div className="flex items-center gap-3 ml-auto">
+          {uiStatus !== 'idle' && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-foreground-500 whitespace-nowrap" title={t('实时调整收音增益')}>
+              <i className="ri-mic-line"></i>
+              <input
+                type="range" min={1} max={6} step={0.5} value={gain}
+                onChange={(e) => onGainChange(Number(e.target.value))}
+                className="w-20 cursor-pointer accent-primary-500"
+              />
+              <span className="tabular-nums w-9 font-medium text-foreground-700">{gain.toFixed(1)}×</span>
+            </label>
+          )}
           {uiStatus !== 'idle' && (
             <div className="w-24 h-1.5 bg-background-200 rounded-full overflow-hidden" title={t('输入音量')}>
               <div

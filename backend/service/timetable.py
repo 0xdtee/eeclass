@@ -16,12 +16,34 @@ def _get_ocr():
     return _OCR
 
 
+# Shanghai University bell schedule (period -> time). When the timetable only shows 节次, map to these times.
+_SHU_BELLS = (
+    "上海大学作息时间(节次→上课时间):第1节 08:00-08:45、第2节 08:55-09:40、第3节 10:00-10:45、"
+    "第4节 10:55-11:40、第5节 13:00-13:45、第6节 13:55-14:40、第7节 15:00-15:45、第8节 15:55-16:40、"
+    "第9节 18:00-18:45、第10节 18:55-19:40、第11节 20:00-20:45、第12节 20:55-21:40。"
+    "课表里若只给了节次(如「1-2节」「3-4」),就按此表换算成 start/end,跨多节取第一节开始到最后一节结束;"
+    "若截图里直接写了具体时间,则以截图的时间为准。")
+
+
+# Weeks: SHU cells print the exact weeks per course (「(1-2节)1-16周」「(3-4节)第1周」「1周,5周,9周,13周」「1-16周(单)」).
+# Expand into an explicit list so ranges, single weeks, discrete weeks and odd/even are all handled uniformly.
+_WEEK_RULE = (
+    "周次:每门课名下面通常写着上课周次(常紧跟在节次后面,如「(1-2节)1-16周」「(3-4节)第1周」「(3-4节)2-16周」"
+    "「(3-4节)9-16周」,也可能是离散的「1周,5周,9周,13周」,或带单双周的「1-16周(单)」「1-16周(双)」)。"
+    "请把它展开成**具体的周数数组** weeks:"
+    "「1-16周」→[1,2,3,…,16];「第1周」→[1];「2-16周」→[2,3,…,16];「1周,5周,9周,13周」→[1,5,9,13];"
+    "「1-16周(单)」→[1,3,5,…,15];「1-16周(双)」→[2,4,…,16]。"
+    "注意周次和节次是两回事:节次(如1-2节)决定上课时间、周次决定哪几周上,别混。"
+    "如果确实没写周次,weeks 就返回空数组 []。")
+
+
 _SYSTEM = (
     "你是课表识别助手。用户给你一张大学周课表截图的 OCR 结果,已按列分好:第一列是节次编号和上课时间"
     "(如 1 08:00 08:45 表示第1节 08:00-08:45),其余每列依次是周一到周日。同一门课的课名常被 OCR 拆成多行"
     "(课名/@校区/教室号),要按 y 坐标相近合并成一门课。请还原成课程列表,输出 JSON:"
-    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号"}]}。'
+    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号","weeks":[周数数组]}]}。'
     "规则:day 周一=1...周日=7;start/end 取该课所在节次对应的时间(跨多节就取第一节开始到最后一节结束);"
+    + _SHU_BELLS + _WEEK_RULE +
     "课名去掉换行拼完整(如 高等数 学 A(2) → 高等数学A(2))、明显的 OCR 错字按常见课名纠正(如 博奔论→博弈论);"
     "被截断的课名按最可能的补全;没有教室就留空字符串。"
     "anchor_monday=截图这一周「周一」那天的真实日期,必须这样定:"
@@ -36,8 +58,9 @@ _SYSTEM = (
 
 _VISION_SYSTEM = (
     "你是课表识别助手。用户直接给你一张大学周课表截图。请识别其中所有课程,输出 JSON:"
-    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号"}]}。'
+    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号","weeks":[周数数组]}]}。'
     "规则:day 周一=1...周日=7;start/end 是该课的起止时间(跨多节取第一节开始到最后一节结束);"
+    + _SHU_BELLS + _WEEK_RULE +
     "课名补全完整、明显错字纠正;没有教室留空字符串。"
     "anchor_monday=截图这一周「周一」那天的真实日期:用表头的年份、月份(如「6月」)和各列表头的日期数字确定,"
     "以表头为准(即使和顶部当前日期不一致);识别不到就填空字符串。只输出 JSON,不要解释、不要代码块。"
@@ -90,10 +113,20 @@ def _clean_result(courses, anchor):
             day = 0
         if not (1 <= day <= 7):
             continue
+        weeks = []
+        for v in (c.get("weeks") or []):
+            try:
+                iv = int(v)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= iv <= 30 and iv not in weeks:
+                weeks.append(iv)
+        weeks.sort()
         clean.append({
             "name": str(c.get("name", "")).strip(), "day": day,
             "start": str(c.get("start", "") or ""), "end": str(c.get("end", "") or ""),
             "location": str(c.get("location", "") or ""), "room": str(c.get("room", "") or ""),
+            "weeks": weeks,
         })
     return {"courses": clean, "anchor_monday": anchor}
 

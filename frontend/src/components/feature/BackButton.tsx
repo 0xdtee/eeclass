@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useT } from '@/lib/i18n';
 
 interface BackButtonProps {
@@ -10,6 +10,7 @@ interface BackButtonProps {
 // Unified back button: tap = go to previous page (or home if no history); long-press ≥500ms = go home.
 export default function BackButton({ className, children }: BackButtonProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
@@ -40,7 +41,9 @@ export default function BackButton({ className, children }: BackButtonProps) {
       longPressedRef.current = false;
       return;
     }
-    if (window.history.length > 1) navigate(-1);
+    // location.key === 'default' means this is the first entry in this tab (a deep link / fresh load with no
+    // in-app history), so going back would leave the app; go to the app home instead of the browser's page.
+    if (location.key !== 'default') navigate(-1);
     else navigate('/');
   };
 

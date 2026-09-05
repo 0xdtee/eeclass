@@ -86,7 +86,7 @@ export default function LandingPage() {
             : 'bg-transparent'
         }`}
       >
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 flex items-center justify-center bg-accent-500 rounded-lg">
               <i className="ri-book-open-line text-background-50 text-lg"></i>
@@ -124,7 +124,7 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/30 to-black/50"></div>
         </div>
 
-        <div className="relative z-10 w-full max-w-6xl mx-auto px-6 py-20 md:py-24">
+        <div className="relative z-10 w-full max-w-7xl mx-auto px-6 py-20 md:py-24">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-background-50/20 backdrop-blur-sm rounded-full border border-background-50/20 mb-6">
               <div className="w-2 h-2 rounded-full bg-accent-400 animate-pulse"></div>
@@ -164,7 +164,7 @@ export default function LandingPage() {
       </section>
 
       {/* Stats Bar */}
-      <section className="relative -mt-12 z-20 max-w-4xl mx-auto px-6 mb-16">
+      <section className="relative -mt-12 z-20 max-w-5xl mx-auto px-6 mb-16">
         <div className="bg-background-50 rounded-2xl border border-background-200 grid grid-cols-2 md:grid-cols-4 divide-x divide-background-100 overflow-hidden">
           {stats.map((stat) => (
             <div key={stat.label} className="px-6 py-5 text-center">
@@ -177,7 +177,7 @@ export default function LandingPage() {
 
       {/* Features */}
       <section id="features" className="py-16 md:py-20">
-        <div className="max-w-6xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="inline-block px-3 py-1 bg-accent-100 text-accent-700 text-xs font-semibold rounded-full mb-4">
               {t('核心功能')}
@@ -209,7 +209,7 @@ export default function LandingPage() {
 
       {/* How it Works */}
       <section id="how-it-works" className="py-16 md:py-20 bg-background-100">
-        <div className="max-w-6xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-xs font-semibold rounded-full mb-4">
               {t('三步开始')}
@@ -279,7 +279,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="bg-background-100 border-t border-background-200 py-10">
-        <div className="max-w-6xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 flex items-center justify-center bg-accent-500 rounded-lg">

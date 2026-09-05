@@ -3,12 +3,20 @@
  * Google Docs, WPS, etc. (The old approach saved HTML as .doc, which non-Word apps show as raw markup.)
  * The library is lazy-loaded so it stays out of the main bundle.
  */
+import { latexToPlain } from './mathText';
 
 export interface WordLine {
   ts: string;
   speaker: string;
   text: string;
   kind?: 'key' | 'define' | null;
+}
+
+export interface WordQuestion {
+  type: string;
+  question: string;
+  answer: string;
+  point?: string;
 }
 
 export interface WordDoc {
@@ -18,9 +26,15 @@ export interface WordDoc {
   keyPoints?: string[];
   corrections?: string[];
   lines?: WordLine[];
+  questions?: WordQuestion[];   // mock exam paper
 }
 
 const ACCENT = '4F46E5';   // indigo (hex, no '#')
+
+// Render LaTeX-ish math to readable plain text (Word can't run KaTeX), and put each MC choice on its own line.
+const plain = latexToPlain;
+const splitChoicesText = (s: string) =>
+  latexToPlain(s).replace(/\s*([A-D][.、．)])\s*/g, (_m, g) => `\n${g} `).replace(/^\n/, '');
 
 const parseCorr = (c: string): [string, string] | null => {
   const m = (c || '').match(/听成[\s"'“”「『]*(.+?)[\s"'“”」』]*应为[\s"'“”「『]*(.+?)(?:["'“”」』]|[，,。；;、]|$)/);
@@ -82,6 +96,32 @@ export async function exportWord(doc: WordDoc): Promise<void> {
         new TextRun({ text: a, strike: true, size: 21, color: 'B45309' }),
         new TextRun({ text: '  →  ', size: 21, color: '92400E' }),
         new TextRun({ text: b, bold: true, size: 21, color: '92400E' }),
+      ],
+    })));
+  }
+
+  const questions = doc.questions ?? [];
+  if (questions.length) {
+    // The exam paper: numbered questions first...
+    children.push(heading('模拟试卷'));
+    questions.forEach((q, i) => {
+      const qLines = splitChoicesText(q.question).split('\n');
+      const runs = [
+        new TextRun({ text: `${i + 1}.  `, bold: true, size: 22, color: ACCENT }),
+        new TextRun({ text: q.type ? `[${q.type}] ` : '', size: 18, color: '9CA3AF' }),
+        new TextRun({ text: qLines[0] ?? '', size: 22, color: '1F2937' }),
+        ...qLines.slice(1).map((ln) => new TextRun({ text: ln, size: 22, color: '374151', break: 1 })),
+      ];
+      children.push(new Paragraph({ spacing: { after: 220, line: 340, lineRule: 'auto' }, children: runs }));
+    });
+    // ...then the answer key, so the paper can actually be attempted before checking.
+    children.push(heading('参考答案'));
+    questions.forEach((q, i) => children.push(new Paragraph({
+      spacing: { after: 90, line: 300, lineRule: 'auto' },
+      children: [
+        new TextRun({ text: `${i + 1}.  `, bold: true, size: 21, color: ACCENT }),
+        new TextRun({ text: plain(q.answer), size: 21, color: '374151' }),
+        ...(q.point ? [new TextRun({ text: `  (考点:${plain(q.point)})`, size: 18, color: '9CA3AF' })] : []),
       ],
     })));
   }

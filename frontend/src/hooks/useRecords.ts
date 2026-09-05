@@ -34,6 +34,7 @@ export interface ScheduleCourse {
   end: string;
   location: string;
   room: string;
+  weeks?: number[];   // recognized teaching weeks, e.g. [1..16] or [1,5,9,13]; [] = unknown
 }
 
 /** Course events with concrete dates (not weekly-recurring, just whatever was imported) */
@@ -276,6 +277,16 @@ export function useRecords() {
     []
   );
 
+  /** Post-class one-click supplementary highlighting: DeepSeek marks the definitions/key points the real-time rules missed */
+  const autoHighlight = useCallback(
+    (sid: string) =>
+      api<{ ok: boolean; added: number; define: number; key: number }>(
+        `/api/transcript/${encodeURIComponent(sid)}/autohighlight`,
+        { method: 'POST' }
+      ),
+    []
+  );
+
   /** Rename a speaker after recording: override by speaker_id, changing every sentence of that person; also records the voiceprint into the voiceprint library */
   const renameSpeaker = useCallback(
     (sid: string, speakerId: number, name: string) =>
@@ -318,6 +329,16 @@ export function useRecords() {
     []
   );
 
+  /** PDF timetable → server renders page 1 (pdftoppm) → OCR/vision → courses (with week ranges + parity) */
+  const importTimetablePdf = useCallback(
+    (pdfBase64: string) =>
+      api<{ courses: ScheduleCourse[]; anchor_monday?: string; error?: string }>('/api/import/timetable-pdf', {
+        method: 'POST',
+        body: JSON.stringify({ pdf: pdfBase64 }),
+      }),
+    []
+  );
+
   /** Reference material: course syllabus */
   const listSyllabus = useCallback(() => api<{ courses: { name: string; official: boolean }[] }>('/api/syllabus'), []);
   const getSyllabus = useCallback(
@@ -326,16 +347,6 @@ export function useRecords() {
   );
   /** Reference material: official syllabus PDF catalog by school */
   const listSchools = useCallback(() => api<{ schools: OfficialSchool[] }>('/api/syllabus/schools'), []);
-
-  /** SHU academic-affairs system auto-login + timetable fetch (takes about 15-25 seconds) */
-  const importShu = useCallback(
-    (username: string, password: string) =>
-      api<{ events: ScheduleEvent[]; note?: string; error?: string }>('/api/import/shu', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      }),
-    []
-  );
 
   /** Save/read dated course events (persisted, survives refresh; whole-table overwrite, with the frontend doing the merge/dedup before sending the full set) */
   const saveSchedule = useCallback(
@@ -387,6 +398,18 @@ export function useRecords() {
     []
   );
 
+  /** Rename a recorded session's title (persists to the server); reload so the new title shows everywhere. */
+  const renameSession = useCallback(
+    async (sid: string, title: string) => {
+      await api<{ ok: boolean; title: string }>(`/api/sessions/${encodeURIComponent(sid)}/title`, {
+        method: 'POST',
+        body: JSON.stringify({ title }),
+      });
+      await reload();
+    },
+    [reload]
+  );
+
   /** Personalized feedback loop: learn the terms the user corrected, so later classes auto-correct this homophone error.
    *  Also send the wrong->right pair and session id (when known) so the server can log the learning provenance for research. */
   const learnTerm = useCallback(
@@ -412,7 +435,7 @@ export function useRecords() {
     []
   );
 
-  return { sessions, loading, error, reload, loadTranscript, editLine, loadEdits, loadSummary, saveSummary, loadNote, saveNote, markLine, renameSpeaker, learnTerm, importTimetable, importShu, saveSchedule, loadSchedule, listSyllabus, getSyllabus, listSchools, listVoices, addVoiceprint, deleteVoiceprint, courseSummary, courseExam, courseMock, setSessionTags, createShare, revokeShare };
+  return { sessions, loading, error, reload, loadTranscript, editLine, loadEdits, loadSummary, saveSummary, loadNote, saveNote, markLine, autoHighlight, renameSpeaker, renameSession, learnTerm, importTimetable, importTimetablePdf, saveSchedule, loadSchedule, listSyllabus, getSyllabus, listSchools, listVoices, addVoiceprint, deleteVoiceprint, courseSummary, courseExam, courseMock, setSessionTags, createShare, revokeShare };
 }
 
 /** Share link (for others to open, no token required) */

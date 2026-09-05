@@ -83,6 +83,10 @@ const KEYFRAMES = `
   0%,100% { opacity: 1; }
   50%     { opacity: 0; }
 }
+@keyframes hd-rise {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
 @media (prefers-reduced-motion: reduce) {
   .hd-anim { animation: none !important; }
 }
@@ -936,6 +940,521 @@ export function ToggleDemo() {
   );
 }
 
+/* ================================================================== */
+/* 18. Meeting Translator — multi-language live subtitles             */
+/* ================================================================== */
+
+const ML_LINES = [
+  { zh: '我们下周一上线', en: 'We go live next Monday' },
+  { zh: '先过一下发布清单', en: 'Let’s run through the checklist' },
+  { zh: '这一版重点是稳定性', en: 'This release focuses on stability' },
+  { zh: '测试要覆盖主要流程', en: 'Testing should cover the main flows' },
+  { zh: '上线后我盯着监控', en: 'I’ll watch the dashboards after launch' },
+  { zh: '有问题随时同步', en: 'Sync up anytime if issues come up' },
+];
+
+export function MeetingLiveDemo() {
+  const t = useT();
+  const reduced = usePrefersReducedMotion();
+  const i = useCycle(ML_LINES.length + 2, 850, reduced); // sentences stream in one by one, then hold
+  const shown = reduced ? ML_LINES.length : Math.min(i + 1, ML_LINES.length);
+  const rows = ML_LINES.slice(0, shown);
+  const col = (chip: string, pick: (r: { zh: string; en: string }) => string, strong: boolean) => (
+    <div className="flex-1 min-w-0 flex flex-col">
+      <span className="self-start text-[9px] font-bold px-1.5 py-0.5 rounded bg-accent-100 text-accent-600">{t(chip)}</span>
+      {/* bottom-aligned: newest line hugs the bottom, older lines stack above */}
+      <div className="flex-1 overflow-hidden flex flex-col justify-end gap-1 pt-1">
+        {rows.map((r, idx) => (
+          <span
+            key={idx}
+            className={`text-[9px] leading-snug break-words ${strong ? 'text-foreground-800' : 'text-foreground-600'}`}
+            style={idx === rows.length - 1 && !reduced ? { animation: 'hd-rise .5s ease-out' } : undefined}
+          >
+            {pick(r)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <Screen title={t('多语言实时字幕')} icon="ri-translate-2">
+      {/* 16:9 like a projection screen */}
+      <div className="aspect-video flex gap-1.5">
+        {col('中', (r) => t(r.zh), true)}
+        {col('英', (r) => r.en, false)}
+      </div>
+    </Screen>
+  );
+}
+
+// Three-language variant (中 / 英 / 法): shows you can pick more than two.
+const ML3_LINES = [
+  { zh: '我们下周一上线', en: 'We go live next Monday', fr: 'On lance lundi prochain' },
+  { zh: '先过一下发布清单', en: 'Let’s run the checklist', fr: 'Passons la checklist' },
+  { zh: '这一版重点是稳定性', en: 'This release is about stability', fr: 'Cette version vise la stabilité' },
+  { zh: '有问题随时同步', en: 'Sync up anytime', fr: 'On se synchronise à tout moment' },
+];
+
+export function MeetingLive3Demo() {
+  const t = useT();
+  const reduced = usePrefersReducedMotion();
+  const i = useCycle(ML3_LINES.length + 2, 900, reduced);
+  const shown = reduced ? ML3_LINES.length : Math.min(i + 1, ML3_LINES.length);
+  const rows = ML3_LINES.slice(0, shown);
+  const col = (chip: string, pick: (r: { zh: string; en: string; fr: string }) => string, strong: boolean) => (
+    <div className="flex-1 min-w-0 flex flex-col">
+      <span className="self-start text-[8px] font-bold px-1 py-0.5 rounded bg-accent-100 text-accent-600">{t(chip)}</span>
+      <div className="flex-1 overflow-hidden flex flex-col justify-end gap-1 pt-1">
+        {rows.map((r, idx) => (
+          <span
+            key={idx}
+            className={`text-[8px] leading-snug break-words ${strong ? 'text-foreground-800' : 'text-foreground-600'}`}
+            style={idx === rows.length - 1 && !reduced ? { animation: 'hd-rise .5s ease-out' } : undefined}
+          >
+            {pick(r)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <Screen title={t('多语言实时字幕')} icon="ri-translate-2">
+      <div className="aspect-video flex gap-1.5">
+        {col('中', (r) => t(r.zh), true)}
+        {col('英', (r) => r.en, false)}
+        {col('法', (r) => r.fr, false)}
+      </div>
+    </Screen>
+  );
+}
+
+// Card demo: two languages, then three — so it's clear you can select several.
+export function MeetingLiveShowcase() {
+  const t = useT();
+  const label = (text: string) => (
+    <div className="flex items-center gap-1 text-[10px] font-medium text-foreground-400">
+      <i className="ri-checkbox-circle-line text-accent-500" />{t(text)}
+    </div>
+  );
+  return (
+    <div className="space-y-2">
+      {label('选 2 种语言')}
+      <MeetingLiveDemo />
+      {label('选 3 种语言(中 / 英 / 法)')}
+      <MeetingLive3Demo />
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* 19. Meeting Translator — projection layout (big fonts / fullscreen) */
+/* ================================================================== */
+
+// Same content in both layouts — only the arrangement (stacked vs columns) differs.
+// Same sentences shown in both layouts — only the arrangement (stacked vs columns) differs.
+type ProjPair = { zh: string; en: string; fr?: string };
+type ProjLang = { chip: string; key: 'zh' | 'en' | 'fr'; translate?: boolean; strong?: boolean };
+
+const MP_PAIRS: ProjPair[] = [
+  { zh: '欢迎各位参加今天的会议', en: 'Welcome to today’s meeting' },
+  { zh: '先看这一季的整体路线图', en: 'First, the overall roadmap this quarter' },
+  { zh: '请看这一页的关键里程碑', en: 'Now, the key milestones on this page' },
+];
+const MP3_PAIRS: ProjPair[] = [
+  { zh: '欢迎各位参加今天的会议', en: 'Welcome to today’s meeting', fr: 'Bienvenue à la réunion' },
+  { zh: '先看这一季的整体路线图', en: 'The overall roadmap this quarter', fr: 'La feuille de route du trimestre' },
+];
+const LANGS2: ProjLang[] = [{ chip: '中', key: 'zh', translate: true, strong: true }, { chip: '英', key: 'en' }];
+const LANGS3: ProjLang[] = [...LANGS2, { chip: '法', key: 'fr' }];
+
+// One projection screen: toggles 横版 (stacked) ↔ 竖版 (columns); the same sentences either way.
+// Works for any number of languages, so 2- and 3-language variants share this.
+function ProjectionCore({ pairs, langs }: { pairs: ProjPair[]; langs: ProjLang[] }) {
+  const t = useT();
+  const reduced = usePrefersReducedMotion();
+  const i = useCycle(2, 2000, reduced);
+  const columns = reduced ? false : i === 1; // false = 横版 (stacked), true = 竖版 (columns)
+  const txt = (p: ProjPair, l: ProjLang) => (l.translate ? t(p[l.key] || '') : p[l.key] || '');
+  return (
+    <Screen title={t('投屏排版')} icon="ri-slideshow-2-line">
+      {/* 16:9 like a projection screen */}
+      <div className="aspect-video flex flex-col">
+        {/* toolbar: which layout is active, font size, fullscreen */}
+        <div className="flex items-center gap-1.5 mb-2 flex-shrink-0">
+          <span className="text-[9px] font-semibold text-accent-600 w-6">{columns ? t('竖版') : t('横版')}</span>
+          <span className={`w-4 h-4 flex items-center justify-center rounded transition-colors ${!columns ? 'bg-accent-100 text-accent-600' : 'text-foreground-300'}`}>
+            <i className="ri-layout-row-line text-[11px]" />
+          </span>
+          <span className={`w-4 h-4 flex items-center justify-center rounded transition-colors ${columns ? 'bg-accent-100 text-accent-600' : 'text-foreground-300'}`}>
+            <i className="ri-layout-column-line text-[11px]" />
+          </span>
+          <span className="ml-auto flex items-center gap-2 text-foreground-300">
+            <span className="flex items-center gap-0.5 text-[9px] tabular-nums"><i className="ri-font-size" />150%</span>
+            <i className="ri-fullscreen-line text-[11px]" />
+          </span>
+        </div>
+        <div className="flex-1 min-h-0 flex items-stretch">
+          {!columns ? (
+            /* 横版: stacked, each sentence as one row per language */
+            <div key="stack" className="w-full overflow-hidden flex flex-col justify-end gap-1.5">
+              {pairs.map((p, idx) => (
+                <div key={idx} className="space-y-0.5">
+                  {langs.map((l, li) => (
+                    <div key={li} className="flex items-center gap-1.5">
+                      <span className="flex-shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-accent-100 text-accent-600">{t(l.chip)}</span>
+                      <span className={`text-[11px] font-semibold truncate ${l.strong ? 'text-foreground-900' : 'text-foreground-600'}`}>{txt(p, l)}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* 竖版: one column per language, the same sentences */
+            <div key="cols" className="w-full flex gap-1.5">
+              {langs.map((l, li) => (
+                <div key={li} className="flex-1 min-w-0 flex flex-col border-l-2 border-background-200 pl-1.5 first:border-l-0 first:pl-0">
+                  <span className="self-start text-[8px] font-bold px-1 py-0.5 rounded bg-accent-100 text-accent-600">{t(l.chip)}</span>
+                  <div className="flex-1 overflow-hidden flex flex-col justify-end gap-1 pt-1">
+                    {pairs.map((p, idx) => (
+                      <span key={idx} className="text-[10px] font-semibold text-foreground-800 break-words leading-snug">{txt(p, l)}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Screen>
+  );
+}
+
+export function MeetingProjectionDemo() { return <ProjectionCore pairs={MP_PAIRS} langs={LANGS2} />; }
+export function MeetingProjection3Demo() { return <ProjectionCore pairs={MP3_PAIRS} langs={LANGS3} />; }
+
+export function MeetingProjectionShowcase() {
+  const t = useT();
+  const label = (text: string) => (
+    <div className="flex items-center gap-1 text-[10px] font-medium text-foreground-400">
+      <i className="ri-checkbox-circle-line text-accent-500" />{t(text)}
+    </div>
+  );
+  return (
+    <div className="space-y-2">
+      {label('选 2 种语言')}
+      <MeetingProjectionDemo />
+      {label('选 3 种语言(中 / 英 / 法)')}
+      <MeetingProjection3Demo />
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* 20. Meeting Translator — AI meeting minutes (the highlight)         */
+/* ================================================================== */
+
+const MIN_POINTS = ['确定 8 月上线时间表', 'API 联调本周内完成'];
+const MIN_TODOS = [
+  { task: '补充测试用例', owner: '小李' },
+  { task: '准备发布说明', owner: 'Anna' },
+];
+
+export function MeetingMinutesDemo() {
+  const t = useT();
+  const reduced = usePrefersReducedMotion();
+  const i = useCycle(8, 720, reduced); // generating → summary → points → decision → todos → hold…
+  const generating = !reduced && i < 2;
+  const showSummary = reduced || i >= 2;
+  const showPoints = reduced || i >= 3;
+  const showDecision = reduced || i >= 4;
+  const showTodos = reduced || i >= 5;
+  const Row = ({ show, children }: { show: boolean; children: React.ReactNode }) => (
+    <div className="transition-all duration-400" style={{ opacity: show ? 1 : 0, transform: show ? 'translateY(0)' : 'translateY(6px)' }}>
+      {children}
+    </div>
+  );
+  return (
+    <Screen title={t('会议纪要')} icon="ri-file-list-3-line">
+      <div className="min-h-[118px] space-y-1.5">
+        <div className="flex items-center gap-1 text-[10px] font-semibold text-foreground-800">
+          <i className="ri-magic-fill text-accent-500" />
+          {generating ? (
+            <span className="flex items-center gap-1 text-foreground-400">
+              <i className="ri-loader-4-line animate-spin" />
+              {t('AI 整理中…')}
+            </span>
+          ) : (
+            t('8 月上线评审会')
+          )}
+        </div>
+        <Row show={showSummary}>
+          <p className="text-[9px] text-foreground-500 leading-snug pl-2 border-l-2 border-background-200">
+            {t('评审 8 月上线计划,明确联调排期与发布准备工作。')}
+          </p>
+        </Row>
+        <Row show={showPoints}>
+          <div className="text-[9px] font-semibold text-foreground-600 mb-0.5">{t('讨论要点')}</div>
+          {MIN_POINTS.map((p, idx) => (
+            <div key={idx} className="flex items-start gap-1 text-[9px] text-foreground-500">
+              <span className="text-accent-500 font-bold">{idx + 1}.</span>
+              {t(p)}
+            </div>
+          ))}
+        </Row>
+        <Row show={showTodos}>
+          <div className="text-[9px] font-semibold text-foreground-600 mb-0.5">{t('待办事项')}</div>
+          {MIN_TODOS.map((td, idx) => (
+            <div key={idx} className="flex items-center gap-1 text-[9px] text-foreground-500">
+              <i className="ri-checkbox-blank-circle-line text-[7px] text-accent-500" />
+              {t(td.task)}
+              <span className="px-1 rounded bg-accent-100 text-accent-600 text-[8px]">{t(td.owner)}</span>
+            </div>
+          ))}
+        </Row>
+      </div>
+      {/* footer: choose language + export PDF, mirroring the real minutes bar */}
+      <div className="mt-2 pt-1.5 border-t border-background-100 flex items-center gap-1.5" style={{ opacity: showDecision ? 1 : 0, transition: 'opacity .4s' }}>
+        {['中', '英'].map((c) => (
+          <span key={c} className="text-[8px] font-bold px-1 py-0.5 rounded bg-background-200 text-foreground-500">{t(c)}</span>
+        ))}
+        <span className="ml-auto inline-flex items-center gap-0.5 text-[8px] font-semibold text-accent-600">
+          <i className="ri-file-pdf-2-line" />
+          {t('导出 PDF')}
+        </span>
+      </div>
+    </Screen>
+  );
+}
+
+/* ================================================================== */
+/* 21. Meeting Translator — file library (slides / video beside text)  */
+/* ================================================================== */
+
+/**
+ * A mini PowerPoint slide rendered with pure CSS (two pages: a cover and a bullet page). Everything is
+ * sized in `em` off a single font-size derived from the given height `h` (px), so the whole slide scales
+ * proportionally — it renders correctly whether the display box is tiny or large.
+ */
+function MiniSlide({ page, h }: { page: number; h: number }) {
+  const t = useT();
+  const box: React.CSSProperties = {
+    height: h, width: (h * 4) / 3, fontSize: h / 9,
+    transition: 'width .5s ease, height .5s ease, font-size .5s ease', // grow smoothly with the box
+  };
+  if (page === 1) {
+    // Cover slide
+    return (
+      <div style={box} className="rounded bg-white flex flex-col items-center justify-center px-[0.5em] relative overflow-hidden shadow">
+        <div className="absolute top-0 left-0 right-0 bg-accent-500" style={{ height: '0.16em' }} />
+        <div className="font-bold text-neutral-800 leading-tight" style={{ fontSize: '1.15em' }}>{t('产品路线图')}</div>
+        <div className="text-neutral-400 tracking-wide" style={{ fontSize: '0.6em', marginTop: '0.2em' }}>PRODUCT ROADMAP · 2026</div>
+        <div className="bg-accent-500 rounded" style={{ width: '2.2em', height: '0.13em', marginTop: '0.35em' }} />
+      </div>
+    );
+  }
+  // Bullet slide
+  const bullets = ['Q1 立项调研', 'Q2 内部测试', 'Q3 正式上线'];
+  return (
+    <div style={box} className="rounded bg-white flex flex-col px-[0.7em] py-[0.5em] relative overflow-hidden shadow">
+      <div className="font-bold text-neutral-800" style={{ fontSize: '0.95em' }}>{t('关键里程碑')}</div>
+      <div className="bg-accent-500 rounded" style={{ width: '1.6em', height: '0.13em', marginTop: '0.15em', marginBottom: '0.4em' }} />
+      <div className="flex flex-col" style={{ gap: '0.32em' }}>
+        {bullets.map((b, idx) => (
+          <div key={idx} className="flex items-center text-neutral-600" style={{ fontSize: '0.82em', gap: '0.4em' }}>
+            <span className="rounded-full bg-accent-500 flex-shrink-0" style={{ width: '0.36em', height: '0.36em' }} />
+            <span className="truncate">{t(b)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Subtitle lines for the mock meeting page. Rendered bottom-aligned (newest hugs the bottom).
+const MF_SUBS = [
+  { zh: '欢迎各位参加今天的会议', en: 'Welcome everyone to today’s meeting' },
+  { zh: '先看这一季的整体路线图', en: 'First, the overall roadmap this quarter' },
+  { zh: '请看这一页的关键里程碑', en: 'Now, the key milestones on this page' },
+];
+
+// Vertical (columns) layout: one column per language, both visible at once, each bottom-aligned.
+function MfSubtitles() {
+  const t = useT();
+  const col = (chip: string, lines: string[], strong: boolean) => (
+    <div className="flex-1 min-w-0 flex flex-col">
+      <span className="self-start text-[8px] font-bold px-1 py-0.5 rounded bg-accent-100 text-accent-600">{t(chip)}</span>
+      <div className="flex-1 overflow-hidden flex flex-col justify-end gap-1 pt-1">
+        {lines.map((l, idx) => (
+          <span key={idx} className={`text-[8px] leading-snug break-words ${strong ? 'text-foreground-800' : 'text-foreground-500'}`}>{l}</span>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="h-full flex gap-2">
+      {col('中', MF_SUBS.map((p) => t(p.zh)), true)}
+      {col('英', MF_SUBS.map((p) => p.en), false)}
+    </div>
+  );
+}
+
+export function MeetingFilesDemo() {
+  const t = useT();
+  const reduced = usePrefersReducedMotion();
+  const i = useCycle(9, 1050, reduced);
+  // Full flow: ordinary page (adaptive, bottom-aligned subtitles) → open library → upload → double-click
+  // → present in the box → drag the divider to resize → collapse the top bar for a bigger view.
+  // Note the order: 'resize' only stretches the box (page stays 1); the page flips on the *next* frame
+  // ('flip'), at the same size — so the page turn happens after the stretch finishes, not during it.
+  const scene = reduced
+    ? 'collapse'
+    : (['normal', 'empty', 'uploading', 'opening', 'present', 'resize', 'flip', 'collapse', 'collapse'][i] || 'normal');
+  const inLibrary = scene === 'empty' || scene === 'uploading' || scene === 'opening';
+  const presenting = scene === 'present' || scene === 'resize' || scene === 'flip' || scene === 'collapse';
+  const collapsed = scene === 'collapse';
+  const boxH = scene === 'present' ? 42 : scene === 'resize' ? 72 : scene === 'flip' ? 72 : scene === 'collapse' ? 92 : 0; // file-box height (px)
+  const page = scene === 'flip' || scene === 'collapse' ? 2 : 1;
+  const caption = scene === 'resize' ? '拖动分隔条调整大小' : scene === 'flip' ? '拉伸完成,翻到下一页' : scene === 'collapse' ? '上拉顶栏,画面更大' : '';
+
+  return (
+    <Screen title={t('管理文件')} icon="ri-folder-3-line">
+      <div className="h-[150px] flex flex-col">
+        {/* top bar — collapses (pulls up) in the last scene to give the display more room */}
+        {!collapsed ? (
+          <div className="flex items-center gap-1 pb-1 mb-1 border-b border-background-200">
+            <i className="ri-translate-2 text-accent-500 text-[10px]" />
+            <span className="text-[8px] font-semibold text-foreground-700">{t('会议翻译')}</span>
+            <span
+              className={`ml-auto inline-flex items-center gap-0.5 text-[8px] rounded px-1 py-0.5 transition-colors ${
+                inLibrary ? 'bg-accent-500 text-background-50' : 'text-foreground-500 border border-background-200'
+              }`}
+            >
+              <i className="ri-folder-3-line" />{t('管理文件')}
+            </span>
+          </div>
+        ) : (
+          <div className="flex justify-center pb-1">
+            <span className="inline-flex items-center h-2.5 px-2 rounded-b bg-background-100 text-foreground-400">
+              <i className="ri-arrow-up-s-line text-[10px]" />
+            </span>
+          </div>
+        )}
+
+        {/* body */}
+        <div className="flex-1 min-h-0">
+          {scene === 'normal' ? (
+            /* ordinary page: subtitles fill the adaptive area, bottom-aligned */
+            <MfSubtitles />
+          ) : inLibrary ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1">
+                <i className="ri-folder-3-line text-accent-500 text-[11px]" />
+                <span className="text-[10px] font-semibold text-foreground-800">{t('文件库')}</span>
+                <span className="ml-auto inline-flex items-center gap-0.5 text-[8px] font-semibold text-background-50 bg-accent-500 rounded px-1.5 py-0.5">
+                  <i className="ri-add-line" />{t('新增文件')}
+                </span>
+              </div>
+              {scene === 'empty' ? (
+                <div className="rounded-md border border-dashed border-background-300 flex flex-col items-center justify-center gap-1 py-4 text-foreground-300">
+                  <i className="ri-upload-cloud-2-line text-base" />
+                  <span className="text-[8px]">{t('上传 PPT / 视频 / 图片')}</span>
+                </div>
+              ) : scene === 'uploading' ? (
+                <div className="rounded-md border border-background-200 bg-background-50 px-2 py-2.5">
+                  <div className="flex items-center gap-1 text-[9px] text-foreground-600 mb-1.5">
+                    <i className="ri-file-ppt-2-line text-accent-500" />{t('产品路线图.pptx')}
+                  </div>
+                  <div className="h-1 rounded-full bg-background-200 overflow-hidden">
+                    <div className="h-full bg-accent-500 rounded-full" style={{ width: '68%' }} />
+                  </div>
+                  <div className="text-[7px] text-foreground-400 mt-1">{t('上传中…')}</div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-1.5 py-2.5 rounded-md border border-accent-400 bg-accent-100 ring-2 ring-accent-200">
+                  <i className="ri-file-ppt-2-line text-accent-500 text-xs" />
+                  <span className="text-[10px] text-foreground-700 truncate">{t('产品路线图.pptx')}</span>
+                  <span className="ml-auto text-[8px] text-accent-600">{t('双击打开')}</span>
+                </div>
+              )}
+            </div>
+          ) : presenting ? (
+            /* presenting: bottom-aligned subtitle strip on top, resizable file box below */
+            <div className="h-full flex flex-col">
+              <div className="flex-1 min-h-0">
+                <MfSubtitles />
+              </div>
+              {/* divider — highlighted while resizing */}
+              <div className="flex justify-center py-0.5">
+                <div className={`h-0.5 rounded-full transition-all duration-300 ${scene === 'resize' ? 'w-12 bg-accent-500' : 'w-8 bg-background-300'}`} />
+              </div>
+              <div
+                style={{ height: boxH }}
+                className="relative flex-shrink-0 rounded-md bg-neutral-800 flex items-center justify-center transition-all duration-500 overflow-hidden"
+              >
+                <MiniSlide page={page} h={boxH - 12} />
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[6px] text-white/80 bg-black/40 rounded-full px-1 tabular-nums">
+                  {page} / 2
+                </span>
+                <i className="ri-close-line absolute top-0.5 right-0.5 text-white/60 text-[9px]" />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* scene caption for the resize / collapse steps */}
+        <div className="h-3 pt-0.5 text-center text-[7px] text-accent-600">
+          {caption ? (
+            <span className="inline-flex items-center gap-0.5">
+              <i className={scene === 'resize' ? 'ri-drag-move-2-line' : scene === 'flip' ? 'ri-arrow-right-s-line' : 'ri-arrow-up-s-line'} />
+              {t(caption)}
+            </span>
+          ) : ''}
+        </div>
+      </div>
+    </Screen>
+  );
+}
+
+/* ================================================================== */
+/* 22. Meeting Translator — meeting history                            */
+/* ================================================================== */
+
+const MH_ROWS = [
+  { d: '08-20', t: '8 月上线评审会' },
+  { d: '08-18', t: '中韩合作沟通' },
+];
+
+export function MeetingHistoryDemo() {
+  const t = useT();
+  const reduced = usePrefersReducedMotion();
+  const i = useCycle(MH_ROWS.length + 3, 750, reduced);
+  const shown = reduced ? MH_ROWS.length : Math.min(i, MH_ROWS.length);
+  return (
+    <Screen title={t('会议历史')} icon="ri-history-line">
+      <div className="space-y-1 min-h-[84px]">
+        {MH_ROWS.slice(0, shown).map((r, idx) => (
+          <div
+            key={idx}
+            className="flex items-center gap-2 px-1.5 py-1.5 rounded-md border border-background-200 bg-background-50"
+          >
+            <i className="ri-translate-2 text-accent-500 text-xs" />
+            <span className="text-[9px] font-mono text-foreground-400">{r.d}</span>
+            <span className="text-[10px] text-foreground-700 truncate">{t(r.t)}</span>
+            <span className="ml-auto flex items-center gap-1 text-[9px] text-foreground-300">
+              <i className="ri-file-list-3-line" title={t('会议纪要')} />
+            </span>
+          </div>
+        ))}
+        {shown < MH_ROWS.length && !reduced && (
+          <div className="flex items-center gap-1 text-[9px] text-foreground-300">
+            <i className="ri-save-line" /> {t('自动存档中…')}
+          </div>
+        )}
+      </div>
+    </Screen>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Demo component registry: mapped by key                              */
 /* ------------------------------------------------------------------ */
@@ -958,6 +1477,11 @@ export const DEMOS: Record<string, React.ComponentType> = {
   share: ShareDemo,
   history: HistoryDemo,
   toggle: ToggleDemo,
+  meetingLive: MeetingLiveShowcase,
+  meetingProjection: MeetingProjectionShowcase,
+  meetingMinutes: MeetingMinutesDemo,
+  meetingFiles: MeetingFilesDemo,
+  meetingHistory: MeetingHistoryDemo,
 };
 
 export type DemoKey = keyof typeof DEMOS;

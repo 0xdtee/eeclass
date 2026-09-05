@@ -100,7 +100,7 @@ export default function AudioListModal({ isOpen, onClose, sessions }: AudioListM
                       title={t('查看这节课的转写全文')}
                     >
                       <i className="ri-file-text-line"></i>
-                      {t('查查看转写')}
+                      {t('查看转写')}
                     </button>
                     {/* Export recording: download the raw audio.wav directly */}
                     <a

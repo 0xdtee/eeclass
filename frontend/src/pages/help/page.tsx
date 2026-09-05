@@ -1,10 +1,120 @@
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DEMOS, DemoKey, HelpDemoStyles } from './demos';
 import BackButton from '@/components/feature/BackButton';
 import { startGuide } from '@/hooks/useGuide';
 import { useT } from '@/lib/i18n';
 
-type CatId = 'record' | 'ai' | 'manage' | 'account';
+type CatId = 'record' | 'ai' | 'meeting' | 'manage' | 'account' | 'faq';
+
+// Q&A entries for the FAQ tab. Answers are short lines (rendered as paragraphs); an optional route
+// adds a "go there" button. Kept grounded to features that actually exist above.
+interface Faq {
+  q: string;
+  a: string[];
+  route?: string;
+  cta?: string;
+}
+
+const FAQS: Faq[] = [
+  {
+    q: '怎么设置每次录音默认开启哪些功能?',
+    a: [
+      '到「设置 → AI 处理默认项」,把想默认启用的开关逐个打开:实时纠错、智能分句、英文翻译、结束自动生成概要。',
+      '设好之后,每次开录音都会自动按这套配置启用,不用每次手动勾选。',
+    ],
+    route: '/settings',
+    cta: '前往设置',
+  },
+  {
+    q: '上网课 / 线上会议,怎么录到电脑里播放的声音?',
+    a: [
+      '到「设置 → 录音 → 默认音源」选「系统声音」(线下当面上课才用麦克风)。',
+      'macOS 上开始录音时,按提示分享「浏览器标签页」并勾选「分享标签页声音」,即可采集到网课/会议的声音。',
+    ],
+    route: '/settings',
+    cta: '录音设置',
+  },
+  {
+    q: '怎么切换识别模型、识别方言或多语言?',
+    a: [
+      '到「设置 → 录音 → 识别模型」里切换。',
+      '默认 SenseVoice 纯本机识别;需要方言(粤/吴/闽/川等,自动转普通话)或法德意西俄日韩等多语言时,选对应的云端模型。',
+    ],
+    route: '/settings',
+    cta: '录音设置',
+  },
+  {
+    q: '多个人同时说话,识别不出来怎么办?',
+    a: [
+      '在录音栏打开「多人分离(实验)」开关。系统会用 GPU 把重叠的话分成两条字幕,分别识别、各自归属说话人。',
+      '仍然使用你选的识别模型;分离服务不可用时会自动回退到普通识别。',
+    ],
+  },
+  {
+    q: '老是听错专业术语(如把「格林公式」听成「格林公司」)怎么办?',
+    a: [
+      '① 打开「AI 实时纠错」,让 DeepSeek 在后台把同音错字改回来。',
+      '② 录音前在「参考资料」里勾选本节相关学科,作为纠错的上下文,术语更准。',
+      '③ 课后在 AI 摘要页用「一键替换」,把某个听错的词一次改到全文并记住,以后自动纠正。',
+    ],
+  },
+  {
+    q: '怎么把「说话人1」改成真实姓名?',
+    a: [
+      '录制结束后,点某个说话人给他改名(如「王老师」)。',
+      '系统会记住他的声纹,下次这位老师讲课自动认出、自动署名;同一个人只存一份,改名会回溯更新过去所有课。',
+    ],
+  },
+  {
+    q: '录音中不小心关了页面 / 断网了,内容会丢吗?',
+    a: [
+      '不会。识别在服务器后台继续进行,回到页面时转写还在。',
+      '注意:AI 概要是在你点「结束录制 → 确认结束」之后才生成的,所以录完记得正常点结束。',
+    ],
+  },
+  {
+    q: '怎么把一节课导出或分享给别人?',
+    a: [
+      '导出:到「历史课程」打开某节课,导出为 Word 或 PDF。',
+      '分享:在该节课点「共享」生成只读链接发给别人,对方无需登录即可查看,链接可随时撤销。',
+    ],
+    route: '/course',
+    cta: '查看历史',
+  },
+  {
+    q: '摘要、考点、模拟卷、复习闪卡分别在哪生成?',
+    a: [
+      '单节课的 AI 概要:结束录制后自动生成,也可在「摘要预览」手动重新生成。',
+      '课程大总结 / 考点推测(带饼图)/ 模拟试卷:到「控制台 → 点课程总数卡片 → 选课程」,进课程详情各标签页生成。',
+      '复习闪卡与自测题:在录音页的「复习」标签页生成。',
+    ],
+  },
+  {
+    q: '我的音频和数据安全吗?会上传吗?',
+    a: [
+      '语音识别、说话人区分都在本机完成,音频不上传。',
+      '只有用到 AI 功能(纠错 / 摘要等)时,才会把转写的文字发给 DeepSeek;不用 AI 就没有任何外部调用。',
+      '每个账号严格隔离,你只看得到自己的课程、课表与声纹库。',
+    ],
+  },
+  {
+    q: '手机 / iPad 上能用吗?',
+    a: [
+      '能。手机和电脑浏览器都能打开网页版复习。',
+      'iPad 上还有原生 App:课堂用 iPad 录音,手机 / 电脑上复习,同一套后端、同一份数据。',
+    ],
+  },
+  {
+    q: '怎么注销账号?',
+    a: [
+      '到「设置 → 账户」里注销。',
+      '注销后 3 天内,该邮箱暂时不能重新注册。',
+    ],
+    route: '/settings',
+    cta: '前往设置',
+  },
+];
 
 interface Feature {
   icon: string;
@@ -221,6 +331,81 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: 'meeting',
+    label: '会议翻译',
+    icon: 'ri-translate-2',
+    intro: '一个人对着话筒说,多种语言实时出字幕,投屏到大屏。结束一键生成会议纪要,还能边放 PPT / 视频边显示字幕。',
+    features: [
+      {
+        icon: 'ri-translate-2',
+        name: '多语言实时字幕',
+        desc: '最多选 3 种语言(中/英/日/韩/法/德/西/意/俄)。说其中一种,其余语言实时作为字幕出现,分栏一一对应,说哪种哪种就是源语言。',
+        route: '/meeting',
+        cta: '前往会议翻译',
+        demo: 'meetingLive',
+        steps: [
+          '在「字幕语言」里勾选参会的语言(最多 3 种)。',
+          '点右上角「开始」,授权麦克风后开始说话。',
+          '说其中一种语言,其余语言实时在各自分栏出现。',
+          '面对面开会时把设备放桌子中间,「收音增益」调大些收得更全。',
+        ],
+      },
+      {
+        icon: 'ri-slideshow-2-line',
+        name: '投屏排版',
+        desc: '专为投屏设计:字幕铺满整宽、字号可像 Word 一样缩放、横版堆叠或竖版分栏随意切,一键全屏。顶栏可收起,把画面全留给字幕。',
+        route: '/meeting',
+        cta: '前往会议翻译',
+        demo: 'meetingProjection',
+        steps: [
+          '用「字号 − / %  / +」把字调到大屏够清楚的大小。',
+          '点布局按钮在横版(堆叠)和竖版(分栏)之间切换。',
+          '点全屏按钮投到大屏;需要更多空间时点顶栏把手把设置收起。',
+        ],
+      },
+      {
+        icon: 'ri-file-list-3-line',
+        name: '会议纪要',
+        desc: '点「结束」后自动用 AI 整理成结构化纪要:主题、概述、讨论要点、决定事项、待办(含负责人)。可选择语言生成对应语言的纪要,并按所选语言多选导出 PDF。',
+        route: '/meeting',
+        cta: '前往会议翻译',
+        demo: 'meetingMinutes',
+        steps: [
+          '开完会点「结束」,系统自动生成会议纪要。',
+          '在纪要面板选择语言,即可得到对应语言的纪要。',
+          '点导出 PDF,勾选要导出的语言(可多选)一次导出。',
+        ],
+      },
+      {
+        icon: 'ri-folder-3-line',
+        name: '管理文件',
+        desc: '每个账号一个文件库,可上传 PPT / 视频 / 图片。双击文件即在字幕上方的框里显示:PPT 像放映一样翻页,视频照常播放,字幕压缩在其上方,还能拉动分隔条调整大小。',
+        route: '/meeting',
+        cta: '前往会议翻译',
+        demo: 'meetingFiles',
+        steps: [
+          '点「管理文件」打开文件库,点「新增文件」上传 PPT / 视频等。',
+          '双击某个文件,让它在字幕上方的框里显示。',
+          'PPT 用方向键 / 点击翻页;拖动分隔条调整显示区域大小。',
+          '点右上角打叉关闭,恢复整屏字幕。',
+        ],
+      },
+      {
+        icon: 'ri-history-line',
+        name: '会议历史',
+        desc: '每场会议(双语记录 + 纪要)自动存档,右上角「历史记录」随时回看,控制台日历上也能看到。登录后跨设备同步,本机已有记录会自动继承到账号。',
+        route: '/meeting',
+        cta: '前往会议翻译',
+        demo: 'meetingHistory',
+        steps: [
+          '会议结束后自动存入历史,无需手动保存。',
+          '点右上角「历史记录」查看并回看任意一场。',
+          '也可在控制台日历上找到对应日期的会议。',
+        ],
+      },
+    ],
+  },
+  {
     id: 'manage',
     label: '课程与资料管理',
     icon: 'ri-folder-2-line',
@@ -272,7 +457,7 @@ const CATEGORIES: Category[] = [
       {
         icon: 'ri-share-forward-line',
         name: '共享课程',
-        desc: '为某节课生成只读分享链接发给他人,对方无需登录即可查查看转写与摘要,链接可随时撤销,安全可控。',
+        desc: '为某节课生成只读分享链接发给他人,对方无需登录即可查看转写与摘要,链接可随时撤销,安全可控。',
         route: '/course',
         demo: 'share',
         steps: [
@@ -335,16 +520,18 @@ export default function HelpPage() {
   // Store the current category in the URL (?cat=), so returning from a feature page restores the category you were viewing instead of resetting to default
   const [sp, setSp] = useSearchParams();
   const raw = sp.get('cat') || '';
-  const active: CatId = (['record', 'ai', 'manage', 'account'].includes(raw) ? raw : 'record') as CatId;
+  const active: CatId = (['record', 'ai', 'meeting', 'manage', 'account', 'faq'].includes(raw) ? raw : 'record') as CatId;
   const setActive = (id: CatId) => setSp({ cat: id }, { replace: true });
   const current = CATEGORIES.find((c) => c.id === active) ?? CATEGORIES[0];
+  // Which FAQ item is expanded (index; -1 = all collapsed)
+  const [openFaq, setOpenFaq] = useState<number>(0);
 
   return (
     <div className="min-h-screen bg-background-100">
       <HelpDemoStyles />
       {/* Top bar */}
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center gap-3 h-14 px-6 max-w-5xl mx-auto">
+        <div className="flex items-center gap-3 h-14 px-6 max-w-7xl mx-auto">
           <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer">
             <i className="ri-arrow-left-line"></i>
           </BackButton>
@@ -360,7 +547,7 @@ export default function HelpPage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-5">
           <h2 className="text-2xl font-bold text-foreground-900">{t('功能说明书')}</h2>
           <p className="text-sm text-foreground-400 mt-1">
@@ -392,18 +579,85 @@ export default function HelpPage() {
                 </span>
               </button>
             ))}
+            {/* FAQ tab (Q&A accordion, not feature cards) */}
+            <button
+              onClick={() => setActive('faq')}
+              className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm whitespace-nowrap cursor-pointer transition-colors flex-shrink-0 md:w-full ${
+                active === 'faq'
+                  ? 'bg-accent-500 text-background-50 font-semibold shadow-sm'
+                  : 'text-foreground-600 hover:bg-background-50'
+              }`}
+            >
+              <i className="ri-question-answer-line text-base"></i>
+              <span>{t('常见问题')}</span>
+              <span className={`ml-auto text-xs ${active === 'faq' ? 'text-background-50/80' : 'text-foreground-300'}`}>
+                {FAQS.length}
+              </span>
+            </button>
           </aside>
 
-          {/* Right: feature cards under this category */}
+          {/* Right: FAQ accordion, or feature cards under this category */}
           <div className="flex-1 min-w-0 w-full">
             <div className="mb-4">
               <h3 className="text-lg font-bold text-foreground-900 flex items-center gap-2">
-                <i className={`${current.icon} text-accent-500`}></i>
-                {t(current.label)}
+                <i className={`${active === 'faq' ? 'ri-question-answer-line' : current.icon} text-accent-500`}></i>
+                {active === 'faq' ? t('常见问题') : t(current.label)}
               </h3>
-              <p className="text-xs text-foreground-400 mt-1">{t(current.intro)}</p>
+              <p className="text-xs text-foreground-400 mt-1">
+                {active === 'faq' ? t('常见操作与疑问的快速解答;点问题展开答案。') : t(current.intro)}
+              </p>
             </div>
 
+            {active === 'faq' ? (
+              <div className="flex flex-col gap-2.5">
+                {FAQS.map((f, i) => {
+                  const open = openFaq === i;
+                  return (
+                    <div
+                      key={i}
+                      className={`bg-background-50 border rounded-2xl overflow-hidden transition-colors ${
+                        open ? 'border-accent-400' : 'border-background-200'
+                      }`}
+                    >
+                      <button
+                        onClick={() => setOpenFaq(open ? -1 : i)}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 text-left cursor-pointer hover:bg-background-100/50"
+                      >
+                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center rounded-lg bg-accent-100 text-accent-600 text-xs font-bold">
+                          Q
+                        </span>
+                        <span className="flex-1 min-w-0 text-sm font-semibold text-foreground-900">{t(f.q)}</span>
+                        <i
+                          className={`ri-arrow-down-s-line text-foreground-400 transition-transform ${
+                            open ? 'rotate-180' : ''
+                          }`}
+                        ></i>
+                      </button>
+                      {open && (
+                        <div className="px-4 pb-4 pl-[3.25rem]">
+                          <div className="space-y-2 border-l-2 border-accent-100 pl-3">
+                            {f.a.map((line, j) => (
+                              <p key={j} className="text-xs text-foreground-600 leading-relaxed">
+                                {t(line)}
+                              </p>
+                            ))}
+                          </div>
+                          {f.route && (
+                            <button
+                              onClick={() => navigate(f.route!)}
+                              className="mt-3 ml-3 inline-flex items-center gap-1 text-xs font-semibold text-accent-600 hover:text-accent-700 cursor-pointer"
+                            >
+                              {t(f.cta ?? '前往使用')}
+                              <i className="ri-arrow-right-line"></i>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {current.features.map((f) => {
                 const Demo = f.demo ? DEMOS[f.demo] : null;
@@ -464,6 +718,7 @@ export default function HelpPage() {
                 );
               })}
             </div>
+            )}
           </div>
         </div>
       </div>

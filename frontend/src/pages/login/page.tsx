@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useT } from '@/lib/i18n';
 
@@ -7,6 +7,11 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const t = useT();
   const { login } = useAuth();
+  // Where to go after login: a ?redirect= path (e.g. from the meeting page), else the dashboard.
+  // Only accept internal paths ("/x", not "//host") to avoid open-redirect.
+  const [sp] = useSearchParams();
+  const rawRedirect = sp.get('redirect') || '/';
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -20,7 +25,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate(redirect);
     } catch (e) {
       setErr(e instanceof Error ? e.message : t('登录失败'));
     } finally {
@@ -145,7 +150,10 @@ export default function LoginPage() {
 
             <p className="text-center text-sm text-foreground-400">
               {t('还没有账户？')}{' '}
-              <Link to="/register" className="text-accent-600 font-medium hover:text-accent-700">
+              <Link
+                to={redirect !== '/' ? `/register?redirect=${encodeURIComponent(redirect)}` : '/register'}
+                className="text-accent-600 font-medium hover:text-accent-700"
+              >
                 {t('立即注册')}
               </Link>
             </p>

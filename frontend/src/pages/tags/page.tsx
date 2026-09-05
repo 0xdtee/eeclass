@@ -382,7 +382,7 @@ export default function TagsPage() {
 
       {/* Top Nav */}
       <div className="sticky top-0 z-40 bg-background-50 border-b border-background-200">
-        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
+        <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-4">
           <BackButton className="flex items-center gap-1.5 text-foreground-500 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap">
             <div className="w-4 h-4 flex items-center justify-center"><i className="ri-arrow-left-s-line text-base"></i></div>
             <span className="text-sm">{t('返回')}</span>
@@ -404,7 +404,7 @@ export default function TagsPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-4">
+      <div className="max-w-4xl mx-auto px-6 py-8 space-y-4">
         {/* Info banner */}
         <div className="bg-background-50 rounded-2xl border border-background-200 p-5 flex items-start gap-4">
           <div className="w-10 h-10 flex items-center justify-center bg-accent-100 rounded-xl flex-shrink-0">

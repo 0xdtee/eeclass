@@ -66,7 +66,7 @@ export default function SharedPage() {
   return (
     <div className="min-h-screen bg-background-100">
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center justify-between h-14 px-6 max-w-4xl mx-auto">
+        <div className="flex items-center justify-between h-14 px-6 max-w-5xl mx-auto">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 flex items-center justify-center bg-accent-100 rounded-lg flex-shrink-0">
               <i className="ri-book-open-line text-accent-600"></i>
@@ -98,7 +98,7 @@ export default function SharedPage() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-6">
+      <div className="max-w-5xl mx-auto px-6 py-6">
         <div className="bg-background-50 border border-background-200 rounded-xl p-6 space-y-3">
           {data.lines.map((l) => (
             <div key={l.id} className={l.new_para ? 'pt-2' : ''}>

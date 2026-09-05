@@ -71,7 +71,7 @@ export default function ReferencePage() {
   return (
     <div className="min-h-screen bg-background-100">
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center justify-between h-14 px-6 max-w-6xl mx-auto">
+        <div className="flex items-center justify-between h-14 px-6 max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
             <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer" />
             <div>
@@ -90,7 +90,7 @@ export default function ReferencePage() {
       {/* School selector */}
       {schools.length > 0 && (
         <div className="border-b border-background-200 bg-background-50">
-          <div className="max-w-6xl mx-auto px-6 flex items-center gap-2 overflow-x-auto py-2.5">
+          <div className="max-w-7xl mx-auto px-6 flex items-center gap-2 overflow-x-auto py-2.5">
             <span className="text-xs text-foreground-400 flex-shrink-0 mr-1"><i className="ri-school-line mr-1"></i>{t('学校')}</span>
             {schools.map((s) => (
               <button
@@ -105,7 +105,7 @@ export default function ReferencePage() {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col md:flex-row gap-5 items-start">
+      <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col md:flex-row gap-5 items-start">
         {/* Left: this school's course list */}
         <div className="w-full md:w-64 flex-shrink-0 space-y-4">
           {grouped.map((c) => (

@@ -60,7 +60,7 @@ export default function HomePage() {
   const noteSid = live.liveSid || activeSessionId;   // Attach notes to the session being recorded / viewed
 
   // Arriving via the main 「快捷通道」 with params: open the matching tab/panel / start recording directly
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [autoNew] = useState(() => searchParams.get('new') === '1');
   const [initialTitle] = useState(() => searchParams.get('title') || '');   // Course name prefilled when arriving from the timetable
   // Arriving from the dashboard 「查看纪要」 (?tab=summary&sid=…): after landing on the summary page, auto-generate once if not generated before
@@ -206,6 +206,14 @@ export default function HomePage() {
 
   const handleSelectSession = useCallback((sessionId: string) => {
     setActiveSessionId(sessionId);
+    // Reflect the selection in the URL, so a refresh reopens THIS session instead of falling back to the
+    // new-recording screen. (Selecting inside the page previously only set state, leaving the URL stale.)
+    setSearchParams((prev) => {
+      const n = new URLSearchParams(prev);
+      n.set('sid', sessionId);
+      n.delete('new');
+      return n;
+    }, { replace: true });
     setSummary('');
     setKeyPoints([]);
     setCorrections([]);
@@ -213,7 +221,7 @@ export default function HomePage() {
     setSummaryError('');
     setFocusLineId(null);
     setActiveTab('transcription');
-  }, []);
+  }, [setSearchParams]);
 
   // Which transcript to show:
   // 1) An archived session was explicitly opened and it isn't the one being recorded -> show the archive (even if, after re-login, live
@@ -259,12 +267,25 @@ export default function HomePage() {
       // Let the server call DeepSeek -- the API key lives only on the server; the browser can't get it and doesn't need it
       const ai = await live.summarize(title, lines, sid || live.liveSid);
       setSummary(ai.summary);
+      // Coerce to a string: a cached summary may have questions as objects ({question,answer}), which would
+      // otherwise render as "[object Object]". New summaries are already normalized server-side.
+      const s = (x: unknown): string => {
+        if (typeof x === 'string') return x;
+        if (x && typeof x === 'object') {
+          const o = x as Record<string, unknown>;
+          const q = o.question ?? o.q ?? o.front;
+          const a = o.answer ?? o.a ?? o.back;
+          if (q || a) return a ? `问:${q ?? ''} 答:${a}` : String(q ?? '');
+          return Object.values(o).filter((v) => typeof v === 'string').join(' ');
+        }
+        return String(x ?? '');
+      };
       setKeyPoints([
-        ...(ai.key_points ?? []),
-        ...(ai.exam_hints ?? []).map((x) => `【老师说要考】${x}`),
-        ...(ai.formulas ?? []).map((x) => `【公式/定理】${x}`),
-        ...(ai.questions ?? []).map((x) => `【课堂问答】${x}`),
-      ]);
+        ...(ai.key_points ?? []).map(s),
+        ...(ai.exam_hints ?? []).map((x) => `【老师说要考】${s(x)}`),
+        ...(ai.formulas ?? []).map((x) => `【公式/定理】${s(x)}`),
+        ...(ai.questions ?? []).map((x) => `【课堂问答】${s(x)}`),
+      ].filter((x) => x && x.trim()));
       setCorrections(ai.corrections ?? []);   // Keep mishearing hints separate, not mixed into the highlights
       setAppliedCorrections([]);              // Freshly generated summary; clear the replacement record
       setActiveTab('summary');
@@ -348,6 +369,17 @@ export default function HomePage() {
       .catch(() => { /* Give up if the transcript can't be read */ });
   }, [live.running, records, generateSummaryFor]);
 
+  // The backend re-clusters speakers in the background after stopping and rewrites the transcript. Re-fetch it
+  // so the just-recorded view shows the same speakers as it will after exit + reopen (fixes speaker divergence).
+  useEffect(() => {
+    const { sid, tick } = live.reclustered;
+    if (!tick || !sid || sid !== activeSessionId) return;
+    void records.loadTranscript(sid)
+      .then((j) => setHistLines(j.lines))
+      .catch(() => { /* ignore */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live.reclustered]);
+
   // Start recording: if the selected session was already recorded -> continue it (keep recording on, don't create a new one or clear its transcript/summary);
   // otherwise record a new session and clear the previous one's leftovers to avoid mixing sessions.
   const handleStartRecording = useCallback((o: Parameters<typeof live.start>[0]) => {
@@ -420,6 +452,15 @@ export default function HomePage() {
     },
     [activeSessionId, records]
   );
+
+  /** Post-class one-click supplementary highlighting: DeepSeek marks the definitions/key points the real-time rules missed, then reload so the new marks show */
+  const handleAutoHighlight = useCallback(async () => {
+    if (!activeSessionId) return;
+    const r = await records.autoHighlight(activeSessionId);
+    const j = await records.loadTranscript(activeSessionId);
+    setHistLines(j.lines);
+    return { added: r.added };
+  }, [activeSessionId, records]);
 
   /** Rename a speaker after recording: changes every line from that person, takes effect immediately, and is learned into the voiceprint library */
   const handleRenameSpeaker = useCallback(
@@ -591,7 +632,7 @@ export default function HomePage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {justEnded && !live.running && (
           <div className="mb-5 flex items-center justify-between gap-3 flex-wrap bg-green-50 border border-green-200 rounded-xl px-4 py-3">
             <div className="flex items-center gap-2 text-sm text-green-800">
@@ -634,7 +675,9 @@ export default function HomePage() {
             onStartRecording={handleStartRecording}
             onEndRecording={handleEndRecording}
             autoStartNaming={autoNew}
-            initialCourseName={initialTitle}
+            initialCourseName={activeSessionId && !live.running && activeSession ? sessionTitle(activeSession) : initialTitle}
+            renameSid={activeSessionId && !live.running ? activeSessionId : ''}
+            onRenameSession={(newTitle: string) => records.renameSession(activeSessionId, newTitle)}
             note={note}
             noteStatus={noteStatus}
             canNote={!!noteSid}
@@ -647,6 +690,7 @@ export default function HomePage() {
             subjectTags={subjectTags}
             onEditLine={handleEditLine}
             onMarkLine={handleMarkLine}
+            onAutoHighlight={activeSessionId && !live.running ? handleAutoHighlight : undefined}
             onRenameSpeaker={handleRenameSpeaker}
             onProposeCorrection={proposeCorrection}
             onShoot={handleShoot}

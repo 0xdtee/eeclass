@@ -173,8 +173,22 @@ export function useLiveCaption() {
   const [error, setError] = useState('');
   const [lastDir, setLastDir] = useState('');
   const [liveSid, setLiveSid] = useState('');   // Directory name of the class being recorded, needed for blackboard shots
+  // Bumped when the backend finishes its post-stop speaker re-clustering and rewrites the transcript, so the
+  // page can re-fetch and the "just recorded" view matches the "reopen from history" view (no speaker divergence).
+  const [reclustered, setReclustered] = useState<{ sid: string; tick: number }>({ sid: '', tick: 0 });
   const [micActive, setMicActive] = useState(false);
   const [deepseekReady, setDeepseekReady] = useState(false);
+  // Pickup gain (收音增益): amplify the browser-mic signal 1×–6×, adjustable live like the meeting translator.
+  const [gain, setGain] = useState<number>(() => {
+    try { return Number(localStorage.getItem('rec_gain')) || 1; } catch { return 1; }
+  });
+  const gainRef = useRef(gain);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  useEffect(() => {
+    gainRef.current = gain;
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = gain;   // live-update the running mic node
+    try { localStorage.setItem('rec_gain', String(gain)); } catch { /* ignore */ }
+  }, [gain]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -198,6 +212,7 @@ export function useLiveCaption() {
     try { m.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
     try { void m.ctx.close(); } catch { /* ignore */ }
     micRef.current = null;
+    gainNodeRef.current = null;
     setMicActive(false);
   }, []);
 
@@ -228,7 +243,12 @@ export function useLiveCaption() {
       }
       ws.send(pcm.buffer);
     };
-    src.connect(node);
+    // Pickup gain: amplify the mic before downsampling (src → gain → processor). Live-adjustable.
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = gainRef.current;
+    gainNodeRef.current = gainNode;
+    src.connect(gainNode);
+    gainNode.connect(node);
     // Don't connect to the speakers (would cause feedback), but some browsers won't run without a destination, so connect a muted gain
     const mute = ctx.createGain();
     mute.gain.value = 0;
@@ -429,6 +449,10 @@ export function useLiveCaption() {
           setLiveSid((m.sid as string) || '');
           setNotice(t('已保存 {n} 句', { n: (m.meta as { lines?: number })?.lines ?? 0 }));
           break;
+        case 'reclustered':
+          // Post-stop speaker re-clustering rewrote the transcript; signal the page to re-fetch it.
+          setReclustered((p) => ({ sid: (m.sid as string) || '', tick: p.tick + 1 }));
+          break;
         case 'line':
           setPartial('');
           setLines((prev) => [...prev, m as unknown as CaptionLine]);
@@ -553,6 +577,24 @@ export function useLiveCaption() {
         : model === 'aliyun_wu' ? 'aliyun_funasr'
         : model === 'aliyun_multi' ? 'aliyun_gummy'   // Gummy: multilingual recognition + translation in one pass
         : model;
+      // The socket may still be connecting (slow intranet / VPN). Wait for it to open before sending 'start',
+      // so the FIRST click reliably starts instead of the command being silently dropped (the old two-click bug).
+      const wsReady = await new Promise<boolean>((resolve) => {
+        const t0 = Date.now();
+        const tick = () => {
+          const w = wsRef.current;
+          if (w && w.readyState === WebSocket.OPEN) return resolve(true);
+          if (Date.now() - t0 > 6000) return resolve(false);
+          setTimeout(tick, 100);
+        };
+        tick();
+      });
+      if (!wsReady) {
+        stopMic();
+        setStarting(false);
+        setError(t('还没连上录音服务,请稍候再点「开始录音」'));
+        return;
+      }
       send({
         cmd: 'start',
         title: opts.title ?? null,
@@ -605,7 +647,8 @@ export function useLiveCaption() {
 
   return {
     connected, authFailed, running, paused, starting, micActive, deepseekReady,
-    devices, defaultDevice, lines, partial, status, notice, error, lastDir, liveSid,
+    devices, defaultDevice, lines, partial, status, notice, error, lastDir, liveSid, reclustered,
+    gain, setGain,
     start, stop, setPaused: setPausedCmd, mark, rename, summarize,
   };
 }

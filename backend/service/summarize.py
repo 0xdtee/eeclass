@@ -22,17 +22,19 @@ SYSTEM = """你是一个帮学生整理课堂笔记的助手。你会收到一�
 
 **极其重要：只能根据转写里真实出现的内容来总结，绝对不许编造、脑补、或添加转写中根本没提到的知识点、术语或内容。** 转写讲了什么就总结什么——哪怕不是正式上课、只是日常对话或闲聊，也要如实把说到的话题和要点概括出来（比如聊了坐地铁、逛街、几家店，就照实写成"聊了坐地铁的花费、逛街和几家咖啡店餐厅"这类）。**只要转写里有任何话（哪怕只是打招呼、测试麦克风、问「能听到吗」、说几句闲话），都必须如实把说了什么概括成摘要**（例如「测试录音：打招呼、确认麦克风是否正常、测试识别与断句效果」）——绝不要因为内容简短或随意就拒绝总结。只有当转写**完全是空的、一个字都没有**时，才把 summary 写成「本次录音内容过少，无法生成摘要」，并把 key_points、formulas、exam_hints、questions、corrections 全部返回空数组 `[]`。总之：有内容就如实总结，绝不凭空捏造转写里没有的东西。
 
+**要通读全文、覆盖整节课从头到尾的每个方面/环节**，不要只总结开头、也不要只写老师口头说"最重要"的那一条——转写里讲到的每个话题都要如实概括进去，尤其别漏掉后半段和结尾的内容。这既可能是学术课，也可能是通知/动员/班会等事务性内容；对**事务性内容，每一条具体的规定、安排、时间、地点、联系方式、注意事项、要求都要作为一个要点单独列出**。
+
 请输出严格的 JSON，不要有任何额外文字、不要用 markdown 代码块包裹，字段如下：
 {
-  "summary": "这节课讲了什么，200字以内，说人话，别堆术语",
+  "summary": "这节课讲了什么，把主要方面都覆盖到，300字以内，说人话，别堆术语",
   "key_points": ["知识点1", "知识点2", ...],
   "formulas": ["课上出现的公式或定理，用文字描述，没有就空数组"],
   "exam_hints": ["老师明确说过要考/是重点的内容，没有就空数组"],
-  "questions": ["学生提问及老师的回答要点，没有就空数组"],
+  "questions": ["每条是一句话字符串(不要用对象),写成「学生问X，老师答Y」这种；没有就空数组"],
   "corrections": ["转写把某个词听错的地方，严格用「听成X应为Y」格式：X是转写里出现的原词(必须和原文一字不差、不带引号)，Y是纠正后的词(不带引号)。不要加任何解释、不要加书名号/引号，X和Y都尽量短(一个词或短语)。没听错、或X和Y一样的，不要输出这一条。没有就空数组"]
 }
-key_points 控制在 3~8 条，每条一句话，要具体，不要写"介绍了基本概念"这种废话。
-corrections **最多列 15 条最明显、最影响理解的**即可，不要逐句罗列(长录音里同类错字挑代表性的就行)，其余字段也各自精简，整份 JSON 不要过长。"""
+key_points 数量**随内容多少而定**：内容丰富就多列（可到 15~20 条），内容少就少列——宁可覆盖全、不要漏；每条一句话、要具体，不要写"介绍了基本概念"这种废话。
+corrections **最多列 15 条最明显、最影响理解的**即可，不要逐句罗列(长录音里同类错字挑代表性的就行)，其余字段各自精简。"""
 
 
 FLASHCARD_SYS = """你在帮学生把一节课的录音转写做成复习闪卡。转写来自自动语音识别，
@@ -128,6 +130,38 @@ def _loads_forgiving(text):
         except json.JSONDecodeError as e:
             last = e
     raise last
+
+
+def _as_text(x):
+    """Coerce one list item into a display string. The model sometimes returns a field like `questions` as
+    objects ({question, answer}) instead of strings; without this the frontend renders "[object Object]"."""
+    if isinstance(x, str):
+        return x.strip()
+    if isinstance(x, dict):
+        q = x.get("question") or x.get("q") or x.get("问") or x.get("front") or x.get("term") or ""
+        a = x.get("answer") or x.get("a") or x.get("答") or x.get("back") or x.get("definition") or ""
+        q, a = str(q).strip(), str(a).strip()
+        if q and a:
+            return f"问:{q} 答:{a}"
+        if q or a:
+            return q or a
+        parts = [str(v).strip() for v in x.values()
+                 if isinstance(v, (str, int, float)) and str(v).strip()]
+        return " ".join(parts)
+    if isinstance(x, list):
+        return " ".join(s for s in (_as_text(i) for i in x) if s)
+    if x is None:
+        return ""
+    return str(x).strip()
+
+
+def _str_list(v):
+    """Normalize a field that should be a list of strings into exactly that (dropping empties)."""
+    if v is None:
+        return []
+    if not isinstance(v, list):
+        v = [v]
+    return [s for s in (_as_text(i) for i in v) if s]
 
 
 TRANS_LANG_NAMES = {
@@ -366,6 +400,180 @@ class DeepSeek:
             return ""
         return out
 
+    def translate_to(self, text, to_lang, topic="", timeout_s=12):
+        """Translate one caption sentence into `to_lang` (a code in TRANS_LANG_NAMES), auto-detecting the
+        source. Returns the translation; if the sentence is already in to_lang (or on no key / failure /
+        unknown language), returns "" -- so the meeting translator can translate a sentence into every
+        selected language and the one that matches the spoken language just drops out."""
+        text = (text or "").strip()
+        dst = TRANS_LANG_NAMES.get(to_lang)
+        if not self.api_key or len(text) < 1 or not dst:
+            return ""
+        sys_prompt = (
+            f"You are translating live meeting captions. Translate the user's sentence (in whatever "
+            f"language it is spoken) into natural, concise, spoken {dst}, to sit as one caption line. "
+            f"Output only the {dst} translation, one line, no explanation, no quotes, no phonetic "
+            f"notation, and don't repeat the original. If the sentence is ALREADY in {dst} and needs no "
+            f"translation, output nothing.")
+        topic = (topic or "").strip()
+        if topic:
+            sys_prompt += f"\nThe subject/context is 「{topic}」; use that field's conventional {dst} terminology."
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": text}],
+            "temperature": 0.2,
+            "stream": False,
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = (data["choices"][0]["message"]["content"] or "").strip().strip('「」""\'` ')
+        except Exception:
+            return ""
+        if not out or out == text:
+            return ""
+        return out
+
+    def translate_multi(self, text, langs, topic="", timeout_s=15):
+        """Translate ONE caption sentence into every language in `langs` (codes in TRANS_LANG_NAMES) in a
+        single call, and detect which of them is the spoken/source language. Because all target versions come
+        from the same source sentence, they line up as one row and read more accurately than N independent
+        real-time streams. Returns {"src": <code in langs or "">, "translations": {code: text, ...}} with an
+        entry for EVERY requested code (the source code's value is the cleaned original). {} on failure/no key."""
+        text = (text or "").strip()
+        codes = [c for c in (langs or []) if c in TRANS_LANG_NAMES]
+        if not self.api_key or len(text) < 1 or not codes:
+            return {}
+        names = ", ".join(f"{c} = {TRANS_LANG_NAMES[c]}" for c in codes)
+        sys_prompt = (
+            "You are cleaning up and translating a live meeting caption. The sentence below was produced by "
+            "speech recognition and may contain small errors; infer the intended meaning. "
+            f"The target languages are: {names}. "
+            "Detect which target language is the one actually spoken (the source). "
+            "Output ONLY a JSON object of the form "
+            '{\"src\": \"<the code that is the spoken language, or empty string if none of them>\", '
+            '\"translations\": {\"<code>\": \"<one natural, concise, spoken line>\"}} '
+            "with an entry in translations for EVERY target code. For the code that equals the spoken "
+            "language, put the cleaned original sentence. No quotes, no phonetic notation, no explanation.")
+        topic = (topic or "").strip()
+        if topic:
+            sys_prompt += f"\nThe subject/context is 「{topic}」; use that field's conventional terminology."
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": text}],
+            "temperature": 0.2,
+            "stream": False,
+            "response_format": {"type": "json_object"},
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = _loads_forgiving(data["choices"][0]["message"]["content"])
+        except Exception:
+            return {}
+        if not isinstance(out, dict):
+            return {}
+        tr = out.get("translations") or {}
+        translations = {c: (str(tr.get(c, "")).strip().strip('「」""\'` ')) for c in codes if tr.get(c)}
+        src = out.get("src") if out.get("src") in codes else ""
+        return {"src": src, "translations": translations}
+
+    def highlight_lines(self, texts, topic="", timeout_s=60):
+        """Post-class supplementary highlighting: given a class transcript (list of sentence strings), decide
+        which lines are 定义(define) / 重点(key) -- catching the real definitions the real-time rules miss
+        (multi-sentence, keyword-free ones), while staying strict so it doesn't over-mark a whole passage.
+        Definitions are returned as ranges (a definition usually spans several fragmented lines); key points as
+        single most-representative lines. Returns {"define": [idx...], "key": [idx...]} of 0-based indices into
+        `texts`; {} on no key / failure. Caps are enforced in code so a runaway model can't yellow the whole class."""
+        texts = [(x or "").strip() for x in (texts or [])]
+        n = len(texts)
+        if not self.api_key or not any(texts):
+            return {}
+        numbered = "\n".join(f"{i}: {tx}" for i, tx in enumerate(texts) if tx)
+        numbered = numbered[: getattr(self, "max_chars", 20000)]
+        max_def = max(2, n // 30)    # definition ranges
+        max_key = max(3, n // 25)    # key lines
+        sys_prompt = (
+            f"你是帮大学生做复习重点的助手。下面是一节课 {n} 句的逐句语音转写(每行开头是编号),"
+            "里面有识别错误、口语、半句、重复,请自行甄别。挑出两类、只挑真正有复习价值的:\n"
+            "- 定义 define:老师正式给出的概念定义或定理/性质的陈述。它常被切成连续几句,用**区间** [起,止] "
+            "表示(闭区间,止句也算)。每个区间紧凑(一般≤5句),只覆盖真正是定义内容的句子,不要把后面的举例、"
+            "解释、口语都包进来;「X 的定义」「下面讲」这种引子不要包含。\n"
+            "- 重点 key:老师强调的关键结论、性质、易考点。**同一个知识点只标最完整、最有代表性的那一句**(单个编号),"
+            "不要把它前后的铺垫、重复、举例、口语确认都标上。\n"
+            f"严格控制数量(宁缺毋滥):这节课定义最多 {max_def} 个区间、重点最多 {max_key} 句。\n"
+            "绝对不要标:反问句(理解吧?对不对?)、口语确认与语气词(对/是啊/所以呢/啊)、明显识别乱码、"
+            "不完整的半句、举例演算过程、与知识点无关的闲话。自检:一句删掉后若不影响学生理解该知识点,就不要标。\n"
+            "只输出 JSON,形如 {\"define\":[[35,39],[54,56]],\"key\":[98,110]}。")
+        if (topic or "").strip():
+            sys_prompt += f"\n本节课主题:「{topic.strip()}」。"
+        payload = json.dumps({
+            "model": self.model,
+            "messages": [{"role": "system", "content": sys_prompt},
+                         {"role": "user", "content": numbered}],
+            "temperature": 0,
+            "stream": False,
+            "response_format": {"type": "json_object"},
+        }, ensure_ascii=False).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.base_url.rstrip("/") + "/chat/completions", data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {self.api_key}"})
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            out = _loads_forgiving(data["choices"][0]["message"]["content"])
+        except Exception:
+            return {}
+        if not isinstance(out, dict):
+            return {}
+
+        # define: list of [start, end] ranges -> expand, drop over-long ranges, cap the number of ranges
+        define = []
+        ranges = out.get("define") or []
+        if isinstance(ranges, list):
+            for rg in ranges[:max_def]:
+                if isinstance(rg, list) and rg:
+                    try:
+                        a, b = int(rg[0]), int(rg[-1])
+                    except Exception:
+                        continue
+                    if a > b:
+                        a, b = b, a
+                    if b - a > 6:        # a real definition isn't 8+ fragments; a runaway range -> skip
+                        continue
+                    define += [i for i in range(a, b + 1) if 0 <= i < n]
+                elif isinstance(rg, (int, float)):   # tolerate a bare index
+                    if 0 <= int(rg) < n:
+                        define.append(int(rg))
+        # key: flat list of single lines -> cap the count
+        key = []
+        for v in (out.get("key") or []):
+            try:
+                iv = int(v)
+            except Exception:
+                continue
+            if 0 <= iv < n and iv not in key:
+                key.append(iv)
+            if len(key) >= max_key:
+                break
+        define = sorted(set(define))
+        key = [i for i in key if i not in define]   # a definition line shouldn't also be a stray key
+        return {"define": define, "key": key}
+
     def translate_wu_to_mandarin(self, text, topic="", timeout_s=12):
         """Translate a per-sentence Shanghainese (Wu) transcript into standard Mandarin, as a caption line beneath the original.
         Returns the Mandarin translation; with no key / on failure / on an empty sentence, returns "" (the caller then shows only the Wu original)."""
@@ -559,6 +767,13 @@ class DeepSeek:
             out = json.loads(text)
         except json.JSONDecodeError:
             out = _loads_forgiving(text)   # handles ```json wrapping / LaTeX backslashes / truncated output
+        # Normalize the string-list fields: the model occasionally returns objects (e.g. questions as
+        # {question, answer}), which would render as "[object Object]" in the UI. Coerce everything to strings.
+        for f in ("key_points", "formulas", "exam_hints", "questions", "corrections"):
+            if f in out:
+                out[f] = _str_list(out[f])
+        if "summary" in out and not isinstance(out["summary"], str):
+            out["summary"] = _as_text(out["summary"])
         out["_usage"] = usage
         out["_model"] = self.model
         return out

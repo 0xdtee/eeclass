@@ -16,6 +16,11 @@ import time
 
 CJK_MATH = re.compile(r"[=＝+－\-×÷∫∮∑∏√∞≤≥≠∂∇αβγθλμπσωΔΩ]|[A-Za-z]\s*[\^_]|d[xyzt]\b")
 NUMERIC = re.compile(r"\d")
+# "X的定义 / 定义如下 / 什么是X / 先讲定义" only ANNOUNCE that a definition is coming -- the defining content is
+# the following sentence(s). These lines mention 「定义」 but aren't the definition, so don't green-highlight them.
+_ANNOUNCE_DEF = re.compile(r"的定义|定义如下|什么是|叫什么|下面.{0,6}定义|先.{0,8}定义|讲.{0,4}定义|定义[是这那][样个]?")
+# Real defining phrasing (this sentence actually defines something) -- keep the highlight even if it also announces.
+_REAL_DEF = re.compile(r"称为|叫做|叫作|定义为|记作|记为|是指|所谓|也就是说")
 
 
 def _bigrams(s):
@@ -64,9 +69,14 @@ class Highlighter:
 
         hits = [w for w in self.define if w in text]
         if hits and len(text) >= 8:
-            score += 2
-            is_define = True
-            reasons.append("定义:" + hits[0])
+            # Skip announcement-only sentences ("X的定义" / "什么是X") -- they name a definition but aren't one;
+            # the real definition is the next line. Keep the highlight if the sentence actually defines something.
+            if _ANNOUNCE_DEF.search(text) and not _REAL_DEF.search(text):
+                pass
+            else:
+                score += 2
+                is_define = True
+                reasons.append("定义:" + hits[0])
 
         hits = [w for w in self.formula if w in text]
         if hits:

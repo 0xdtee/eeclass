@@ -60,6 +60,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - 🧠 **Course-level AI** — beyond per-class summaries, it **aggregates a whole course's classes into a grand summary**, predicts exam points (with a share pie chart), and generates a mock paper.
 - 📱 **Web + native iPad app** — the phone/iPad client (web `/m` + Capacitor iPad app) lives in its own repo, [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile).
 - 🌏 **Multilingual recognition + live translation** — recognizes Chinese (plus 16 dialects), English, French, German, Italian, Spanish, Russian, Japanese and Korean; add a translated caption line between any two of 9 languages with a **source ⇄ target picker** (recognition on a continuous cloud stream, translation via the LLM).
+- 🤝 **Meeting Translator (ZH ⇄ EN)** — a standalone two-way page: speak English and it shows Chinese, speak Chinese and it shows English — read both languages live in a meeting. The cloud Gummy model auto-detects the language and recognizes + translates in one pass.
 - 🏠 **Open source (MIT), self-hosted** — runs on one ordinary machine + a LAN.
 - 📖 **Built-in animated manual** — every feature ships with a CSS-animated demo + step-by-step guide; zero learning curve.
 
@@ -69,6 +70,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - **Speaker separation + voiceprint library** — tells speakers apart on the fly; name a person once and future recordings recognize the same voice. Same person is stored once (deduplicated), and renaming propagates back across past classes.
 - **Highlight detection** — auto-marks key points, definitions and formulas the teacher stresses.
 - **Live translation** — attach a translated caption line under each sentence, any direction among 9 languages (Chinese/English/French/German/Italian/Spanish/Russian/Japanese/Korean) via a source ⇄ target picker; the default follows the interface language.
+- **Meeting Translator** — a standalone two-way Chinese ⇄ English page (`/meeting`): auto-detects whether Chinese or English is spoken and translates to the other, streaming bilingual bubbles in real time; uses the cloud Gummy model for recognition + translation, ideal for in-person meetings. Projects fullscreen onto a big screen, and on Stop it auto-generates **meeting minutes** (overview / discussion points / decisions / action items with owners, via DeepSeek, copyable). History is synced across devices per account.
 - **AI assist (via DeepSeek, optional)** — homophone correction, smart sentence segmentation, dialect-to-Mandarin polish, per-class summary (in the interface language), whole-course grand summary, exam-point prediction, mock exam, flashcards / quiz, and "ask the lecture" Q&A.
 - **Board capture** — snap the blackboard/slide; shots are aligned to the timeline.
 - **Accounts & access** — real login (pbkdf2), strict per-account data isolation, admin-only voiceprint management, read-only share links.

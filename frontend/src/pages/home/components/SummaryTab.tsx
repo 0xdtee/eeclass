@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useT } from '@/lib/i18n';
+import MathText from '@/components/base/MathText';
 
 interface SummaryTabProps {
   summary: string;
@@ -190,7 +191,7 @@ export default function SummaryTab({
         {summary ? (
           <div className="space-y-4">
             <div className="p-4 bg-accent-50 rounded-lg border border-accent-100">
-              <p className="text-sm leading-relaxed text-foreground-700">{summary}</p>
+              <p className="text-sm leading-relaxed text-foreground-700"><MathText text={summary} /></p>
             </div>
 
             {keyPoints.length > 0 && (
@@ -204,7 +205,7 @@ export default function SummaryTab({
                       <span className="w-6 h-6 flex items-center justify-center flex-shrink-0 bg-primary-500 text-background-50 rounded-full text-xs font-bold">
                         {idx + 1}
                       </span>
-                      <p className="text-sm text-foreground-700 pt-0.5">{point}</p>
+                      <p className="text-sm text-foreground-700 pt-0.5"><MathText text={point} /></p>
                     </div>
                   ))}
                 </div>

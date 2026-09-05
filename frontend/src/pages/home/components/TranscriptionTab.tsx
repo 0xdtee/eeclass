@@ -25,6 +25,9 @@ interface TranscriptionTabProps {
   autoStartNaming?: boolean;
   /** Course name prefilled when arriving from the timetable */
   initialCourseName?: string;
+  /** When a saved session is being viewed (not recording), its id -- lets the name box rename that session */
+  renameSid?: string;
+  onRenameSession?: (title: string) => Promise<void> | void;
   /** Class notes */
   note?: string;
   noteStatus?: '' | 'saving' | 'saved';
@@ -39,6 +42,8 @@ interface TranscriptionTabProps {
   onEditLine: (lineId: number, text: string) => Promise<void>;
   /** Manually mark/unmark a line as a highlight (marked line-by-line in history, persisted) */
   onMarkLine?: (lineId: number, kind: 'key' | 'define' | null) => void;
+  /** Post-class one-click supplementary highlighting: DeepSeek marks the definitions/key points the real-time rules missed; resolves to how many were added */
+  onAutoHighlight?: () => Promise<{ added: number } | void>;
   /** Rename a speaker after recording (by speaker_id, changing every line from that person) */
   onRenameSpeaker?: (speakerId: number, name: string) => void | Promise<void>;
   onProposeCorrection?: (from: string, to: string) => void;
@@ -75,9 +80,9 @@ function singleWordDiff(before: string, after: string): [string, string] | null 
 }
 
 export default function TranscriptionTab({
-  sid, sessionTitle, onGenerateSummary, onEndRecording, onStartRecording, autoStartNaming, initialCourseName, isGenerating, live, historyLines, shots, courses, subjectTags,
+  sid, sessionTitle, onGenerateSummary, onEndRecording, onStartRecording, autoStartNaming, initialCourseName, renameSid, onRenameSession, isGenerating, live, historyLines, shots, courses, subjectTags,
   note, noteStatus, canNote, onNoteChange,
-  onEditLine, onMarkLine, onRenameSpeaker, onProposeCorrection, onShoot, onDeleteShot, onNoteShot, canEdit,
+  onEditLine, onMarkLine, onAutoHighlight, onRenameSpeaker, onProposeCorrection, onShoot, onDeleteShot, onNoteShot, canEdit,
   playerRef, focusLineId,
 }: TranscriptionTabProps) {
   const t = useT();
@@ -89,8 +94,35 @@ export default function TranscriptionTab({
   const [saveError, setSaveError] = useState('');
   const [curTime, setCurTime] = useState(0);
   const [shotsOnly, setShotsOnly] = useState(false);
+  // Caption font size (Word-style zoom), remembered on this device. Applied to the transcript sentences.
+  const [fontScale, setFontScale] = useState<number>(() => {
+    try { return Math.min(220, Math.max(70, Number(localStorage.getItem('cc_fontscale')) || 100)); } catch { return 100; }
+  });
+  const bumpFont = (d: number) => setFontScale((v) => {
+    const n = Math.min(220, Math.max(70, v + d));
+    try { localStorage.setItem('cc_fontscale', String(n)); } catch { /* ignore */ }
+    return n;
+  });
   const [editSpk, setEditSpk] = useState<number | null>(null);   // id of the speaker being renamed
   const [spkDraft, setSpkDraft] = useState('');
+  const [highlighting, setHighlighting] = useState(false);
+  const [hlMsg, setHlMsg] = useState('');
+
+  const runAutoHighlight = async () => {
+    if (!onAutoHighlight || highlighting) return;
+    setHighlighting(true);
+    setHlMsg('');
+    try {
+      const r = await onAutoHighlight();
+      const n = r && typeof r.added === 'number' ? r.added : 0;
+      setHlMsg(n > 0 ? t('已补标 {n} 处', { n }) : t('没有找到可补标的定义/重点'));
+    } catch (e) {
+      setHlMsg(e instanceof Error ? e.message : t('标注失败'));
+    } finally {
+      setHighlighting(false);
+      setTimeout(() => setHlMsg(''), 4000);
+    }
+  };
 
   const commitSpeaker = (id: number) => {
     const name = spkDraft.trim();
@@ -203,6 +235,8 @@ export default function TranscriptionTab({
         notice={live.notice}
         sessionTitle={sessionTitle}
         micActive={live.micActive}
+        gain={live.gain}
+        onGainChange={live.setGain}
         courses={courses}
         subjectTags={subjectTags}
         onShoot={onShoot}
@@ -211,6 +245,8 @@ export default function TranscriptionTab({
         onPause={live.setPaused}
         autoStartNaming={autoStartNaming}
         initialCourseName={initialCourseName}
+        renameSid={renameSid}
+        onRenameSession={onRenameSession}
         onMark={live.mark}
       />
 
@@ -284,6 +320,15 @@ export default function TranscriptionTab({
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-0.5" title={t('字幕字号')}>
+              <button onClick={() => bumpFont(-10)} disabled={fontScale <= 70} className="w-6 h-6 flex items-center justify-center rounded bg-background-100 text-foreground-600 hover:bg-background-200 disabled:opacity-40 cursor-pointer" title={t('减小字号')}>
+                <i className="ri-subtract-line text-xs"></i>
+              </button>
+              <span className="text-xs tabular-nums text-foreground-500 w-9 text-center">{fontScale}%</span>
+              <button onClick={() => bumpFont(10)} disabled={fontScale >= 220} className="w-6 h-6 flex items-center justify-center rounded bg-background-100 text-foreground-600 hover:bg-background-200 disabled:opacity-40 cursor-pointer" title={t('放大字号')}>
+                <i className="ri-add-line text-xs"></i>
+              </button>
+            </div>
             {shots.length > 0 && !isLive && (
               <label className="flex items-center gap-1.5 text-xs text-foreground-500 cursor-pointer">
                 <input type="checkbox" checked={shotsOnly} onChange={(e) => setShotsOnly(e.target.checked)} className="cursor-pointer" />
@@ -303,6 +348,17 @@ export default function TranscriptionTab({
             >
               <i className="ri-download-line text-sm"></i>{t('导出文本')}
             </button>
+            {!isLive && onAutoHighlight && (
+              <button
+                onClick={runAutoHighlight}
+                disabled={highlighting || lines.length === 0}
+                className="flex items-center gap-1.5 px-3 py-2 bg-green-100 text-green-700 rounded-full text-xs font-medium hover:bg-green-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                title={t('用 AI 通读全文,自动把老师讲的定义、重点补标出来(会和你手动标的合并)')}
+              >
+                <i className={`${highlighting ? 'ri-loader-4-line animate-spin' : 'ri-sparkling-2-line'} text-sm`}></i>
+                {highlighting ? t('AI 标注中...') : t('一键标注')}
+              </button>
+            )}
             <button
               data-guide="gen-summary"
               onClick={onGenerateSummary}
@@ -316,11 +372,12 @@ export default function TranscriptionTab({
         </div>
 
         {saveError && <p className="text-xs text-red-600 mb-2">{saveError}</p>}
+        {hlMsg && <p className="text-xs text-green-600 mb-2 flex items-center gap-1"><i className="ri-check-line"></i>{hlMsg}</p>}
 
         {shotsOnly ? (
           <ShotStrip shots={shots} onSeek={(t) => playerRef.current?.seek(t)} onDelete={onDeleteShot} onNote={onNoteShot} />
         ) : (
-          <div ref={boxRef} className="min-h-[360px] max-h-[560px] overflow-y-auto">
+          <div ref={boxRef} className="min-h-[360px] max-h-[560px] overflow-y-auto" style={{ fontSize: `${(14 * fontScale) / 100}px` }}>
             {lines.length > 0 || shots.length > 0 ? (
               <div className="space-y-3">
                 {lines.map((l, i) => {
@@ -381,7 +438,7 @@ export default function TranscriptionTab({
                             {/* Click the text -> seek the recording to this line */}
                             <span
                               onClick={() => { if (showPlayer) playerRef.current?.seek(l.start ?? 0); }}
-                              className={`text-sm leading-relaxed text-foreground-700 ${
+                              className={`text-[1em] leading-relaxed text-foreground-700 ${
                                 KIND_STYLE[l.kind ?? ''] ?? ''
                               } ${showPlayer ? 'cursor-pointer hover:text-accent-700' : ''}`}
                               title={showPlayer ? t('跳到这一句的录音') : undefined}
@@ -402,7 +459,7 @@ export default function TranscriptionTab({
                         )}
                         {l.edited && <span className="text-xs text-accent-500 ml-2">{t('已修改')}</span>}
                         {l.translation && (
-                          <div className="mt-1 flex items-start gap-1.5 text-[13px] leading-snug text-sky-700 bg-sky-50 border-l-2 border-sky-300 rounded-r px-2 py-1">
+                          <div className="mt-1 flex items-start gap-1.5 text-[0.92em] leading-snug text-sky-700 bg-sky-50 border-l-2 border-sky-300 rounded-r px-2 py-1">
                             <i className="ri-translate-2 text-sky-400 mt-0.5 flex-shrink-0"></i>
                             <span>{l.translation}</span>
                           </div>
@@ -419,10 +476,10 @@ export default function TranscriptionTab({
                     <ShotStrip shots={trailing} onSeek={(t) => playerRef.current?.seek(t)} onDelete={onDeleteShot} onNote={onNoteShot} />
                   ) : null;
                 })()}
-                {live.partial && <div className="text-sm text-foreground-400 italic">{live.partial} …</div>}
+                {live.partial && <div className="text-[1em] text-foreground-400 italic">{live.partial} …</div>}
               </div>
             ) : (
-              <p className="text-foreground-400 italic text-sm">
+              <p className="text-foreground-400 italic text-[1em]">
                 {live.running
                   ? t('已开启麦克风,等待第一句话…')
                   : t('暂无转写内容，点上方「开始录音」，或去「历史课程」选一节已录好的课。')}

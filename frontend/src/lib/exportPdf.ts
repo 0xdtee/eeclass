@@ -7,12 +7,20 @@
  * Trade-off: text in the PDF is an image and not selectable; in return you get "one-click download" and cross-platform consistency.
  * (jspdf / html2canvas are dynamically imported and bundled separately, so they don't bloat the main bundle.)
  */
+import { latexToPlain } from './mathText';
 
 export interface PdfLine {
   ts: string;
   speaker: string;
   text: string;
   kind?: 'key' | 'define' | null;
+}
+
+export interface PdfQuestion {
+  type: string;
+  question: string;
+  answer: string;
+  point?: string;
 }
 
 export interface PdfDoc {
@@ -22,7 +30,11 @@ export interface PdfDoc {
   keyPoints?: string[];
   corrections?: string[];
   lines?: PdfLine[];
+  questions?: PdfQuestion[];   // mock exam paper
 }
+
+// Render LaTeX-ish math to readable plain text (PDF can't run KaTeX)
+const plainMath = latexToPlain;
 
 const esc = (s: string) =>
   String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
@@ -92,12 +104,23 @@ function docBody(doc: PdfDoc): string {
     })
     .join('');
 
+  const qs = doc.questions ?? [];
+  const paper = qs
+    .map((q, i) => `<div class="kp"><span class="kpn">${i + 1}.</span>` +
+      `<span class="kpt">${q.type ? `<span class="meta">[${esc(q.type)}]</span> ` : ''}${esc(plainMath(q.question))}</span></div>`)
+    .join('');
+  const answers = qs
+    .map((q, i) => `<div class="kp"><span class="kpn">${i + 1}.</span><span class="kpt">${esc(plainMath(q.answer))}` +
+      `${q.point ? `<span class="meta"> (考点:${esc(plainMath(q.point))})</span>` : ''}</span></div>`)
+    .join('');
+
   return `<div class="cover">
       <h1>${esc(doc.title)}</h1>
       ${doc.subtitle ? `<p class="sub">${esc(doc.subtitle)}</p>` : ''}
     </div>
     ${doc.summary ? `<h2>课堂摘要</h2><div class="summary">${esc(doc.summary)}</div>` : ''}
     ${points ? `<h2>重点知识点</h2>${points}` : ''}
+    ${paper ? `<h2>模拟试卷</h2>${paper}<h2>参考答案</h2>${answers}` : ''}
     ${corr ? `<div class="corr"><h2>识别可能听错(仅供参考)</h2>${corr}</div>` : ''}
     ${lines ? `<h2>课堂转写全文</h2>${lines}` : ''}`;
 }

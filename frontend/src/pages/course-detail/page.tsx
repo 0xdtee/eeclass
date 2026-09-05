@@ -7,6 +7,8 @@ import { audioUrl, audioDownloadUrl } from '@/hooks/useLibrary';
 import BackButton from '@/components/feature/BackButton';
 import MathText from '@/components/base/MathText';
 import AudioPlayer from '@/components/feature/AudioPlayer';
+import { exportWord } from '@/lib/exportWord';
+import { exportPdf } from '@/lib/exportPdf';
 import { useT } from '@/lib/i18n';
 
 // MC options A./B./C./D. often run together on one line; insert a line break before each when displaying (require a trailing space so we don't wrongly split cases like 「A、B、ω为常量」)
@@ -82,7 +84,7 @@ function Pie({ values, labels, selected, onSelect }: { values: number[]; labels:
 }
 
 export default function CourseDetailPage() {
-  const [sp] = useSearchParams();
+  const [sp, setSp] = useSearchParams();
   const name = sp.get('name') || '';
   const tag = sp.get('tag') || '';       // Prefer grouping by tag when present (otherwise by course name)
   const byTag = !!tag;
@@ -109,7 +111,16 @@ export default function CourseDetailPage() {
     },
     [localTags, records]
   );
-  const [tab, setTab] = useState<TabId>('summary');
+  // The active tab lives in the URL (?tab=), so returning here (browser back / in-app 返回) restores the same
+  // tab instead of resetting to 课程总结 -- e.g. viewing a transcript from 录音集合 then 返回 comes back to 录音集合.
+  const [tab, setTabState] = useState<TabId>(() => {
+    const q = sp.get('tab') as TabId | null;
+    return q && TABS.some((x) => x.id === q) ? q : 'summary';
+  });
+  const setTab = useCallback((id: TabId) => {
+    setTabState(id);
+    setSp((prev) => { const n = new URLSearchParams(prev); n.set('tab', id); return n; }, { replace: true });
+  }, [setSp]);
   const [summary, setSummary] = useState<CourseSummary | null>(null);
   const [exam, setExam] = useState<CourseExam | null>(null);
   const [mock, setMock] = useState<CourseMock | null>(null);
@@ -122,7 +133,21 @@ export default function CourseDetailPage() {
   const handledJumpRef = useRef('');   // Jump targets already handled, to avoid reprocessing / wrongly clearing the highlight timer
   const [playingKey, setPlayingKey] = useState('');
   const [tagPickerFor, setTagPickerFor] = useState('');   // Which recording currently has its tag selector expanded
+  const [mockExportOpen, setMockExportOpen] = useState(false);
   const t = useT();
+
+  /** Export the mock exam paper (questions first, then an answer key) as Word or PDF */
+  const exportMock = useCallback(async (fmt: 'word' | 'pdf') => {
+    setMockExportOpen(false);
+    if (!mock?.questions?.length) return;
+    const doc = {
+      title: t('《{name}》模拟试卷', { name: displayName }),
+      subtitle: t('共 {n} 题 · 由「课堂实时字幕」生成', { n: mock.questions.length }),
+      questions: mock.questions,
+    };
+    if (fmt === 'word') await exportWord(doc);
+    else await exportPdf(doc);
+  }, [mock, displayName, t]);
 
   const playRef = useCallback((sid: string, start: number, key: string) => {
     const a = audioRef.current;
@@ -219,7 +244,7 @@ export default function CourseDetailPage() {
     <div className="min-h-screen bg-background-100">
       {/* Top bar */}
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center justify-between h-14 px-6 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between h-14 px-6 max-w-7xl mx-auto">
           <div className="flex items-center gap-3 min-w-0">
             <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer">
               <i className="ri-arrow-left-line"></i>
@@ -249,7 +274,7 @@ export default function CourseDetailPage() {
       </nav>
 
       {/* Tabs */}
-      <div className="max-w-5xl mx-auto px-6 pt-4">
+      <div className="max-w-7xl mx-auto px-6 pt-4">
         <div className="flex items-center gap-1 bg-background-50 border border-background-200 rounded-full p-1 w-fit">
           {TABS.map((tb) => (
             <button
@@ -266,7 +291,7 @@ export default function CourseDetailPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-5">
+      <div className="max-w-7xl mx-auto px-6 py-5">
         {err && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
             <p className="text-sm text-red-700"><i className="ri-error-warning-line mr-1"></i>{err}</p>
@@ -280,7 +305,7 @@ export default function CourseDetailPage() {
         {tab === 'summary' && (loading && (!summary || summary.no_transcript) ? Spinner : summary && !summary.no_transcript && (
           <div className="space-y-4">
             <div className="bg-background-50 border border-background-200 rounded-xl p-6">
-              <p className="text-sm leading-relaxed text-foreground-700">{summary.summary}</p>
+              <p className="text-sm leading-relaxed text-foreground-700"><MathText text={summary.summary} /></p>
             </div>
             {summary.key_points?.length > 0 && (
               <div id="sum-keypoints" className={`bg-background-50 border rounded-xl p-6 transition-all ${highlightCh === -1 ? 'border-accent-400 ring-2 ring-accent-200' : 'border-background-200'}`}>
@@ -289,7 +314,7 @@ export default function CourseDetailPage() {
                   {summary.key_points.map((p, i) => (
                     <div key={i} className="flex items-start gap-3 p-3 bg-background-100 rounded-lg">
                       <span className="w-6 h-6 flex items-center justify-center flex-shrink-0 bg-accent-500 text-background-50 rounded-full text-xs font-bold">{i + 1}</span>
-                      <p className="text-sm text-foreground-700 pt-0.5">{p}</p>
+                      <p className="text-sm text-foreground-700 pt-0.5"><MathText text={p} /></p>
                     </div>
                   ))}
                 </div>
@@ -468,6 +493,28 @@ export default function CourseDetailPage() {
               <i className="ri-file-list-3-line text-accent-600"></i>
               <h3 className="text-sm font-semibold text-foreground-800">{t('《{name}》模拟试卷', { name: displayName })}</h3>
               <span className="text-xs text-foreground-400">{t('共 {n} 题', { n: mock.questions.length })}</span>
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setMockExportOpen((v) => !v)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-accent-500 text-background-50 rounded-full text-xs font-semibold hover:bg-accent-600 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <i className="ri-download-2-line text-sm"></i>{t('导出')}
+                  <i className={`ri-arrow-${mockExportOpen ? 'up' : 'down'}-s-line text-sm`}></i>
+                </button>
+                {mockExportOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMockExportOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-20 w-40 bg-background-50 border border-background-200 rounded-xl shadow-lg p-2">
+                      <button onClick={() => void exportMock('word')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-foreground-700 hover:bg-background-100 cursor-pointer">
+                        <i className="ri-file-word-2-line text-foreground-400"></i>{t('导出为 Word')}
+                      </button>
+                      <button onClick={() => void exportMock('pdf')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-foreground-700 hover:bg-background-100 cursor-pointer">
+                        <i className="ri-file-pdf-2-line text-foreground-400"></i>{t('导出为 PDF')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             {mock.questions.map((q, i) => (
               <div key={i} className="space-y-1.5">

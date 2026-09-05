@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { quickActions } from '@/mocks/dashboardData';
 import { useRecords, sessionTitle, fmtDuration } from '@/hooks/useRecords';
-import type { ScheduleCourse, ScheduleEvent } from '@/hooks/useRecords';
+import type { ScheduleEvent } from '@/hooks/useRecords';
 import { useTagsStore } from '@/hooks/useTagsStore';
 import { loadSettings } from '@/lib/settings';
 import { findSimilarTag } from '@/lib/tagMatch';
@@ -10,8 +10,9 @@ import AnimatedNumber from '@/components/feature/AnimatedNumber';
 import Calendar from '@/components/feature/Calendar';
 import NewSessionModal from '@/pages/dashboard/components/NewSessionModal';
 import ImportModal from '@/pages/dashboard/components/ImportModal';
-import SyncShuModal from '@/pages/dashboard/components/SyncShuModal';
+import type { ConfirmCourse } from '@/pages/dashboard/components/ImportModal';
 import SearchBar from '@/pages/dashboard/components/SearchBar';
+import { type MeetingSession, syncOnLoad, loadLocal } from '@/pages/meeting/history';
 import CourseTypeModal from '@/pages/dashboard/components/CourseTypeModal';
 import TagCoursesModal from '@/pages/dashboard/components/TagCoursesModal';
 import SummaryListModal from '@/pages/dashboard/components/SummaryListModal';
@@ -47,7 +48,6 @@ export default function DashboardHome() {
   const [createdSessions, setCreatedSessions] = useState<CreatedSession[]>([]);
   const [createdMessage, setCreatedMessage] = useState('');
   const [showImport, setShowImport] = useState(false);
-  const [showSyncShu, setShowSyncShu] = useState(false);
   const [importDate, setImportDate] = useState('');
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // Dated course events (deduplicated)
   const [calendarFocus, setCalendarFocus] = useState('');   // After import, make the calendar jump to the month of the courses
@@ -150,6 +150,31 @@ export default function DashboardHome() {
     return out;
   }, [scheduleEvents, labelToId]);
 
+  // Meeting-translator history, shown on the calendar too. The dashboard is only reached when logged
+  // in, so pull the account's meetings (this also inherits any local ones), falling back to local.
+  const [meetingHistory, setMeetingHistory] = useState<MeetingSession[]>([]);
+  useEffect(() => {
+    syncOnLoad(true).then(setMeetingHistory).catch(() => setMeetingHistory(loadLocal()));
+  }, []);
+
+  const meetingSessions = useMemo(() => {
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    return meetingHistory.map((s) => {
+      const d = new Date(s.created);
+      return {
+        id: `mtg-${s.id}`,
+        title: s.title || t('会议翻译'),
+        date: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`,
+        time: `${p2(d.getHours())}:${p2(d.getMinutes())}`,
+        duration: '',
+        tags: [] as string[],
+        description: t('{n} 句', { n: s.turns?.length ?? 0 }),
+        summary: s.minutes?.summary ?? '',
+        keyPoints: s.minutes?.points ?? [],
+      };
+    });
+  }, [meetingHistory, t]);
+
   // "Total courses" is grouped by the base name with numbering stripped: 高数第1课/第2课… all count as one 「高数」
   const distinctCourses = useMemo(() => {
     const baseName = (t: string) =>
@@ -250,6 +275,11 @@ export default function DashboardHome() {
   };
 
   const handleSelectSession = (id: string) => {
+    // A meeting-translator session -> open it on the meeting page (it loads that session from history).
+    if (id.startsWith('mtg-')) {
+      navigate('/meeting?open=' + encodeURIComponent(id.slice(4)));
+      return;
+    }
     // A timetable course (not yet recorded) -> start a new recording and prefill its title with the course name; an already-recorded one -> open it
     if (id.startsWith('sched-')) {
       const ev = scheduleSessions.find((s) => s.id === id);
@@ -282,27 +312,14 @@ export default function DashboardHome() {
     setTimeout(() => setCreatedMessage(''), 3000);
   };
 
-  // Merge a batch of dated course events straight into the calendar (used by SHU sync)
-  const handleAddEvents = (newEvents: ScheduleEvent[]) => {
-    const key = (e: ScheduleEvent) => `${e.date}|${e.start}|${e.name}`;
-    const map = new Map(scheduleEvents.map((e) => [key(e), e]));
-    newEvents.forEach((e) => map.set(key(e), e));
-    const merged = Array.from(map.values());
-    setScheduleEvents(merged);
-    void records.saveSchedule(merged).catch(() => {});
-    const first = newEvents.map((e) => e.date).sort()[0];
-    if (first) setCalendarFocus(`${first}|${Date.now()}`);
-    setCreatedMessage(t('已将 {n} 节课加入日历', { n: newEvents.length }));
-    setTimeout(() => setCreatedMessage(''), 4000);
-  };
-
   const handleImportImage = (dataUrl: string) => records.importTimetable(dataUrl);
+  const handleImportPdf = (b64: string) => records.importTimetablePdf(b64);
 
-  const handleConfirmCourses = (courses: ScheduleCourse[], anchorMonday?: string) => {
+  const handleConfirmCourses = (courses: ConfirmCourse[], firstMonday?: string) => {
     const pad = (n: number) => String(n).padStart(2, '0');
-    // Reference Monday: prefer the real date from the timetable header, fall back to this week only if it can't be recognized
+    // First-week Monday from the modal (already snapped to a Monday); fall back to this week's Monday.
     let monday: Date;
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchorMonday || '');
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(firstMonday || '');
     if (m) {
       monday = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     } else {
@@ -310,6 +327,7 @@ export default function DashboardHome() {
       monday = new Date(today);
       monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
     }
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));   // ensure it's a Monday
     // (1) First assign a tag per course by name: reuse a similar existing tag if found, otherwise create a new one.
     //     Stick the result on the course itself (event.tag), so every course on the timetable/calendar carries its own tag.
     const st = loadSettings();
@@ -333,16 +351,21 @@ export default function DashboardHome() {
       });
     }
 
-    // (2) Place each course only on its real day (this week), no duplicates; attach the tag just assigned
-    const newEvents: ScheduleEvent[] = courses.map((c) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + (c.day - 1));
-      return {
-        name: c.name,
-        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-        start: c.start, end: c.end, location: c.location, room: c.room,
-        tag: nameToTag.get(c.name) || undefined,
-      };
+    // (2) Generate one event per teaching week in each course's week list (recurring across the semester)
+    const newEvents: ScheduleEvent[] = [];
+    courses.forEach((c) => {
+      const wks = (c.weeks && c.weeks.length ? c.weeks : [1]);
+      for (const w of wks) {
+        if (!Number.isFinite(w) || w < 1) continue;
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + (w - 1) * 7 + (c.day - 1));
+        newEvents.push({
+          name: c.name,
+          date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+          start: c.start, end: c.end, location: c.location, room: c.room,
+          tag: nameToTag.get(c.name) || undefined,
+        });
+      }
     });
     // Merge and dedup with the existing ones (by date+time+course name) -- supports accumulating across multiple weekly imports
     const key = (e: ScheduleEvent) => `${e.date}|${e.start}|${e.name}`;
@@ -358,7 +381,7 @@ export default function DashboardHome() {
 
     const tagged = nameToTag.size;
     const tagTxt = tagged ? t(',已给 {tagged} 门课打上标签(新建 {created} 个 / 沿用已有 {grouped} 个)', { tagged, created: createdNames.length, grouped: groupedNames.length }) : '';
-    setCreatedMessage(t('已将 {n} 门课加入日历', { n: courses.length }) + (monthTxt ? `(${monthTxt})` : '') + tagTxt);
+    setCreatedMessage(t('已将 {n} 门课、共 {m} 节加入日历', { n: courses.length, m: newEvents.length }) + (monthTxt ? `(${t('从')} ${monthTxt})` : '') + tagTxt);
     setTimeout(() => setCreatedMessage(''), 4000);
   };
 
@@ -377,7 +400,7 @@ export default function DashboardHome() {
         <div className="absolute inset-0 bg-gradient-to-br from-accent-50/60 via-transparent to-primary-50/40"></div>
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary-50/40 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
-        <div className="relative z-10 max-w-6xl mx-auto px-6 py-10 md:py-14">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 py-10 md:py-14">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-3">
@@ -393,6 +416,13 @@ export default function DashboardHome() {
               </p>
               <SearchBar sessions={allSessions} tagLabels={tagLabels} />
             </div>
+            <button
+              onClick={() => navigate('/meeting')}
+              className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
+            >
+              <i className="ri-translate-2 text-lg"></i>
+              {t('会议翻译')}
+            </button>
             <button
               onClick={() => navigate('/reference')}
               className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
@@ -462,7 +492,7 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, sIdx) => {
@@ -513,14 +543,13 @@ export default function DashboardHome() {
 
         {/* Calendar */}
         <Calendar
-          sessions={[...allSessions, ...scheduleSessions]}
+          sessions={[...allSessions, ...scheduleSessions, ...meetingSessions]}
           focusDate={calendarFocus}
           tagLabels={tagLabels}
           tagColorMap={tagColorMap}
           onSelectSession={handleSelectSession}
           onCreateSession={handleCreateSession}
           onImport={handleOpenImport}
-          onSyncShu={() => setShowSyncShu(true)}
         />
 
         {/* Main Content Grid */}
@@ -706,14 +735,8 @@ export default function DashboardHome() {
         onClose={() => setShowImport(false)}
         onConfirm={handleConfirmCreate}
         onImportImage={handleImportImage}
+        onImportPdf={handleImportPdf}
         onConfirmCourses={handleConfirmCourses}
-      />
-
-      <SyncShuModal
-        isOpen={showSyncShu}
-        onClose={() => setShowSyncShu(false)}
-        onSync={records.importShu}
-        onConfirmEvents={handleAddEvents}
       />
 
       <CourseTypeModal

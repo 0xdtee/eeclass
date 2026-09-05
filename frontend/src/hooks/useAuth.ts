@@ -104,17 +104,27 @@ export function useAuth() {
     [accept]
   );
 
-  const logout = useCallback(async () => {
-    try {
-      await post('/api/logout', {});
-    } catch {
-      /* Log out locally even if the network is down */
-    }
-    setToken('');
-    localStorage.removeItem(USER_KEY);
+  const logout = useCallback(() => {
+    // Clear everything locally, tell the server to invalidate the session (keepalive lets the request
+    // outlive the navigation), then do a FULL redirect to the login page. A soft navigate isn't enough:
+    // useAuth isn't a shared store, so AuthGate (which decides dashboard-vs-login) keeps its own stale
+    // "signed in" state and navigate('/') to the same route doesn't remount it -- only a real page load
+    // rebuilds it from the now-cleared storage. So force one.
+    const tok = getToken();
     setUser(null);
+    localStorage.removeItem(USER_KEY);
+    setToken('');
     clearTagsForLogout();       // Clear the local tag cache so the next account won't see this account's
     clearSettingsForLogout();
+    try {
+      fetch(SERVICE_ORIGIN + '/api/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Token': tok },
+        body: '{}',
+        keepalive: true,
+      }).catch(() => undefined);
+    } catch { /* offline: local logout already done */ }
+    window.location.href = SERVICE_ORIGIN + '/app/login';
   }, []);
 
   return { user, loading, login, register, sendRegisterCode, logout, isAuthenticated: !!user };
