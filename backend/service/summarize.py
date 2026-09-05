@@ -724,9 +724,11 @@ class DeepSeek:
         ]
         return out
 
-    def summarize(self, lines, title=None, board="", lang="zh-Hans"):
+    def summarize(self, lines, title=None, board="", lang="zh-Hans", syllabus=None):
         """lines: [{ts, speaker, text, kind}]; board: recognized whiteboard/slide content.
-        lang: UI language for the OUTPUT text ('zh-Hans' | 'zh-Hant' | 'en'). Returns a dict."""
+        lang: UI language for the OUTPUT text ('zh-Hans' | 'zh-Hant' | 'en').
+        syllabus: optional stored syllabus dict for this course (authoritative textbook/chapter reference).
+        Returns a dict."""
         if not self.ready:
             raise RuntimeError(
                 "还没配 DeepSeek API key。把 key 填到 service/config.json 的 "
@@ -743,7 +745,24 @@ class DeepSeek:
         if board and board.strip():
             board_sec = ("\n\n【课堂板书/PPT 识别内容(重要,老师写在板书上的往往是重点)】\n"
                          + board.strip()[:8000])
-        user = (f"课程：{title}\n\n" if title else "") + "逐句转写：\n" + body + board_sec
+        # Textbook cross-reference: if this is an academic subject, ground the summary in its standard textbook.
+        book_sec = ""
+        if (title or "").strip():
+            book_sec = (
+                f"\n\n【教材对照】课程标题是「{title.strip()}」。如果它是一门有标准教材的学科课程"
+                "(如高等数学、大学物理、线性代数、概率论、数据结构、有机化学、微观经济学、大学英语 等),"
+                "请结合该课程**通用教材的章节体系**来理解并组织这节课的内容:\n"
+                "① 在 summary 末尾用一句话注明「本节对应教材:《教材名》第X章 章节名(如涉及多章就都列上)」;\n"
+                "② 凡是属于教材核心知识(概念定义、定理、公式、重要方法)的 key_points,在**该条开头加上「【教材】」**"
+                "(可再带章节,如「【教材·第3章】...」);不属于教材内容的要点(如老师的提醒、作业安排、闲话)不要加这个标记。\n"
+                "如果这门课不是学科课(如班会、通知、军训动员、测试录音等),就完全忽略本段——不要提教材、不要加【教材】标记。")
+            if isinstance(syllabus, dict) and syllabus.get("chapters"):
+                tbs = "、".join([str(x) for x in (syllabus.get("textbooks") or [])][:3])
+                chs = "；".join(str(c.get("title", "")).strip()
+                                for c in (syllabus.get("chapters") or [])[:40] if c.get("title"))
+                book_sec += (f"\n已知本课教材与章节(以此为准,不要臆造):教材={tbs or '(未注明)'};"
+                             f"章节顺序:{chs}。")
+        user = (f"课程：{title}\n\n" if title else "") + "逐句转写：\n" + body + board_sec + book_sec
         payload = json.dumps({
             "model": self.model,
             "messages": [{"role": "system", "content": SYSTEM + lang_note(lang)},
