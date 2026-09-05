@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BackButton from '@/components/feature/BackButton';
+import ClassFileLibrary from '@/components/feature/ClassFileLibrary';
 import Tabs from '@/components/base/Tabs';
 import TranscriptionTab from '@/pages/home/components/TranscriptionTab';
 import SummaryTab, { parseCorrection } from '@/pages/home/components/SummaryTab';
@@ -46,6 +47,8 @@ export default function HomePage() {
   const [shots, setShots] = useState<Shot[]>([]);
   const [focusLineId, setFocusLineId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
+  const [showFiles, setShowFiles] = useState(false);            // class file library (manage)
+  const [pendingPick, setPendingPick] = useState<{ lines: TranscriptLine[]; sid: string } | null>(null);  // manual mode: ask which material to combine
   const [justEnded, setJustEnded] = useState(false);   // Just finished recording; show the "saved · back to home" banner
   const [note, setNote] = useState('');
   const [noteStatus, setNoteStatus] = useState<'' | 'saving' | 'saved'>('');
@@ -255,7 +258,8 @@ export default function HomePage() {
   viewLinesRef.current = viewLines;
 
   // Generate the summary from the given transcript lines + session sid (decoupled from "which session is being viewed", to avoid the summary landing on the wrong session)
-  const generateSummaryFor = useCallback(async (lines: TranscriptLine[], sid: string | null) => {
+  const generateSummaryFor = useCallback(async (lines: TranscriptLine[], sid: string | null,
+                                               mat?: { fileIds?: string[]; auto?: boolean }) => {
     if (lines.length === 0) {
       setSummaryError(t('这节课还没有转写内容'));
       setActiveTab('summary');
@@ -265,7 +269,7 @@ export default function HomePage() {
     setSummaryError('');
     try {
       // Let the server call DeepSeek -- the API key lives only on the server; the browser can't get it and doesn't need it
-      const ai = await live.summarize(title, lines, sid || live.liveSid);
+      const ai = await live.summarize(title, lines, sid || live.liveSid, mat);
       setSummary(ai.summary);
       // Coerce to a string: a cached summary may have questions as objects ({question,answer}), which would
       // otherwise render as "[object Object]". New summaries are already normalized server-side.
@@ -363,9 +367,15 @@ export default function HomePage() {
     const sid = pendingSummaryRef.current;
     if (!sid) return;
     pendingSummaryRef.current = null;
-    const auto = loadSettings().autoSummary;
+    const st = loadSettings();
     void records.loadTranscript(sid)
-      .then((j) => { setHistLines(j.lines); if (auto) void generateSummaryFor(j.lines, sid); })  // After a continued recording, refresh to the full transcript
+      .then((j) => {
+        setHistLines(j.lines);
+        if (!st.autoSummary) return;
+        // auto material mode: match the hidden knowledge base silently. manual: ask which files to combine first.
+        if (st.materialMode === 'auto') void generateSummaryFor(j.lines, sid, { auto: true });
+        else setPendingPick({ lines: j.lines, sid });
+      })  // After a continued recording, refresh to the full transcript
       .catch(() => { /* Give up if the transcript can't be read */ });
   }, [live.running, records, generateSummaryFor]);
 
@@ -615,6 +625,13 @@ export default function HomePage() {
               <i className="ri-file-word-2-line"></i>
             </button>
             <button
+              onClick={() => setShowFiles(true)}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-500 hover:text-foreground-700 hover:bg-background-200 transition-colors cursor-pointer"
+              title={t('课堂文件库(课件/讲义,用于结合整理摘要)')}
+            >
+              <i className="ri-folder-3-line"></i>
+            </button>
+            <button
               onClick={() => setShowEditHistory(true)}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-background-100 text-foreground-500 hover:text-foreground-700 hover:bg-background-200 transition-colors cursor-pointer"
               title={t('编辑历史')}
@@ -786,6 +803,14 @@ export default function HomePage() {
         onClose={() => setEditingCourse(null)}
         onSave={lib.updateCourse}
       />
+      {showFiles && <ClassFileLibrary mode="manage" onClose={() => setShowFiles(false)} />}
+      {pendingPick && (
+        <ClassFileLibrary
+          mode="pick"
+          onClose={() => { const p = pendingPick; setPendingPick(null); if (p) void generateSummaryFor(p.lines, p.sid); }}
+          onConfirm={(ids) => { const p = pendingPick; setPendingPick(null); if (p) void generateSummaryFor(p.lines, p.sid, { fileIds: ids }); }}
+        />
+      )}
     </div>
   );
 }

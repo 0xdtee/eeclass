@@ -15,6 +15,9 @@ export interface AppSettings {
   device: 'auto' | 'browser' | 'browser-system';       // Default audio source
   toWord: boolean;                                     // Write to Word while recording
   autoSummary: boolean;                                // Auto-generate a summary after recording ends
+  /** How class material is folded into the summary: 'manual' asks you to pick files after recording,
+   *  'auto' silently matches the hidden knowledge index against the transcript. */
+  materialMode: 'manual' | 'auto';
   importTagSimilar: boolean;                           // On course import: assign similar ones to existing tags
   importTagNew: boolean;                               // On course import: create a new tag when none is similar
 }
@@ -29,6 +32,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   device: 'auto',
   toWord: false,
   autoSummary: true,
+  materialMode: 'manual',
   importTagSimilar: true,
   importTagNew: true,
 };

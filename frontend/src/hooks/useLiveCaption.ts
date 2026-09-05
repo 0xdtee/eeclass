@@ -631,12 +631,18 @@ export function useLiveCaption() {
   /** Let DeepSeek summarize this class. The key lives on the server; the browser can't get it and doesn't need to.
    *  Omit `which` to use the content recorded live this time; when viewing a past class, pass in that class's lines. */
   const summarize = useCallback(
-    async (title?: string, which?: { ts: string; speaker: string; text: string }[], sid?: string): Promise<AiSummary> => {
+    async (title?: string, which?: { ts: string; speaker: string; text: string }[], sid?: string,
+           mat?: { fileIds?: string[]; auto?: boolean }): Promise<AiSummary> => {
       const r = await fetch(SERVICE_ORIGIN + '/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
         // sid lets the backend identify this class's blackboard shots and fold them into the summary
-        body: JSON.stringify({ title, lines: which ?? lines, dir: lastDir || undefined, sid: sid || liveSid || undefined, lang: getLang() }),
+        body: JSON.stringify({
+          title, lines: which ?? lines, dir: lastDir || undefined, sid: sid || liveSid || undefined, lang: getLang(),
+          // class material: explicit picks (manual mode) or auto-match against the hidden knowledge index
+          file_ids: mat?.fileIds && mat.fileIds.length ? mat.fileIds : undefined,
+          auto: mat?.auto || undefined,
+        }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error((j as { error?: string }).error || `HTTP ${r.status}`);

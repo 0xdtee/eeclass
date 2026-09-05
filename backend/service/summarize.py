@@ -724,10 +724,11 @@ class DeepSeek:
         ]
         return out
 
-    def summarize(self, lines, title=None, board="", lang="zh-Hans", syllabus=None):
+    def summarize(self, lines, title=None, board="", lang="zh-Hans", syllabus=None, materials=None):
         """lines: [{ts, speaker, text, kind}]; board: recognized whiteboard/slide content.
         lang: UI language for the OUTPUT text ('zh-Hans' | 'zh-Hant' | 'en').
         syllabus: optional stored syllabus dict for this course (authoritative textbook/chapter reference).
+        materials: optional [{name, text}] from the class file library, to be woven into the summary.
         Returns a dict."""
         if not self.ready:
             raise RuntimeError(
@@ -762,7 +763,28 @@ class DeepSeek:
                                 for c in (syllabus.get("chapters") or [])[:40] if c.get("title"))
                 book_sec += (f"\n已知本课教材与章节(以此为准,不要臆造):教材={tbs or '(未注明)'};"
                              f"章节顺序:{chs}。")
-        user = (f"课程：{title}\n\n" if title else "") + "逐句转写：\n" + body + board_sec + book_sec
+        # Course material from the class file library (chosen by the user, or auto-matched by relevance).
+        mat_sec = ""
+        mats = [m for m in (materials or []) if (m or {}).get("text", "").strip()]
+        if mats:
+            names = "、".join(str(m.get("name", "")) for m in mats)
+            parts = []
+            for m in mats:
+                parts.append(f"—— 资料《{m.get('name', '')}》 ——\n{str(m.get('text', ''))[:12000]}")
+            mat_sec = (
+                f"\n\n【课程资料(用户提供的 {len(mats)} 份:{names})】\n" + "\n\n".join(parts) +
+                "\n\n**如何使用这些资料**:这是这门课的配套资料。请把转写内容和资料**结合**起来整理:"
+                "① 用资料校正转写里的术语/公式/人名写法(以资料为准);"
+                "② 老师讲到、资料里也有的知识点,补上资料里更完整准确的表述;"
+                "③ 资料里有、但这节课**没讲**的内容不要写进来(摘要只反映这节课);"
+                "④ 凡是借助资料补充或校正过的要点,在该条开头加上「【资料】」标记(可带文件名,如「【资料·讲义】」);"
+                "**这个标记优先于「【教材】」**——同一条既参考了资料又属于教材内容时,只标「【资料】」。"
+                "如果某份资料和这节课其实无关,忽略它、不要硬凑。")
+        user = (f"课程：{title}\n\n" if title else "") + "逐句转写：\n" + body + board_sec + book_sec + mat_sec
+        if mats:
+            # last word wins: with user-supplied material present, its marker replaces the textbook one
+            user += ("\n\n【标记优先级(最终规则)】本次有用户提供的课程资料。凡是参考了上面这些资料的要点,"
+                     "一律只标「【资料】」,**不要**再标「【教材】」;只有资料里没有、纯属教材通用内容的要点才标「【教材】」。")
         payload = json.dumps({
             "model": self.model,
             "messages": [{"role": "system", "content": SYSTEM + lang_note(lang)},

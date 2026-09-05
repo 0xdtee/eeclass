@@ -10,6 +10,7 @@ import AnimatedNumber from '@/components/feature/AnimatedNumber';
 import Calendar from '@/components/feature/Calendar';
 import NewSessionModal from '@/pages/dashboard/components/NewSessionModal';
 import ImportModal from '@/pages/dashboard/components/ImportModal';
+import ClassFileLibrary from '@/components/feature/ClassFileLibrary';
 import type { ConfirmCourse } from '@/pages/dashboard/components/ImportModal';
 import SearchBar from '@/pages/dashboard/components/SearchBar';
 import { type MeetingSession, syncOnLoad, loadLocal } from '@/pages/meeting/history';
@@ -50,6 +51,7 @@ export default function DashboardHome() {
   const [showImport, setShowImport] = useState(false);
   const [importDate, setImportDate] = useState('');
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // Dated course events (deduplicated)
+  const [showFiles, setShowFiles] = useState(false);   // class file library
   const [schedUndo, setSchedUndo] = useState<ScheduleEvent[][]>([]);   // snapshots before each schedule change (undo)
   const [schedRedo, setSchedRedo] = useState<ScheduleEvent[][]>([]);   // undone snapshots (redo)
   const [calendarFocus, setCalendarFocus] = useState('');   // After import, make the calendar jump to the month of the courses
@@ -451,6 +453,13 @@ export default function DashboardHome() {
               {t('会议翻译')}
             </button>
             <button
+              onClick={() => setShowFiles(true)}
+              className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
+            >
+              <i className="ri-folder-3-line text-lg"></i>
+              {t('文件库')}
+            </button>
+            <button
               onClick={() => navigate('/reference')}
               className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
             >
@@ -800,6 +809,7 @@ export default function DashboardHome() {
 
       <VoicePrintModal isOpen={showVoices && user?.role === 'admin'} onClose={() => setShowVoices(false)} />
       <ChangelogModal isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
+      {showFiles && <ClassFileLibrary mode="manage" onClose={() => setShowFiles(false)} />}
     </div>
   );
 }

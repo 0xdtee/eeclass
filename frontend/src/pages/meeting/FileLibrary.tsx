@@ -25,6 +25,7 @@ export default function FileLibrary({ onOpen, onClose }: { onOpen: (f: LibFile) 
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState('');
   const [sel, setSel] = useState('');
+  const [sync, setSync] = useState(false);   // also copy into the class file library (off by default)
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -41,6 +42,7 @@ export default function FileLibrary({ onOpen, onClose }: { onOpen: (f: LibFile) 
     setErr('');
     try {
       const fd = new FormData();
+      if (sync) fd.append('sync', '1');
       fd.append('file', file);
       await api('/api/meeting/files', 'POST', fd);
       await load();
@@ -49,7 +51,7 @@ export default function FileLibrary({ onOpen, onClose }: { onOpen: (f: LibFile) 
     } finally {
       setUploading(false);
     }
-  }, [load]);
+  }, [load, sync]);
 
   const del = useCallback(async (id: string) => {
     try {
@@ -78,6 +80,12 @@ export default function FileLibrary({ onOpen, onClose }: { onOpen: (f: LibFile) 
               <i className="ri-close-line"></i>
             </button>
           </div>
+        </div>
+        <div className="px-5 py-2 border-b border-background-100">
+          <label className="inline-flex items-center gap-2 text-[11px] text-foreground-500 cursor-pointer">
+            <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} className="accent-accent-500 w-3.5 h-3.5" />
+            {t('新增时同步到课堂文件库(默认不同步)')}
+          </label>
         </div>
         {err && <div className="px-5 py-2 text-xs text-red-600">{err}</div>}
         <div className="flex-1 overflow-y-auto p-3">
