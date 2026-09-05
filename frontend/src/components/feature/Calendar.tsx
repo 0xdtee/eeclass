@@ -20,6 +20,11 @@ interface CalendarProps {
   onSelectSession: (id: string) => void;
   onCreateSession: (date: string) => void;
   onImport?: () => void;
+  /** Undo/redo the last schedule change (e.g. an import with the wrong start date); buttons show only when available */
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   /** When changed, the calendar jumps to the month containing this date (e.g. jump to the course's month after importing a schedule) */
   focusDate?: string;
 }
@@ -70,7 +75,7 @@ function getColorClass(color: string, type: 'bg' | 'border' | 'text' | 'dot' | '
   return map[color]?.[type] ?? map.accent[type];
 }
 
-export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, onImport, focusDate }: CalendarProps) {
+export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, onImport, onUndo, onRedo, canUndo, canRedo, focusDate }: CalendarProps) {
   const t = useT();
   const today = new Date();
   const [viewMode, setViewMode] = useState<CalendarView>('week');
@@ -266,6 +271,30 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
                 <i className="ri-file-upload-line"></i>
                 {t('导入文档')}
               </button>
+            )}
+            {(canUndo || canRedo) && (
+              <div className="flex items-center gap-1">
+                {onUndo && (
+                  <button
+                    onClick={onUndo}
+                    disabled={!canUndo}
+                    title={t('撤回上一次课表改动(如导入时选错时间)')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap border border-background-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <i className="ri-arrow-go-back-line"></i>{t('撤回')}
+                  </button>
+                )}
+                {onRedo && (
+                  <button
+                    onClick={onRedo}
+                    disabled={!canRedo}
+                    title={t('恢复刚撤回的课表改动')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-background-100 text-foreground-600 rounded-lg text-xs font-medium hover:bg-background-200 hover:text-foreground-800 transition-colors cursor-pointer whitespace-nowrap border border-background-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <i className="ri-arrow-go-forward-line"></i>{t('恢复')}
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

@@ -50,6 +50,8 @@ export default function DashboardHome() {
   const [showImport, setShowImport] = useState(false);
   const [importDate, setImportDate] = useState('');
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // Dated course events (deduplicated)
+  const [schedUndo, setSchedUndo] = useState<ScheduleEvent[][]>([]);   // snapshots before each schedule change (undo)
+  const [schedRedo, setSchedRedo] = useState<ScheduleEvent[][]>([]);   // undone snapshots (redo)
   const [calendarFocus, setCalendarFocus] = useState('');   // After import, make the calendar jump to the month of the courses
   const [showCourseTypes, setShowCourseTypes] = useState(false);
   const [showTagCourses, setShowTagCourses] = useState(false);
@@ -372,6 +374,9 @@ export default function DashboardHome() {
     const map = new Map(scheduleEvents.map((e) => [key(e), e]));
     newEvents.forEach((e) => map.set(key(e), e));
     const merged = Array.from(map.values());
+    // Snapshot the pre-import calendar so this import can be undone (e.g. wrong start date / week count)
+    setSchedUndo((u) => [...u, scheduleEvents]);
+    setSchedRedo([]);
     setScheduleEvents(merged);
     void records.saveSchedule(merged).catch(() => {});
     // Jump to the month of this batch's earliest day so you see it right away (otherwise courses in another month stay hidden)
@@ -383,6 +388,28 @@ export default function DashboardHome() {
     const tagTxt = tagged ? t(',已给 {tagged} 门课打上标签(新建 {created} 个 / 沿用已有 {grouped} 个)', { tagged, created: createdNames.length, grouped: groupedNames.length }) : '';
     setCreatedMessage(t('已将 {n} 门课、共 {m} 节加入日历', { n: courses.length, m: newEvents.length }) + (monthTxt ? `(${t('从')} ${monthTxt})` : '') + tagTxt);
     setTimeout(() => setCreatedMessage(''), 4000);
+  };
+
+  // Undo/redo the last schedule change (mainly: an import with the wrong start date or week count)
+  const undoSchedule = () => {
+    if (!schedUndo.length) return;
+    const prev = schedUndo[schedUndo.length - 1];
+    setSchedRedo((r) => [...r, scheduleEvents]);
+    setSchedUndo((u) => u.slice(0, -1));
+    setScheduleEvents(prev);
+    void records.saveSchedule(prev).catch(() => {});
+    setCreatedMessage(t('已撤回上一次课表改动'));
+    setTimeout(() => setCreatedMessage(''), 3000);
+  };
+  const redoSchedule = () => {
+    if (!schedRedo.length) return;
+    const next = schedRedo[schedRedo.length - 1];
+    setSchedUndo((u) => [...u, scheduleEvents]);
+    setSchedRedo((r) => r.slice(0, -1));
+    setScheduleEvents(next);
+    void records.saveSchedule(next).catch(() => {});
+    setCreatedMessage(t('已恢复课表改动'));
+    setTimeout(() => setCreatedMessage(''), 3000);
   };
 
   return (
@@ -550,6 +577,10 @@ export default function DashboardHome() {
           onSelectSession={handleSelectSession}
           onCreateSession={handleCreateSession}
           onImport={handleOpenImport}
+          onUndo={undoSchedule}
+          onRedo={redoSchedule}
+          canUndo={schedUndo.length > 0}
+          canRedo={schedRedo.length > 0}
         />
 
         {/* Main Content Grid */}
