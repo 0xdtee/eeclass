@@ -16,18 +16,18 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/live.png" alt="Live transcription"><br><sub><b>Live transcription</b> — speaker labels, an inline translation under each line, notes side by side.</sub></td>
-    <td width="50%"><img src="docs/screenshots/summary.png" alt="AI summary"><br><sub><b>AI summary</b> — summary, key points, textbook cross-reference, one-tap homophone fixes.</sub></td>
+    <td width="50%"><img src="docs/screenshots/live.png" alt="Class transcript"><br><sub><b>Class transcript</b> — speaker labels, AI-marked definitions (green) and key points, audio replay, notes side by side.</sub></td>
+    <td width="50%"><img src="docs/screenshots/summary.png" alt="AI summary"><br><sub><b>AI summary</b> — grounded in the textbook (chapters noted, points tagged 【教材】), one-tap homophone fixes.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/schedule.png" alt="Weekly schedule"><br><sub><b>Weekly schedule</b> — import a timetable from a screenshot/PDF; weeks auto-read, per-course colors.</sub></td>
-    <td width="50%"><img src="docs/screenshots/settings.png" alt="Settings"><br><sub><b>Settings</b> — toggle real-time correction, smart segmentation and translation.</sub></td>
+    <td width="50%"><img src="docs/screenshots/schedule.png" alt="Class calendar"><br><sub><b>Class calendar</b> — import a timetable from a screenshot/PDF; weeks auto-read, a whole semester laid out at once.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings.png" alt="Settings"><br><sub><b>Settings</b> — recognition model (Mandarin / dialect / multilingual), mic sensitivity, audio source and translation direction.</sub></td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/syllabus.png" width="900" alt="Official syllabus library"><br>
-  <sub><b>Official syllabus library</b> — browse ministry &amp; university course outlines (PDF) right inside the app.</sub>
+  <img src="docs/screenshots/course-exam.png" width="900" alt="Course-level AI: exam-point prediction"><br>
+  <sub><b>Course-level AI</b> — aggregates a course's classes to predict exam points (share pie chart), renders formulas with KaTeX, and jumps straight to the audio where the teacher covered each point.</sub>
 </p>
 
 ---

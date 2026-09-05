@@ -16,18 +16,18 @@ eeclass 是一套课堂转写与 AI 笔记系统。老师在台上讲,它实时�
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/live.png" alt="实时转写"><br><sub><b>实时转写</b> —— 说话人区分、每句下自动挂翻译字幕、笔记并排。</sub></td>
-    <td width="50%"><img src="docs/screenshots/summary.png" alt="AI 摘要"><br><sub><b>AI 摘要</b> —— 摘要、重点知识点、结合教材标注、一键纠正同音听错。</sub></td>
+    <td width="50%"><img src="docs/screenshots/live.png" alt="课堂转写"><br><sub><b>课堂转写</b> —— 说话人区分、AI 标注的定义(绿)与重点、录音回放、笔记并排。</sub></td>
+    <td width="50%"><img src="docs/screenshots/summary.png" alt="AI 摘要"><br><sub><b>AI 摘要</b> —— 摘要结合教材注明章节、要点标「【教材】」、一键纠正同音听错。</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/schedule.png" alt="课程日历"><br><sub><b>课程日历</b> —— 截图/PDF 导入课表,自动读周次,按课程配色。</sub></td>
-    <td width="50%"><img src="docs/screenshots/settings.png" alt="设置"><br><sub><b>设置</b> —— 实时纠错、智能分句、自动翻译一键开关。</sub></td>
+    <td width="50%"><img src="docs/screenshots/schedule.png" alt="课程日历"><br><sub><b>课程日历</b> —— 截图/PDF 导入课表,自动读周次,一次排满整学期。</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings.png" alt="设置"><br><sub><b>设置</b> —— 识别模型(普通话/方言/多语言)、拾音灵敏度、音源与翻译方向。</sub></td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/syllabus.png" width="900" alt="官方教学大纲库"><br>
-  <sub><b>官方教学大纲库</b> —— 在应用内直接浏览教育部与各高校发布的课程大纲(PDF)。</sub>
+  <img src="docs/screenshots/course-exam.png" width="900" alt="课程级 AI:考点推测"><br>
+  <sub><b>课程级 AI</b> —— 把一门课的多节课聚合起来预测考点(占比饼图)、公式用 KaTeX 渲染,点录音片段直接听老师讲那段。</sub>
 </p>
 
 ---
