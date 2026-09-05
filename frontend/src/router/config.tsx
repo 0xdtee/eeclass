@@ -11,6 +11,7 @@ import Register from "../pages/register/page";
 import TagsPage from "../pages/tags/page";
 import SharedPage from "../pages/shared/page";
 import HelpPage from "../pages/help/page";
+import MeetingPage from "../pages/meeting/page";
 
 const routes: RouteObject[] = [
   {
@@ -71,6 +72,14 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: "/meeting",
+    element: (
+      <RequireAuth>
+        <MeetingPage />
+      </RequireAuth>
+    ),
+  },
+  {
     path: "/login",
     element: <Login />,
   },
@@ -83,5 +92,10 @@ const routes: RouteObject[] = [
     element: <NotFound />,
   },
 ];
+
+// Optional private extras for this deployment (src/localExtras.tsx is not part of the public repo).
+// The glob resolves to nothing when the file is absent, so the public build just has no extra routes.
+const localMods = import.meta.glob<{ extraRoutes?: RouteObject[] }>("../localExtras.tsx", { eager: true });
+for (const m of Object.values(localMods)) routes.push(...(m.extraRoutes ?? []));
 
 export default routes;

@@ -229,6 +229,16 @@ class Session:
             d = os.path.join(records_root, os.path.basename(append_sid))
             if os.path.isdir(d):
                 existing_dir = d
+                # Continuing a recording must keep the original session's title -- the "start" payload carries the
+                # (possibly default) course-name box, which would otherwise overwrite it. Read it back from meta.
+                try:
+                    with open(os.path.join(d, "meta.json"), "r", encoding="utf-8") as _mf:
+                        _old_title = (json.load(_mf) or {}).get("title")
+                    if _old_title:
+                        title = _old_title
+                        self.title = _old_title
+                except Exception:
+                    pass
                 self._rehydrate_for_append(d, records_root)   # if old files were offloaded to OSS, pull them back locally first
                 start_line_id, last_end = self._scan_transcript(d)
                 self.t_offset = self._audio_duration(d) or last_end
@@ -461,13 +471,29 @@ class Session:
         except Exception:
             traceback.print_exc()
         res = self.rec.finish(meta)
+        # Persist to PG here (in the executor thread), not only in the WS "stop" handler: a multi-hour
+        # recording's stop() (voiceprint + reclustering) runs long, and if the client disconnects during it
+        # the awaiting coroutine is cancelled before its upsert runs -- meta.json gets written but PG stays
+        # NULL, so the dashboard shows 0秒. Writing it right after meta.json keeps the two in lockstep.
+        try:
+            recordings_db.upsert_recording(
+                os.path.basename(res),
+                title=meta.get("title"),
+                owner=meta.get("owner"),
+                duration_s=meta.get("duration_s"),
+                course_id=getattr(self, "course_id", None) or None,
+                meta=meta)
+        except Exception:
+            traceback.print_exc()
         # Global speaker re-clustering: online clustering is greedy + reuses the previous speaker for short
         # sentences, which on far-field/quiet audio collapses several people into one. Re-embed every line and
         # cluster them all together for a better split. Runs async so it never delays stop; it rewrites
         # transcript.jsonl in place and the session page shows the corrected speakers on reload.
         if self.cfg.get("speaker", {}).get("recluster", True):
             sess_dir, spk, recs, cfg_ref = self.rec.dir, self.spk, list(self._utt_recs), self.cfg
+            emit_fn, rc_sid = self.emit, os.path.basename(self.rec.dir)
             def _rc():
+                changed = False
                 try:
                     # Far-field voiceprints are too noisy to cluster reliably, so first try DeepSeek relabeling
                     # by conversation logic (who asks/answers, addressing, coherence). Fall back to voiceprint
@@ -476,15 +502,24 @@ class Session:
                         try:
                             from summarize import relabel_session
                             if relabel_session(sess_dir, cfg_ref, recs):
-                                print(f"[relabel] {os.path.basename(sess_dir)} 说话人已按对话逻辑重排(DeepSeek)", flush=True)
-                                return
+                                print(f"[relabel] {rc_sid} 说话人已按对话逻辑重排(DeepSeek)", flush=True)
+                                changed = True
                         except Exception:
                             traceback.print_exc()
-                    from speaker import recluster_session
-                    if recluster_session(sess_dir, cfg_ref, recs, spk, speaker_name):
-                        print(f"[recluster] {os.path.basename(sess_dir)} 说话人已全局重排(声纹)", flush=True)
+                    if not changed:
+                        from speaker import recluster_session
+                        if recluster_session(sess_dir, cfg_ref, recs, spk, speaker_name):
+                            print(f"[recluster] {rc_sid} 说话人已全局重排(声纹)", flush=True)
+                            changed = True
                 except Exception:
                     traceback.print_exc()
+                # The rewrite changed the persisted speaker assignments; tell the still-connected client to
+                # re-fetch so the "just recorded" view matches what it will show after exit + reopen (no divergence).
+                if changed:
+                    try:
+                        emit_fn({"type": "reclustered", "sid": rc_sid})
+                    except Exception:
+                        pass
             threading.Thread(target=_rc, daemon=True).start()
         return res, meta
 
@@ -676,9 +711,12 @@ class Session:
         # Translation subtitle line, attached below the original. The Gummy backend already produced the
         # translation in the same pass, so just attach it (no DeepSeek call). Otherwise: Wu backend translates
         # to Mandarin; else translate from translate_from into translate_to (skipped when the two are equal).
+        # Show any translation the ASR backend (Gummy) produced instantly, as a real-time stopgap -- but ALWAYS
+        # hand the final translation to DeepSeek for accuracy; its result then replaces the rough one. The
+        # original line above is emitted immediately, so the source text stays real-time regardless.
         if translation:
             self._save_translation(rec["id"], translation)
-        elif self.translate_wu:
+        if self.translate_wu:
             if self.translate_pool and text.strip():
                 self.translate_pool.submit(self._translate_line, rec["id"], text, 'wu', 'zh')
         elif self.translate_from != self.translate_to:
@@ -1085,6 +1123,332 @@ class App:
             if ent and ent.get("ws") is not None:
                 self._send_soon(ent["ws"], msg)
         return emit
+
+    # ---------- Meeting translator (isolated, cloud) ----------
+    # No login required for translate/minutes -- a not-logged-in user can use the tool (their history
+    # then lives only in their browser). History endpoints below DO require an account.
+    async def meeting_ws(self, request):
+        import meeting
+        return await meeting.meeting_ws(
+            request, check_token=self.check_token, make_ds=lambda: DeepSeek(self.cfg))
+
+    async def api_meeting_minutes(self, request):
+        import meeting
+        return await meeting.meeting_minutes_http(
+            request, make_ds=lambda: DeepSeek(self.cfg), check_token=self.check_token)
+
+    async def api_meeting_slides(self, request):
+        import meeting
+        return await meeting.meeting_slides_http(request, check_token=self.check_token)
+
+    # ---------- Per-account meeting file library (upload files/videos, open them in the slide box) ----------
+    def _meeting_files_dir(self, request):
+        d = os.path.join(self._records_root(), "meeting_files", self._owner_id(request))
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    async def api_meeting_files(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        return web.json_response({"files": self._read_account_json(request, "meeting_files", []) or []})
+
+    async def api_meeting_file_upload(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        import asyncio
+        dest = None
+        sync = False
+        try:
+            reader = await request.multipart()
+            name, ext, fid, size = "file", "", secrets.token_hex(8), 0
+            d = self._meeting_files_dir(request)
+            field = await reader.next()
+            while field is not None:
+                if field.name == "sync":
+                    sync = (await field.text()).strip() in ("1", "true", "on", "yes")
+                elif field.name == "file":
+                    name = field.filename or "file"
+                    ext = os.path.splitext(name)[1].lower()
+                    dest = os.path.join(d, fid + ext)
+                    # Stream the upload to disk in 1 MB chunks -- never buffer a whole (possibly GB-sized)
+                    # video in RAM, which was making large-video imports very slow / fail.
+                    with open(dest, "wb") as f:
+                        while True:
+                            chunk = await field.read_chunk(1024 * 1024)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            size += len(chunk)
+                field = await reader.next()
+            if dest is None:
+                return web.json_response({"error": "没有文件"}, status=400)
+        except Exception:
+            if dest:
+                try: os.remove(dest)
+                except Exception: pass
+            return web.json_response({"error": "上传失败"}, status=400)
+        if size == 0:
+            try: os.remove(dest)
+            except Exception: pass
+            return web.json_response({"error": "空文件"}, status=400)
+        files = self._read_account_json(request, "meeting_files", []) or []
+        meta = {"id": fid, "name": name, "ext": ext, "size": size, "created": int(time.time() * 1000)}
+        files.insert(0, meta)
+        self._write_account_json(request, "meeting_files", files[:300])
+        # Pre-transcode non-web-native video (.mov from Mac/iPhone, .avi, .mkv, ...) in the background, so it's
+        # already an MP4 by the time the user double-clicks -- no slow blocking remux on first playback.
+        if ext in (".mov", ".qt", ".avi", ".mkv", ".wmv", ".flv", ".3gp", ".ts", ".mpg", ".mpeg"):
+            asyncio.create_task(self._ensure_meeting_mp4(dest, os.path.join(d, fid + ".mp4"), fid))
+        # opt-in: also put this file in the class library (and index it for the knowledge base)
+        if sync:
+            try:
+                import shutil
+                cd = self._class_files_dir(request)
+                cfid = secrets.token_hex(8)
+                cpath = os.path.join(cd, cfid + ext)
+                shutil.copyfile(dest, cpath)
+                await self._store_class_file(request, name, ext, cpath, size)
+                meta["synced"] = True
+            except Exception:
+                meta["synced"] = False
+        return web.json_response(meta)
+
+    async def _ensure_meeting_mp4(self, src, mp4, fid):
+        """Remux a non-web-native video to a cached MP4, guarded by a per-file lock so the background (upload)
+        and on-demand (GET) paths never transcode the same file twice."""
+        import asyncio
+        import meeting
+        locks = getattr(self, "_remux_locks", None)
+        if locks is None:
+            locks = self._remux_locks = {}
+        async with locks.setdefault(fid, asyncio.Lock()):
+            if os.path.isfile(mp4):
+                return True
+            return bool(await meeting.remux_to_mp4(src, mp4))
+
+    async def api_meeting_file_get(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        fid = request.match_info.get("id", "")
+        files = self._read_account_json(request, "meeting_files", []) or []
+        meta = next((f for f in files if f.get("id") == fid), None)
+        if not meta:
+            return web.json_response({"error": "文件不存在"}, status=404)
+        d = self._meeting_files_dir(request)
+        path = os.path.join(d, fid + meta["ext"])
+        if not os.path.isfile(path):
+            return web.json_response({"error": "文件不存在"}, status=404)
+        ext = meta["ext"]
+        if ext in (".ppt", ".pptx", ".odp", ".key"):
+            pdf = os.path.join(d, fid + ".pdf")
+            if not os.path.isfile(pdf):
+                import meeting
+                if not await meeting.convert_to_pdf(path, d):
+                    return web.json_response({"error": "转换失败(LibreOffice 未安装或文件损坏)"}, status=500)
+            return web.FileResponse(pdf, headers={"Content-Type": "application/pdf"})
+        # Non-web-native video containers (QuickTime .mov, .avi, .mkv, ...) don't play in Chrome/Edge;
+        # remux them to MP4 (cached) so the browser can play them.
+        if ext in (".mov", ".qt", ".avi", ".mkv", ".wmv", ".flv", ".3gp", ".ts", ".mpg", ".mpeg"):
+            mp4 = os.path.join(d, fid + ".mp4")
+            if not os.path.isfile(mp4):
+                # Usually already done by the background transcode kicked off at upload; otherwise do it now
+                # (the shared per-file lock means we wait for the background one rather than transcoding twice).
+                if not await self._ensure_meeting_mp4(path, mp4, fid):
+                    return web.json_response({"error": "视频转码失败,请改用 MP4"}, status=500)
+            return web.FileResponse(mp4, headers={"Content-Type": "video/mp4"})
+        return web.FileResponse(path)
+
+    async def api_meeting_file_delete(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        fid = request.match_info.get("id", "")
+        files = self._read_account_json(request, "meeting_files", []) or []
+        meta = next((f for f in files if f.get("id") == fid), None)
+        if meta:
+            d = self._meeting_files_dir(request)
+            for p in (os.path.join(d, fid + meta["ext"]), os.path.join(d, fid + ".pdf"), os.path.join(d, fid + ".mp4")):
+                try:
+                    if os.path.isfile(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+        self._write_account_json(request, "meeting_files", [f for f in files if f.get("id") != fid])
+        return web.json_response({"ok": True})
+
+    # ---------- class file library (course material) + its hidden knowledge index ----------
+    def _class_files_dir(self, request):
+        import class_files
+        return class_files.files_dir(self._records_root(), self._owner_id(request))
+
+    def _index_class_file(self, request, fid, name, ext, path):
+        """Extract text and build the hidden knowledge index for one file (runs off the event loop)."""
+        import class_files
+        d = self._class_files_dir(request)
+        text = class_files.extract_text(path, ext)
+        if not class_files.save_text(d, fid, text):
+            return False
+        ds = DeepSeek(self.cfg)
+        idx = class_files.build_index(ds, name, text)
+        if not idx:
+            return False
+        m = self._read_account_json(request, "class_files_index", {}) or {}
+        m[fid] = idx
+        self._write_account_json(request, "class_files_index", m)
+        return True
+
+    async def _store_class_file(self, request, name, ext, src_path, size):
+        """Register an already-stored file into the class library + kick off indexing. Returns its meta."""
+        files = self._read_account_json(request, "class_files", []) or []
+        meta = {"id": os.path.basename(src_path).split(".")[0], "name": name, "ext": ext,
+                "size": size, "created": int(time.time() * 1000)}
+        files.insert(0, meta)
+        self._write_account_json(request, "class_files", files[:300])
+        import class_files as _cf
+        if ext.lower() in _cf.INDEXABLE:
+            async def _idx():
+                try:
+                    await asyncio.get_running_loop().run_in_executor(
+                        None, self._index_class_file, request, meta["id"], name, ext, src_path)
+                except Exception:
+                    pass
+            asyncio.create_task(_idx())
+        return meta
+
+    async def api_class_files(self, request):
+        """The user-visible library listing -- deliberately never includes the hidden knowledge index."""
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        return web.json_response({"files": self._read_account_json(request, "class_files", []) or []})
+
+    async def api_class_file_upload(self, request):
+        """Upload course material. Field `sync=1` also copies it into the meeting file library."""
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        dest = None
+        sync = False
+        try:
+            reader = await request.multipart()
+            name, ext, fid, size = "file", "", secrets.token_hex(8), 0
+            d = self._class_files_dir(request)
+            field = await reader.next()
+            while field is not None:
+                if field.name == "sync":
+                    sync = (await field.text()).strip() in ("1", "true", "on", "yes")
+                elif field.name == "file":
+                    name = field.filename or "file"
+                    ext = os.path.splitext(name)[1].lower()
+                    dest = os.path.join(d, fid + ext)
+                    with open(dest, "wb") as f:
+                        while True:
+                            chunk = await field.read_chunk(1024 * 1024)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            size += len(chunk)
+                field = await reader.next()
+            if dest is None:
+                return web.json_response({"error": "没有文件"}, status=400)
+        except Exception:
+            if dest:
+                try: os.remove(dest)
+                except Exception: pass
+            return web.json_response({"error": "上传失败"}, status=400)
+        if size == 0:
+            try: os.remove(dest)
+            except Exception: pass
+            return web.json_response({"error": "空文件"}, status=400)
+        meta = await self._store_class_file(request, name, ext, dest, size)
+        if sync:
+            try:
+                import shutil
+                md = self._meeting_files_dir(request)
+                mfid = secrets.token_hex(8)
+                shutil.copyfile(dest, os.path.join(md, mfid + ext))
+                mfiles = self._read_account_json(request, "meeting_files", []) or []
+                mfiles.insert(0, {"id": mfid, "name": name, "ext": ext, "size": size,
+                                  "created": int(time.time() * 1000)})
+                self._write_account_json(request, "meeting_files", mfiles[:300])
+                meta["synced"] = True
+            except Exception:
+                meta["synced"] = False
+        return web.json_response(meta)
+
+    async def api_class_file_get(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        fid = request.match_info.get("id", "")
+        files = self._read_account_json(request, "class_files", []) or []
+        meta = next((f for f in files if f.get("id") == fid), None)
+        if not meta:
+            return web.json_response({"error": "文件不存在"}, status=404)
+        d = self._class_files_dir(request)
+        path = os.path.join(d, fid + meta["ext"])
+        if not os.path.isfile(path):
+            return web.json_response({"error": "文件不存在"}, status=404)
+        if meta["ext"] in (".ppt", ".pptx", ".odp", ".key", ".doc", ".docx"):
+            pdf = os.path.join(d, fid + ".pdf")
+            if not os.path.isfile(pdf):
+                import meeting
+                if not await meeting.convert_to_pdf(path, d):
+                    return web.FileResponse(path)
+            return web.FileResponse(pdf, headers={"Content-Type": "application/pdf"})
+        return web.FileResponse(path)
+
+    async def api_class_file_delete(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        fid = request.match_info.get("id", "")
+        files = self._read_account_json(request, "class_files", []) or []
+        meta = next((f for f in files if f.get("id") == fid), None)
+        if meta:
+            d = self._class_files_dir(request)
+            import class_files as _cf
+            for p in (os.path.join(d, fid + meta["ext"]), os.path.join(d, fid + ".pdf"),
+                      _cf.text_path(d, fid)):
+                try:
+                    if os.path.isfile(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+        self._write_account_json(request, "class_files", [f for f in files if f.get("id") != fid])
+        idx = self._read_account_json(request, "class_files_index", {}) or {}
+        if fid in idx:
+            idx.pop(fid, None)
+            self._write_account_json(request, "class_files_index", idx)
+        return web.json_response({"ok": True})
+
+    async def api_meeting_history(self, request):
+        """List this account's saved meetings (only for logged-in users; anonymous keeps history in the browser)."""
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        return web.json_response({"sessions": self._read_account_json(request, "meeting_history", []) or []})
+
+    async def api_meeting_history_save(self, request):
+        """Upsert one or more meeting sessions into this account's history. Bulk is used to inherit a
+        browser's local (anonymous) history right after login."""
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        try:
+            body = await request.json()
+            incoming = body.get("sessions")
+            if incoming is None and body.get("session"):
+                incoming = [body["session"]]
+            incoming = list(incoming or [])
+        except Exception:
+            return web.json_response({"error": "参数不对"}, status=400)
+        import meeting
+        existing = self._read_account_json(request, "meeting_history", []) or []
+        merged = meeting.merge_sessions(existing, incoming)
+        self._write_account_json(request, "meeting_history", merged)
+        return web.json_response({"ok": True, "sessions": merged})
+
+    async def api_meeting_history_delete(self, request):
+        if not self._req_user_key(request):
+            return web.json_response({"error": "未登录"}, status=401)
+        sid = request.match_info.get("id")
+        existing = self._read_account_json(request, "meeting_history", []) or []
+        self._write_account_json(request, "meeting_history", [s for s in existing if s.get("id") != sid])
+        return web.json_response({"ok": True})
 
     # ---------- WebSocket ----------
     async def ws_handler(self, request):
@@ -1630,7 +1994,6 @@ class App:
         print(f"[account-delete] {email} removed ({removed} sessions)", flush=True)
         return web.json_response({"ok": True})
 
-    # ---------- HTTP endpoints ----------
     async def api_summarize(self, request):
         if not self.check_token(request):
             return web.json_response({"error": "令牌不对"}, status=401)
@@ -1674,11 +2037,69 @@ class App:
                     None, board_content, sdir, self.cfg)
             except Exception:
                 board = ""
+        # Textbook grounding: if this course has a stored syllabus (by title or its subject tags), pass it in
+        # as the authoritative textbook/chapter reference. If none is stored, summarize() still cross-references
+        # the standard textbook from the title alone.
+        syllabus = None
+        try:
+            from syllabus import load_syllabus
+            root = self._records_root()
+            cands = []
+            if body.get("title"):
+                cands.append(str(body["title"]).strip())
+            if sdir and os.path.isdir(sdir):
+                try:
+                    with open(os.path.join(sdir, "meta.json"), encoding="utf-8") as f:
+                        mj = json.load(f)
+                    for tg in (mj.get("tags") or []):
+                        if isinstance(tg, str) and tg.strip():
+                            cands.append(tg.strip())
+                except Exception:
+                    pass
+            import re as _re
+            for c in list(cands):   # also try a cleaned base name (strip 第X讲 / (1) suffixes)
+                base = _re.sub(r"\s*第?\s*\d+\s*[讲课节]?\s*$", "", c)
+                base = _re.sub(r"\s*[（(]\s*\d+\s*[）)]\s*$", "", base).strip()
+                if base and base != c:
+                    cands.append(base)
+            seen = set()
+            for name in cands:
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                syllabus = load_syllabus(root, name)
+                if syllabus:
+                    break
+        except Exception:
+            syllabus = None
+        # Course material from the class file library:
+        #   manual mode -> the user ticked file_ids; auto mode -> score the hidden index against the transcript.
+        materials, used_files = [], []
+        try:
+            import class_files as _cf
+            d = self._class_files_dir(request)
+            lib = self._read_account_json(request, "class_files", []) or []
+            picks = []
+            fids = [str(x) for x in (body.get("file_ids") or []) if x]
+            if fids:
+                picks = [f for f in fids if any(x.get("id") == f for x in lib)]
+            elif body.get("auto"):
+                idx = self._read_account_json(request, "class_files_index", {}) or {}
+                text = "\n".join(str(l.get("text", "")) for l in lines)
+                picks = _cf.pick_relevant(text, idx, lib)
+            if picks:
+                materials = _cf.load_materials(d, picks, lib)
+                used_files = [m["name"] for m in materials]
+        except Exception:
+            materials, used_files = [], []
         try:
             out = await asyncio.get_running_loop().run_in_executor(
-                None, ds.summarize, lines, body.get("title"), board, body.get("lang") or "zh-Hans")
+                None, ds.summarize, lines, body.get("title"), board,
+                body.get("lang") or "zh-Hans", syllabus, materials)
         except Exception as e:
             return web.json_response({"error": f"DeepSeek 调用失败：{e}"}, status=502)
+        if used_files:
+            out["used_files"] = used_files   # so the UI can say which material was folded in
         return web.json_response(out)
 
     async def api_sessions(self, request):
@@ -1962,6 +2383,77 @@ class App:
         self._save_mark(sid, line_id, kind)
         return web.json_response({"ok": True, "line_id": line_id, "kind": kind})
 
+    async def api_autohighlight(self, request):
+        """Post-class one-click supplementary highlighting: DeepSeek reads the whole transcript and marks the
+        definitions/key points the zero-latency real-time rules can't catch (multi-sentence, keyword-free ones).
+        Writes to marks.json, so it merges with manual marks and shows both live and in history."""
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        sid = request.match_info["sid"]
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权访问这节课"}, status=403)
+        if not os.path.isdir(self._session_dir(sid)):
+            return web.json_response({"error": "没有这份记录"}, status=404)
+        ds = DeepSeek(self.cfg)
+        if not ds.ready:
+            return web.json_response({"error": "没配 DeepSeek key,无法一键标注"}, status=400)
+        d, lines = self._load_lines(sid)
+        if not lines:
+            return web.json_response({"error": "没有这份记录"}, status=404)
+        texts = [l.get("text", "") for l in lines]
+        topic = ""
+        try:
+            with open(os.path.join(d, "meta.json"), encoding="utf-8") as f:
+                topic = (json.load(f).get("title") or "").strip()
+        except Exception:
+            pass
+        try:
+            res = await asyncio.get_running_loop().run_in_executor(
+                None, ds.highlight_lines, texts, topic)
+        except Exception as e:
+            return web.json_response({"error": f"标注失败: {e}"}, status=500)
+        marks = self._load_marks(sid)
+        # Idempotent re-run: revert the marks WE set last time (only those the user hasn't since changed),
+        # so clicking 一键标注 again replaces the old auto set instead of piling on. Manual marks are untouched.
+        auto_path = os.path.join(self._session_dir(sid), "autohl.json")
+        prev_auto = {}
+        try:
+            if os.path.exists(auto_path):
+                with open(auto_path, encoding="utf-8") as f:
+                    prev_auto = json.load(f) or {}
+        except Exception:
+            prev_auto = {}
+        for k, kind in prev_auto.items():
+            if marks.get(k) == kind:      # unchanged by the user since -> drop it
+                marks.pop(k, None)
+        new_auto = {}
+        added = 0
+        for idx in res.get("define", []):
+            if 0 <= idx < len(lines):
+                k = str(lines[idx].get("id"))
+                if k in marks and k not in prev_auto:   # a manual mark/clear -> leave it alone
+                    continue
+                marks[k] = "define"
+                new_auto[k] = "define"
+                added += 1
+        for idx in res.get("key", []):
+            if 0 <= idx < len(lines):
+                k = str(lines[idx].get("id"))
+                if k in new_auto:                        # already a define this run
+                    continue
+                if k in marks and k not in prev_auto:    # a manual mark/clear -> leave it alone
+                    continue
+                marks[k] = "key"
+                new_auto[k] = "key"
+                added += 1
+        with open(self._marks_path(sid), "w", encoding="utf-8") as f:
+            json.dump(marks, f, ensure_ascii=False, indent=2)
+        with open(auto_path, "w", encoding="utf-8") as f:
+            json.dump(new_auto, f, ensure_ascii=False, indent=2)
+        return web.json_response({"ok": True, "added": added,
+                                  "define": len(res.get("define", [])),
+                                  "key": len(res.get("key", []))})
+
     def _load_edits(self, sid):
         p = os.path.join(self._session_dir(sid), "edits.jsonl")
         if not os.path.exists(p):
@@ -2111,6 +2603,50 @@ class App:
                 None, extract_timetable, raw, ds, self.cfg)
         except Exception as e:
             return web.json_response({"error": f"识别失败: {e}"}, status=500)
+        return web.json_response(result)
+
+    async def api_import_timetable_pdf(self, request):
+        """PDF timetable -> render page 1 to a PNG (poppler's pdftoppm) -> the same OCR/vision extraction as a
+        screenshot. Robust for text-based and image-only/scanned PDFs alike; the file never leaves the server."""
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        ds = DeepSeek(self.cfg)
+        if not ds.ready:
+            return web.json_response({"error": "没配 DeepSeek key,无法识别课表"}, status=400)
+        try:
+            import base64
+            m = await request.json()
+            b = m.get("pdf") or ""
+            if "," in b and b.strip().startswith("data:"):
+                b = b.split(",", 1)[1]
+            raw = base64.b64decode(b)
+        except Exception:
+            return web.json_response({"error": "PDF 参数不对"}, status=400)
+        if not raw:
+            return web.json_response({"error": "PDF 是空的"}, status=400)
+
+        def _render_and_extract(pdf_bytes):
+            import tempfile
+            import subprocess
+            from timetable import extract_timetable
+            with tempfile.TemporaryDirectory() as td:
+                pdfp = os.path.join(td, "in.pdf")
+                with open(pdfp, "wb") as f:
+                    f.write(pdf_bytes)
+                prefix = os.path.join(td, "page")
+                # single first page, 200 DPI -> <prefix>.png
+                subprocess.run(["pdftoppm", "-png", "-singlefile", "-r", "200", "-f", "1", "-l", "1", pdfp, prefix],
+                               check=True, capture_output=True, timeout=90)
+                with open(prefix + ".png", "rb") as f:
+                    png = f.read()
+            return extract_timetable(png, ds, self.cfg)
+
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(None, _render_and_extract, raw)
+        except FileNotFoundError:
+            return web.json_response({"error": "服务器缺少 pdftoppm(poppler),无法渲染 PDF"}, status=500)
+        except Exception as e:
+            return web.json_response({"error": f"PDF 渲染或识别失败: {e}"}, status=500)
         return web.json_response(result)
 
     # ---------- reference material: course syllabus ----------
@@ -2302,27 +2838,6 @@ class App:
         voiceprint.remove_voice(self._records_root(), request.match_info["id"],
                                 key=self._req_user_key(request))
         return web.json_response({"ok": True})
-
-    async def api_import_shu(self, request):
-        """Auto-login to SHU's academic system + scrape the timetable (Playwright). The password is only used to log in and never persisted."""
-        if not self.check_token(request):
-            return web.json_response({"error": "令牌不对"}, status=401)
-        try:
-            m = await request.json()
-            u = (m.get("username") or "").strip()
-            pwd = m.get("password") or ""
-        except Exception:
-            return web.json_response({"error": "参数不对"}, status=400)
-        if not u or not pwd:
-            return web.json_response({"error": "请输入学/工号和密码"}, status=400)
-        debug_dir = os.path.join(self._records_root(), "shu_probe")
-        try:
-            from shu_jwxt import sync_timetable
-            result = await asyncio.get_running_loop().run_in_executor(
-                None, sync_timetable, u, pwd, debug_dir)
-        except Exception as e:
-            return web.json_response({"error": f"抓取失败: {e}"}, status=500)
-        return web.json_response(result)
 
     # ---------- timetable (weekly recurring classes, stored in schedule.json, for calendar import) ----------
     def _schedule_file(self, request):
@@ -2947,6 +3462,41 @@ class App:
             traceback.print_exc()
         return web.json_response({"ok": True, "tags": cleaned})
 
+    async def api_rename_session(self, request):
+        """Rename a recorded session's title (written to meta.json + PG's meta jsonb, so /api/sessions and every
+        title display pick it up). Owner-only."""
+        if not self.check_token(request):
+            return web.json_response({"error": "令牌不对"}, status=401)
+        sid = request.match_info["sid"]
+        d = self._session_dir(sid)
+        if not os.path.isdir(d):
+            return web.json_response({"error": "没有这份记录"}, status=404)
+        if not self._owns_session(request, sid):
+            return web.json_response({"error": "无权修改这节课"}, status=403)
+        try:
+            body = await request.json()
+            title = (body.get("title") or "").strip()
+        except Exception:
+            return web.json_response({"error": "参数不对"}, status=400)
+        if not title:
+            return web.json_response({"error": "名称不能为空"}, status=400)
+        mp = os.path.join(d, "meta.json")
+        try:
+            with open(mp, encoding="utf-8") as f:
+                meta = json.load(f)
+        except Exception:
+            meta = {}
+        meta["title"] = title
+        tmp = mp + ".part"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, mp)
+        try:
+            recordings_db.upsert_recording(os.path.basename(sid), meta=meta)
+        except Exception:
+            traceback.print_exc()
+        return web.json_response({"ok": True, "title": title})
+
     # ---------- sharing: generate a read-only link ----------
     def _shares_path(self):
         return os.path.join(self._records_root(), "shares.json")
@@ -3089,8 +3639,22 @@ class App:
             return await handler(request)
 
         app = web.Application(middlewares=[guard, cors, isolate],
-                              client_max_size=32 * 1024 * 1024)
+                              client_max_size=2 * 1024 * 1024 * 1024)   # allow large uploads (meeting file library: PPT/video); nginx set to unlimited
         app.router.add_get("/ws", self.ws_handler)
+        app.router.add_get("/ws_meeting", self.meeting_ws)   # standalone EN<->ZH meeting translator (isolated, cloud Gummy)
+        app.router.add_post("/api/meeting/minutes", self.api_meeting_minutes)   # auto meeting minutes (DeepSeek)
+        app.router.add_post("/api/meeting/slides", self.api_meeting_slides)      # import PPT/PDF -> PDF for the slide viewer
+        app.router.add_get("/api/meeting/files", self.api_meeting_files)          # per-account file library
+        app.router.add_post("/api/meeting/files", self.api_meeting_file_upload)
+        app.router.add_get("/api/meeting/files/{id}", self.api_meeting_file_get)
+        app.router.add_delete("/api/meeting/files/{id}", self.api_meeting_file_delete)
+        app.router.add_get("/api/class/files", self.api_class_files)               # per-account class material library
+        app.router.add_post("/api/class/files", self.api_class_file_upload)
+        app.router.add_get("/api/class/files/{id}", self.api_class_file_get)
+        app.router.add_delete("/api/class/files/{id}", self.api_class_file_delete)
+        app.router.add_get("/api/meeting/history", self.api_meeting_history)     # per-account saved meetings
+        app.router.add_post("/api/meeting/history", self.api_meeting_history_save)
+        app.router.add_delete("/api/meeting/history/{id}", self.api_meeting_history_delete)
         # /health isn't token-checked: devices rely on it to tell whether the service is up, and it leaks nothing
         app.router.add_get("/health", lambda r: web.json_response(
             {"ok": True, "needs_token": bool(self.token),
@@ -3102,12 +3666,20 @@ class App:
         app.router.add_get("/api/me", self.api_me)
         app.router.add_post("/api/logout", self.api_logout)
         app.router.add_post("/api/account/delete", self.api_account_delete)
+        # Optional private extras for this deployment (admin_local.py is not part of the public repo);
+        # when the module is absent the app simply runs without those routes.
+        try:
+            import admin_local
+            admin_local.register(app, self)
+        except ImportError:
+            pass
         app.router.add_post("/api/summarize", self.api_summarize)
         app.router.add_get("/api/sessions", self.api_sessions)
         app.router.add_get("/api/transcript/{sid}", self.api_transcript)
         app.router.add_post("/api/transcript/{sid}/edit", self.api_edit_line)
         app.router.add_get("/api/transcript/{sid}/edits", self.api_edits)
         app.router.add_post("/api/transcript/{sid}/mark", self.api_mark_line)
+        app.router.add_post("/api/transcript/{sid}/autohighlight", self.api_autohighlight)
         app.router.add_post("/api/transcript/{sid}/speaker", self.api_rename_speaker)
         app.router.add_get("/api/transcript/{sid}/note", self.api_get_note)
         app.router.add_post("/api/transcript/{sid}/note", self.api_save_note)
@@ -3115,7 +3687,7 @@ class App:
         app.router.add_get("/api/transcript/{sid}/summary", self.api_get_summary)
         app.router.add_post("/api/terms/learn", self.api_learn_term)
         app.router.add_post("/api/import/timetable", self.api_import_timetable)
-        app.router.add_post("/api/import/shu", self.api_import_shu)
+        app.router.add_post("/api/import/timetable-pdf", self.api_import_timetable_pdf)
         app.router.add_get("/api/syllabus", self.api_syllabus_list)
         # official syllabus (by school) -- the static segment must be registered before {name}, or it gets treated as a course name
         app.router.add_get("/api/syllabus/schools", self.api_syllabus_schools)
@@ -3154,6 +3726,7 @@ class App:
         app.router.add_delete("/api/courses/{cid}", self.api_course_delete)
         app.router.add_post("/api/sessions/{sid}/course", self.api_assign_course)
         app.router.add_post("/api/sessions/{sid}/tags", self.api_set_tags)
+        app.router.add_post("/api/sessions/{sid}/title", self.api_rename_session)
 
         # the built web page (phones/tablets open it from here). If not built, skip it, without affecting local use.
         if os.path.isdir(WEBAPP_DIR):
@@ -3168,6 +3741,15 @@ class App:
                         return web.FileResponse(p, headers={
                             "Cache-Control": "public, max-age=31536000, immutable"})
                     return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
+                # A missing hashed asset (e.g. a stale chunk after a redeploy, or a client that kept the page
+                # open across a deploy) must NOT fall back to index.html: a dynamic import() that receives HTML
+                # fails with "'text/html' is not a valid JavaScript MIME type". Return a real 404 so the import
+                # fails cleanly; only genuine SPA routes (no file extension) get index.html.
+                relp = "/" + rel.replace(os.sep, "/")
+                if "/assets/" in relp or os.path.splitext(rel)[1].lower() in (
+                        ".js", ".mjs", ".css", ".map", ".json", ".wasm",
+                        ".woff", ".woff2", ".ttf", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp"):
+                    return web.Response(status=404, text="Not Found")
                 return web.FileResponse(os.path.join(WEBAPP_DIR, "index.html"),
                                         headers={"Cache-Control": "no-cache"})
             app.router.add_get("/app", spa)

@@ -37,6 +37,12 @@ const CATS: { id: Cat; label: string; icon: string }[] = [
   { id: 'account', label: '账户', icon: 'ri-user-line' },
 ];
 
+type LocalLinks = { email: string; items: { to: string; icon: string; label: string }[] };
+const localLinks: LocalLinks | null =
+  Object.values(import.meta.glob<{ extraSettingsLinks?: LocalLinks }>("../../localExtras.tsx", { eager: true }))
+    .map((m) => m.extraSettingsLinks)
+    .find(Boolean) ?? null;
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -80,13 +86,13 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background-100">
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center gap-3 h-14 px-6 max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 h-14 px-6 max-w-7xl mx-auto">
           <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer" />
           <h1 className="text-sm font-semibold text-foreground-900 flex items-center gap-2"><i className="ri-settings-3-line"></i>{t('设置')}</h1>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row gap-5 items-start">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row gap-5 items-start">
         {/* Left: top-level categories */}
         <aside className="w-full md:w-52 flex-shrink-0 flex md:flex-col gap-1.5 overflow-x-auto">
           {CATS.map((c) => (
@@ -129,6 +135,27 @@ export default function SettingsPage() {
                     </button>
                   );
                 })}
+              </div>
+              {/* how course material from the class file library gets folded into the summary */}
+              <div className="px-5 pb-4 pt-1 border-t border-background-100">
+                <p className="text-sm font-medium text-foreground-800">{t('结合课堂文件库资料')}</p>
+                <p className="text-xs text-foreground-400 mt-1 leading-relaxed">
+                  {t('手动:录完课先问你要结合哪些资料(可跳过)。自动:AI 自己判断课程内容和资料库里哪份相关,直接结合,不再询问。')}
+                </p>
+                <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl mt-2.5">
+                  {([{ v: 'manual', label: '手动选择' }, { v: 'auto', label: '自动匹配' }] as const).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => set('materialMode', o.v)}
+                      className={`flex-1 text-xs sm:text-sm py-2 px-1 rounded-lg cursor-pointer whitespace-nowrap transition-all active:scale-95 ${
+                        s.materialMode === o.v ? 'bg-accent-500 text-background-50 font-semibold shadow-sm' : 'text-foreground-500 hover:text-foreground-800'
+                      }`}
+                    >
+                      {t(o.label)}
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
           )}
@@ -241,6 +268,20 @@ export default function SettingsPage() {
                 <div className="text-xs text-foreground-400 border-t border-background-100 pt-3">
                   {t('服务地址:')}<a href={`${SERVICE_ORIGIN}/health`} target="_blank" rel="noreferrer" className="text-primary-500 hover:underline break-all">{SERVICE_ORIGIN}</a>
                 </div>
+                {/* Optional private extras for this deployment (src/localExtras.tsx is absent in the public repo). */}
+                {localLinks && user?.email === localLinks.email && (
+                  <div className="flex gap-2">
+                    {localLinks.items.map((it) => (
+                      <button
+                        key={it.to}
+                        onClick={() => navigate(it.to)}
+                        className="flex items-center gap-2 px-4 py-2 bg-accent-50 text-accent-600 rounded-full text-sm font-medium hover:bg-accent-100 cursor-pointer"
+                      >
+                        <i className={it.icon}></i>{it.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button
                   data-guide="set-logout"
                   onClick={() => { logout(); navigate('/'); }}
