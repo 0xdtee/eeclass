@@ -1400,6 +1400,9 @@ class App:
         fid = request.match_info.get("id", "")
         files = self._read_account_json(request, "class_files", []) or []
         meta = next((f for f in files if f.get("id") == fid), None)
+        if not meta:
+            # not this account's file (or already gone) -- same answer either way, never touch another owner's
+            return web.json_response({"error": "文件不存在"}, status=404)
         if meta:
             d = self._class_files_dir(request)
             import class_files as _cf
