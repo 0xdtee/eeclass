@@ -41,11 +41,12 @@ _SYSTEM = (
     "你是课表识别助手。用户给你一张大学周课表截图的 OCR 结果,已按列分好:第一列是节次编号和上课时间"
     "(如 1 08:00 08:45 表示第1节 08:00-08:45),其余每列依次是周一到周日。同一门课的课名常被 OCR 拆成多行"
     "(课名/@校区/教室号),要按 y 坐标相近合并成一门课。请还原成课程列表,输出 JSON:"
-    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号","weeks":[周数数组]}]}。'
+    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号","teacher":"任课老师","weeks":[周数数组]}]}。'
     "规则:day 周一=1...周日=7;start/end 取该课所在节次对应的时间(跨多节就取第一节开始到最后一节结束);"
     + _SHU_BELLS + _WEEK_RULE +
     "课名去掉换行拼完整(如 高等数 学 A(2) → 高等数学A(2))、明显的 OCR 错字按常见课名纠正(如 博奔论→博弈论);"
     "被截断的课名按最可能的补全;没有教室就留空字符串。"
+    "teacher=这门课的任课老师姓名(格子里常有人名,可能多位,用、分隔);没有就留空字符串。"
     "anchor_monday=截图这一周「周一」那天的真实日期,必须这样定:"
     "①年份取截图里出现的年(如 2026/7/30 或 2026/... 里的 2026);"
     "②月份取表头那行左上角的月份(如「6月」就是 6 月),不要用顶部的当前日期月份;"
@@ -58,10 +59,11 @@ _SYSTEM = (
 
 _VISION_SYSTEM = (
     "你是课表识别助手。用户直接给你一张大学周课表截图。请识别其中所有课程,输出 JSON:"
-    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号","weeks":[周数数组]}]}。'
+    '{"anchor_monday":"YYYY-MM-DD","courses":[{"name":"课名","day":周几数字1-7,"start":"HH:MM","end":"HH:MM","location":"@校区","room":"教室号","teacher":"任课老师","weeks":[周数数组]}]}。'
     "规则:day 周一=1...周日=7;start/end 是该课的起止时间(跨多节取第一节开始到最后一节结束);"
     + _SHU_BELLS + _WEEK_RULE +
     "课名补全完整、明显错字纠正;没有教室留空字符串。"
+    "teacher=任课老师姓名(可能多位,用、分隔),没有就留空字符串。"
     "anchor_monday=截图这一周「周一」那天的真实日期:用表头的年份、月份(如「6月」)和各列表头的日期数字确定,"
     "以表头为准(即使和顶部当前日期不一致);识别不到就填空字符串。只输出 JSON,不要解释、不要代码块。"
 )
@@ -126,7 +128,7 @@ def _clean_result(courses, anchor):
             "name": str(c.get("name", "")).strip(), "day": day,
             "start": str(c.get("start", "") or ""), "end": str(c.get("end", "") or ""),
             "location": str(c.get("location", "") or ""), "room": str(c.get("room", "") or ""),
-            "weeks": weeks,
+            "teacher": str(c.get("teacher", "") or ""), "weeks": weeks,
         })
     return {"courses": clean, "anchor_monday": anchor}
 

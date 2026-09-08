@@ -137,7 +137,7 @@ export default function DashboardHome() {
         arr.push(e);
         byName.set(e.name, arr);
       });
-    const out: Array<{ id: string; title: string; date: string; time: string; duration: string; tags: string[]; description: string; summary: string; keyPoints: string[] }> = [];
+    const out: Array<{ id: string; title: string; date: string; time: string; endTime?: string; place?: string; teacher?: string; duration: string; tags: string[]; description: string; summary: string; keyPoints: string[] }> = [];
     byName.forEach((arr, name) => {
       arr.forEach((e, i) => {
         const tagId = e.tag ? labelToId[e.tag.trim()] : undefined;
@@ -145,6 +145,9 @@ export default function DashboardHome() {
           id: `sched-${e.date}-${e.name}-${e.start}`,
           title: arr.length > 1 ? `${name} 第${i + 1}课` : name,   // Don't number a course that appears only once
           date: e.date, time: e.start,
+          endTime: e.end || '',
+          place: `${e.location || ''} ${e.room || ''}`.trim(),
+          teacher: e.teacher || '',
           duration: '', tags: tagId ? [tagId] : [],
           description: `${e.location} ${e.room}`.trim(),
           summary: '', keyPoints: [] as string[],
@@ -367,6 +370,7 @@ export default function DashboardHome() {
           name: c.name,
           date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
           start: c.start, end: c.end, location: c.location, room: c.room,
+          teacher: c.teacher || undefined,
           tag: nameToTag.get(c.name) || undefined,
         });
       }

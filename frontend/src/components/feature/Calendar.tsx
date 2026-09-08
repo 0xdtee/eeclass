@@ -6,6 +6,10 @@ interface SessionRef {
   title: string;
   date: string;
   time: string;
+  /** Timetable extras (course events only): end time, place and teacher */
+  endTime?: string;
+  place?: string;
+  teacher?: string;
   duration: string;
   tags: string[];
   description: string;
@@ -50,6 +54,16 @@ function blockColor(name: string): string {
   let h = 0;
   for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
   return BLOCK_COLORS[h % BLOCK_COLORS.length];
+}
+
+/** Minutes between two HH:MM strings (0 when either is missing/invalid). */
+function minutesBetween(a?: string, b?: string): number {
+  const parse = (x?: string) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec((x || '').trim());
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const s = parse(a), e = parse(b);
+  return s != null && e != null && e > s ? e - s : 0;
 }
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -464,25 +478,41 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                 const cell = c.list.filter((s) => s.time === time);
                 return (
                   <div key={c.key} className="min-h-[56px] p-0.5 border-l border-background-100">
-                    {cell.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => drill(c.d)}
-                        className={`w-full text-left mb-0.5 px-1.5 py-1 rounded-md border text-[11px] leading-tight cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
-                        title={`${s.title}${s.description ? ' · ' + s.description : ''}`}
-                      >
-                        <div className="font-semibold line-clamp-2">
-                          {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
-                        </div>
-                        {s.tags[0] && tagLabels[s.tags[0]] && (
-                          <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1 rounded text-[9px] font-medium ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
-                            <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
-                            {tagLabels[s.tags[0]]}
-                          </span>
-                        )}
-                        {s.description && <div className="opacity-70 truncate mt-0.5">{s.description}</div>}
-                      </button>
-                    ))}
+                    {cell.map((s) => {
+                      // Stretch the block with the lesson's length: 45 min ≈ one unit, so a 2-period class is visibly taller
+                      const mins = minutesBetween(s.time, s.endTime);
+                      const minH = mins ? Math.min(150, Math.max(58, Math.round(mins * 1.15))) : 58;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => drill(c.d)}
+                          style={{ minHeight: `${minH}px` }}
+                          className={`w-full text-left mb-0.5 px-1.5 py-1 rounded-md border text-[11px] leading-tight cursor-pointer hover:brightness-95 flex flex-col ${blockColor(s.title)}`}
+                          title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place, s.teacher].filter(Boolean).join(' · ')}
+                        >
+                          <div className="font-semibold line-clamp-2">
+                            {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
+                          </div>
+                          {s.endTime && (
+                            <div className="opacity-80 font-mono text-[10px] mt-0.5">{s.time}-{s.endTime}</div>
+                          )}
+                          {s.tags[0] && tagLabels[s.tags[0]] && (
+                            <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1 rounded text-[9px] font-medium w-fit ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
+                              <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
+                              {tagLabels[s.tags[0]]}
+                            </span>
+                          )}
+                          {(s.place || s.teacher) ? (
+                            <div className="mt-auto pt-0.5 space-y-0.5 opacity-80">
+                              {s.place && <div className="flex items-center gap-0.5 truncate"><i className="ri-map-pin-line text-[9px]"></i>{s.place}</div>}
+                              {s.teacher && <div className="flex items-center gap-0.5 truncate"><i className="ri-user-line text-[9px]"></i>{s.teacher}</div>}
+                            </div>
+                          ) : (
+                            s.description && <div className="opacity-70 truncate mt-0.5">{s.description}</div>
+                          )}
+                        </button>
+                      );
+                    })}
                     {cell.length === 0 && (
                       <button
                         onClick={() => drill(c.d)}
@@ -723,7 +753,11 @@ function MonthView({
 
                   return (
                     <div key={session.id} className="space-y-0.5">
-                      <div className={`flex items-center gap-1 px-1 py-0.5 rounded text-[10px] leading-tight ${bgClass} bg-background-50/60`}>
+                      <div
+                        title={[session.title,
+                                session.endTime ? `${session.time}-${session.endTime}` : session.time,
+                                session.place, session.teacher].filter(Boolean).join(' · ')}
+                        className={`flex items-center gap-1 px-1 py-0.5 rounded text-[10px] leading-tight ${bgClass} bg-background-50/60`}>
                         <span className={`w-1 h-1 rounded-full ${dotClass} flex-shrink-0`}></span>
                         <span className={`truncate font-medium ${textClass}`}>
                           {session.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{displayTitle}
@@ -876,9 +910,19 @@ function DayView({
                             {/* Meta row */}
                             <div className="flex items-center gap-2 mb-1.5">
                               <span className={`text-xs font-medium ${textClass} ${bgClass} px-2 py-0.5 rounded-full whitespace-nowrap`}>
-                                {session.time}
+                                {session.endTime ? `${session.time}-${session.endTime}` : session.time}
                               </span>
                               <span className="text-xs text-foreground-400">{session.duration}</span>
+                              {session.place && (
+                                <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
+                                  <i className="ri-map-pin-line"></i>{session.place}
+                                </span>
+                              )}
+                              {session.teacher && (
+                                <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
+                                  <i className="ri-user-line"></i>{session.teacher}
+                                </span>
+                              )}
                               <div className="flex items-center gap-1">
                                 <div className={`w-1 h-1 rounded-full ${dotClass}`}></div>
                                 <span className="text-xs text-foreground-400">{t('{n} 个重点', { n: session.keyPoints?.length ?? 0 })}</span>
