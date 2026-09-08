@@ -705,7 +705,7 @@ function MonthView({
               onClick={() => onDateClick(viewYear, viewMonth, day)}
               onMouseEnter={() => hasSessions && setHoveredDate(dateStr)}
               onMouseLeave={() => setHoveredDate(null)}
-              className={`relative flex flex-col items-start p-1.5 h-[108px] rounded-lg transition-all cursor-pointer group border text-left overflow-hidden ${
+              className={`relative flex flex-col items-start p-1.5 h-[150px] rounded-lg transition-all cursor-pointer group border text-left overflow-hidden ${
                 hasSessions
                   ? `${bgClass} ${borderClass} hover:border-accent-400`
                   : isToday
@@ -729,7 +729,7 @@ function MonthView({
               </span>
 
               <div className="flex-1 w-full overflow-hidden space-y-1 relative z-10">
-                {daySessions.slice(0, 2).map((session, idx) => {
+                {daySessions.slice(0, 3).map((session) => {
                   const displayTitle = session.title
                     .replace(/^第\d+讲：/, '')
                     .replace(/^补课：/, '')
@@ -741,23 +741,28 @@ function MonthView({
                         title={[session.title,
                                 session.endTime ? `${session.time}-${session.endTime}` : session.time,
                                 session.place, session.teacher].filter(Boolean).join(' · ')}
-                        className={`flex items-center gap-1 px-1 py-0.5 rounded text-[10px] leading-tight ${bgClass} bg-background-50/60`}>
-                        <span className={`w-1 h-1 rounded-full ${dotClass} flex-shrink-0`}></span>
-                        <span className={`truncate font-medium ${textClass}`}>
-                          {session.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{displayTitle}
-                        </span>
+                        className={`px-1 py-0.5 rounded text-[10px] leading-tight ${bgClass} bg-background-50/60`}>
+                        <div className="flex items-center gap-1">
+                          <span className={`w-1 h-1 rounded-full ${dotClass} flex-shrink-0`}></span>
+                          <span className={`truncate font-medium ${textClass}`}>
+                            {session.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{displayTitle}
+                          </span>
+                        </div>
+                        {(session.time || session.teacher) && (
+                          <div className="flex items-center gap-1.5 pl-2 text-[9px] text-foreground-400 truncate">
+                            {session.time && (
+                              <span className="font-mono">{session.endTime ? `${session.time}-${session.endTime}` : session.time}</span>
+                            )}
+                            {session.teacher && <span className="truncate">{session.teacher}</span>}
+                          </div>
+                        )}
                       </div>
-                      {idx === 0 && session.summary && (
-                        <p className="text-[9px] leading-tight text-foreground-400 px-1 line-clamp-2">
-                          {session.summary.replace(/^本课时[^。]*。/, '').substring(0, 40)}
-                        </p>
-                      )}
                     </div>
                   );
                 })}
-                {daySessions.length > 2 && (
+                {daySessions.length > 3 && (
                   <span className={`text-[9px] font-medium px-1 ${textClass}`}>
-                    {t('+{n} 更多', { n: daySessions.length - 2 })}
+                    {t('+{n} 更多', { n: daySessions.length - 3 })}
                   </span>
                 )}
               </div>
