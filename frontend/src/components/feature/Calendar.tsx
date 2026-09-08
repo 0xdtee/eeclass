@@ -427,6 +427,14 @@ interface WeekViewProps {
 
 const WEEK_HEAD = ['一', '二', '三', '四', '五', '六', '日'];
 
+/** HH:MM -> minutes since midnight (null when missing/invalid). */
+function toMin(x?: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((x || '').trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+const PX_PER_MIN = 0.85;   // vertical scale of the week timeline
+
 function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick }: WeekViewProps) {
   const t = useT();
   const drill = (d: Date) => onDateClick(d.getFullYear(), d.getMonth(), d.getDate());   // week → that day's view
@@ -435,16 +443,23 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
     const list = (sessionsByDate[key] ?? []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     return { d, key, list };
   });
-  // Time rows: all start times that appear this week, earliest to latest
-  const times = Array.from(new Set(cols.flatMap((c) => c.list.map((s) => s.time).filter(Boolean)))).sort();
   const isToday = (d: Date) =>
     d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
 
+  // Timeline bounds: cover every lesson this week, snapped to whole hours (default 8:00–18:00).
+  const all = cols.flatMap((c) => c.list);
+  const starts = all.map((s) => toMin(s.time)).filter((x): x is number => x != null);
+  const ends = all.map((s) => toMin(s.endTime) ?? (toMin(s.time) ?? 0) + 45).filter((x): x is number => x != null);
+  const dayStart = starts.length ? Math.floor(Math.min(...starts) / 60) * 60 : 8 * 60;
+  const dayEnd = ends.length ? Math.ceil(Math.max(...ends) / 60) * 60 : 18 * 60;
+  const height = Math.max(120, (dayEnd - dayStart) * PX_PER_MIN);
+  const hours = Array.from({ length: Math.floor((dayEnd - dayStart) / 60) + 1 }, (_, i) => dayStart + i * 60);
+
   return (
     <div className="p-4 overflow-x-auto">
-      <div className="min-w-[720px]">
+      <div className="min-w-[760px]">
         {/* Header: Monday–Sunday + dates */}
-        <div className="grid" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
+        <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
           <div></div>
           {cols.map((c, i) => (
             <button key={c.key} type="button" onClick={() => drill(c.d)} className="p-0 pb-2 text-center cursor-pointer group bg-transparent" title={t('查看这一天')}>
@@ -458,57 +473,70 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
           ))}
         </div>
 
-        {times.length === 0 ? (
+        {all.length === 0 ? (
           <div className="py-16 text-center text-sm text-foreground-400">{t('本周暂无课程。请切换到有课程的周,或导入课表。')}</div>
         ) : (
-          times.map((time) => (
-            <div key={time} className="grid border-t border-background-100" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
-              <div className="text-[11px] text-foreground-400 font-mono pt-2 pr-1 text-right">{time}</div>
-              {cols.map((c) => {
-                const cell = c.list.filter((s) => s.time === time);
-                return (
-                  <div key={c.key} className="p-1 border-l border-background-100">
-                    {cell.map((s) => (
-                      // Height follows the content (no forced stretch): a longer lesson gets a bit more air,
-                      // but blocks never leave a big empty gap under the text.
-                      <button
-                        key={s.id}
-                        onClick={() => drill(c.d)}
-                        className={`w-full text-left mb-1 px-2 py-1.5 rounded-md border text-[12px] leading-snug cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
-                        title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place, s.teacher].filter(Boolean).join(' · ')}
-                      >
-                        <div className="font-semibold line-clamp-2">
-                          {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
-                        </div>
-                        <div className="opacity-80 font-mono text-[11px] mt-0.5">
+          /* Timeline: hour ruler on the left, lessons positioned by their real start/end time */
+          <div className="grid border-t border-background-100" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
+            {/* hour ruler */}
+            <div className="relative" style={{ height }}>
+              {hours.map((h) => (
+                <div key={h} className="absolute right-1.5 -translate-y-1/2 text-[11px] font-mono text-foreground-400"
+                     style={{ top: (h - dayStart) * PX_PER_MIN }}>
+                  {String(Math.floor(h / 60)).padStart(2, '0')}:00
+                </div>
+              ))}
+            </div>
+            {/* one column per day */}
+            {cols.map((c) => (
+              <div key={c.key} className="relative border-l border-background-100" style={{ height }}>
+                {/* hour grid lines */}
+                {hours.map((h) => (
+                  <div key={h} className="absolute left-0 right-0 border-t border-background-100/70"
+                       style={{ top: (h - dayStart) * PX_PER_MIN }}></div>
+                ))}
+                {/* click anywhere empty to open that day */}
+                <button onClick={() => drill(c.d)} className="absolute inset-0 w-full h-full hover:bg-background-100/40 cursor-pointer" aria-label={t('查看这一天')} />
+                {c.list.map((s) => {
+                  const st = toMin(s.time);
+                  if (st == null) return null;
+                  const en = toMin(s.endTime) ?? st + 45;
+                  const top = (st - dayStart) * PX_PER_MIN;
+                  const h = Math.max(24, (en - st) * PX_PER_MIN);
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => drill(c.d)}
+                      style={{ top, height: h }}
+                      className={`absolute left-0.5 right-0.5 overflow-hidden text-left px-1.5 py-1 rounded-md border text-[12px] leading-snug cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
+                      title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place, s.teacher].filter(Boolean).join(' · ')}
+                    >
+                      <div className="font-semibold line-clamp-2">
+                        {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
+                      </div>
+                      {h >= 44 && (
+                        <div className="opacity-80 font-mono text-[11px]">
                           {s.endTime ? `${s.time}-${s.endTime}` : s.time}
                         </div>
-                        {(s.place || s.teacher) && (
-                          <div className="opacity-80 text-[11px] mt-0.5 flex items-center gap-2 flex-wrap">
-                            {s.place && <span className="inline-flex items-center gap-0.5 truncate"><i className="ri-map-pin-line text-[10px]"></i>{s.place}</span>}
-                            {s.teacher && <span className="inline-flex items-center gap-0.5 truncate"><i className="ri-user-line text-[10px]"></i>{s.teacher}</span>}
-                          </div>
-                        )}
-                        {s.tags[0] && tagLabels[s.tags[0]] && (
-                          <span className={`inline-flex items-center gap-0.5 mt-1 px-1 rounded text-[10px] font-medium ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
-                            <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
-                            {tagLabels[s.tags[0]]}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                    {cell.length === 0 && (
-                      <button
-                        onClick={() => drill(c.d)}
-                        className="w-full h-full min-h-[40px] rounded-md hover:bg-background-100/60 cursor-pointer"
-                        aria-label={t('查看这一天')}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))
+                      )}
+                      {h >= 62 && (s.place || s.teacher) && (
+                        <div className="opacity-80 text-[11px] flex items-center gap-2 flex-wrap">
+                          {s.place && <span className="inline-flex items-center gap-0.5 truncate"><i className="ri-map-pin-line text-[10px]"></i>{s.place}</span>}
+                          {s.teacher && <span className="inline-flex items-center gap-0.5 truncate"><i className="ri-user-line text-[10px]"></i>{s.teacher}</span>}
+                        </div>
+                      )}
+                      {h >= 82 && s.tags[0] && tagLabels[s.tags[0]] && (
+                        <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1 rounded text-[10px] font-medium ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
+                          <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
+                          {tagLabels[s.tags[0]]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
