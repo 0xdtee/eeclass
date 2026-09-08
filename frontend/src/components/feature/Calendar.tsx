@@ -56,16 +56,6 @@ function blockColor(name: string): string {
   return BLOCK_COLORS[h % BLOCK_COLORS.length];
 }
 
-/** Minutes between two HH:MM strings (0 when either is missing/invalid). */
-function minutesBetween(a?: string, b?: string): number {
-  const parse = (x?: string) => {
-    const m = /^(\d{1,2}):(\d{2})$/.exec((x || '').trim());
-    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-  };
-  const s = parse(a), e = parse(b);
-  return s != null && e != null && e > s ? e - s : 0;
-}
-
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -477,46 +467,40 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
               {cols.map((c) => {
                 const cell = c.list.filter((s) => s.time === time);
                 return (
-                  <div key={c.key} className="min-h-[56px] p-0.5 border-l border-background-100">
-                    {cell.map((s) => {
-                      // Stretch the block with the lesson's length: 45 min ≈ one unit, so a 2-period class is visibly taller
-                      const mins = minutesBetween(s.time, s.endTime);
-                      const minH = mins ? Math.min(150, Math.max(58, Math.round(mins * 1.15))) : 58;
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => drill(c.d)}
-                          style={{ minHeight: `${minH}px` }}
-                          className={`w-full text-left mb-0.5 px-1.5 py-1 rounded-md border text-[11px] leading-tight cursor-pointer hover:brightness-95 flex flex-col ${blockColor(s.title)}`}
-                          title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place, s.teacher].filter(Boolean).join(' · ')}
-                        >
-                          <div className="font-semibold line-clamp-2">
-                            {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
+                  <div key={c.key} className="p-1 border-l border-background-100">
+                    {cell.map((s) => (
+                      // Height follows the content (no forced stretch): a longer lesson gets a bit more air,
+                      // but blocks never leave a big empty gap under the text.
+                      <button
+                        key={s.id}
+                        onClick={() => drill(c.d)}
+                        className={`w-full text-left mb-1 px-2 py-1.5 rounded-md border text-[12px] leading-snug cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
+                        title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place, s.teacher].filter(Boolean).join(' · ')}
+                      >
+                        <div className="font-semibold line-clamp-2">
+                          {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
+                        </div>
+                        <div className="opacity-80 font-mono text-[11px] mt-0.5">
+                          {s.endTime ? `${s.time}-${s.endTime}` : s.time}
+                        </div>
+                        {(s.place || s.teacher) && (
+                          <div className="opacity-80 text-[11px] mt-0.5 flex items-center gap-2 flex-wrap">
+                            {s.place && <span className="inline-flex items-center gap-0.5 truncate"><i className="ri-map-pin-line text-[10px]"></i>{s.place}</span>}
+                            {s.teacher && <span className="inline-flex items-center gap-0.5 truncate"><i className="ri-user-line text-[10px]"></i>{s.teacher}</span>}
                           </div>
-                          {s.endTime && (
-                            <div className="opacity-80 font-mono text-[10px] mt-0.5">{s.time}-{s.endTime}</div>
-                          )}
-                          {s.tags[0] && tagLabels[s.tags[0]] && (
-                            <span className={`inline-flex items-center gap-0.5 mt-0.5 px-1 rounded text-[9px] font-medium w-fit ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
-                              <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
-                              {tagLabels[s.tags[0]]}
-                            </span>
-                          )}
-                          {(s.place || s.teacher) ? (
-                            <div className="mt-auto pt-0.5 space-y-0.5 opacity-80">
-                              {s.place && <div className="flex items-center gap-0.5 truncate"><i className="ri-map-pin-line text-[9px]"></i>{s.place}</div>}
-                              {s.teacher && <div className="flex items-center gap-0.5 truncate"><i className="ri-user-line text-[9px]"></i>{s.teacher}</div>}
-                            </div>
-                          ) : (
-                            s.description && <div className="opacity-70 truncate mt-0.5">{s.description}</div>
-                          )}
-                        </button>
-                      );
-                    })}
+                        )}
+                        {s.tags[0] && tagLabels[s.tags[0]] && (
+                          <span className={`inline-flex items-center gap-0.5 mt-1 px-1 rounded text-[10px] font-medium ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'text')}`}>
+                            <span className={`w-1 h-1 rounded-full ${getColorClass(tagColorMap[s.tags[0]] ?? 'accent', 'dot')}`}></span>
+                            {tagLabels[s.tags[0]]}
+                          </span>
+                        )}
+                      </button>
+                    ))}
                     {cell.length === 0 && (
                       <button
                         onClick={() => drill(c.d)}
-                        className="w-full h-full min-h-[52px] rounded-md hover:bg-background-100/60 cursor-pointer"
+                        className="w-full h-full min-h-[40px] rounded-md hover:bg-background-100/60 cursor-pointer"
                         aria-label={t('查看这一天')}
                       />
                     )}
