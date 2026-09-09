@@ -443,7 +443,7 @@ const PERIODS: { n: number; s: string; e: string }[] = [
   { n: 9, s: '18:00', e: '18:45' }, { n: 10, s: '18:55', e: '19:40' },
   { n: 11, s: '20:00', e: '20:45' }, { n: 12, s: '20:55', e: '21:40' },
 ];
-const ROW_H = 68;   // height of one period row
+const ROW_H = 78;   // height of one period row
 
 /** Which periods a lesson spans; times that don't sit on the bell schedule snap to the nearest period. */
 function periodSpan(startT?: string, endT?: string): { from: number; to: number } {
@@ -485,14 +485,14 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
     <div className="p-4 overflow-x-auto">
       <div className="min-w-[780px]">
         {/* Header: weekday + date, today emphasized */}
-        <div className="grid" style={{ gridTemplateColumns: '46px repeat(7, 1fr)' }}>
+        <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
           <div></div>
           {cols.map((c, i) => (
             <button key={c.key} type="button" onClick={() => drill(c.d)} className="p-0 pb-2 text-center cursor-pointer group bg-transparent" title={t('查看这一天')}>
-              <div className={`text-xs ${isToday(c.d) ? 'text-foreground-700 font-semibold' : 'text-foreground-400'}`}>
+              <div className={`text-[13px] ${isToday(c.d) ? 'text-foreground-700 font-semibold' : 'text-foreground-400'}`}>
                 {t('周{w}', { w: t(WEEK_HEAD[i]) })}
               </div>
-              <div className={`text-sm font-semibold mt-0.5 mx-auto w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
+              <div className={`text-[15px] font-bold mt-1 mx-auto w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
                 isToday(c.d) ? 'bg-accent-500 text-background-50' : 'text-foreground-500 group-hover:bg-background-100'
               }`}>
                 {c.d.getDate()}
@@ -504,15 +504,15 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
         {used.length === 0 ? (
           <div className="py-16 text-center text-sm text-foreground-400">{t('本周暂无课程。请切换到有课程的周,或导入课表。')}</div>
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: '46px repeat(7, 1fr)' }}>
+          <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
             {/* Period ruler: number on top, start/end time under it */}
             <div>
               {rows.map((p) => (
                 <div key={p.n} className="flex flex-col items-center justify-center text-foreground-400 border-t border-background-100"
                      style={{ height: ROW_H }}>
-                  <span className="text-[13px] font-semibold text-foreground-500 leading-none">{p.n}</span>
-                  <span className="text-[9px] font-mono leading-tight mt-0.5">{p.s}</span>
-                  <span className="text-[9px] font-mono leading-tight opacity-70">{p.e}</span>
+                  <span className="text-[15px] font-bold text-foreground-600 leading-none">{p.n}</span>
+                  <span className="text-[11px] font-mono leading-tight mt-1 text-foreground-500">{p.s}</span>
+                  <span className="text-[11px] font-mono leading-tight text-foreground-400">{p.e}</span>
                 </div>
               ))}
             </div>
@@ -536,19 +536,19 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       className={`absolute left-1.5 right-1.5 overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
                       title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place || '未填', s.teacher].filter(Boolean).join(' · ')}
                     >
-                      <div className="text-[12px] font-semibold leading-tight line-clamp-2">
+                      <div className="text-[14px] font-semibold leading-tight line-clamp-2">
                         {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
                       </div>
-                      <div className="text-[11px] opacity-85 leading-snug truncate">
+                      <div className="text-[12.5px] opacity-90 leading-snug truncate">
                         <span className="opacity-70">{t('时间：')}</span>
                         <span className="font-mono">{s.endTime ? `${s.time}-${s.endTime}` : s.time}</span>
                       </div>
-                      <div className="text-[11px] opacity-85 leading-snug truncate">
+                      <div className="text-[12.5px] opacity-90 leading-snug truncate">
                         <span className="opacity-70">{t('地点：')}</span>
                         {s.place || <span className="opacity-50">{t('未填')}</span>}
                       </div>
                       {s.teacher && (
-                        <div className="text-[11px] opacity-85 leading-snug truncate">
+                        <div className="text-[12.5px] opacity-90 leading-snug truncate">
                           <span className="opacity-70">{t('老师：')}</span>{s.teacher}
                         </div>
                       )}
