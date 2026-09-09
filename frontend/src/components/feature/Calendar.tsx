@@ -433,36 +433,31 @@ function toMin(x?: string): number | null {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
-/** Shanghai University's bell schedule: the week grid is one equal row per period (WakeUp-style),
- *  so lunch breaks and gaps between periods take no vertical space at all. */
-const PERIODS: { n: number; s: string; e: string }[] = [
-  { n: 1, s: '08:00', e: '08:45' }, { n: 2, s: '08:55', e: '09:40' },
-  { n: 3, s: '10:00', e: '10:45' }, { n: 4, s: '10:55', e: '11:40' },
-  { n: 5, s: '13:00', e: '13:45' }, { n: 6, s: '13:55', e: '14:40' },
-  { n: 7, s: '15:00', e: '15:45' }, { n: 8, s: '15:55', e: '16:40' },
-  { n: 9, s: '18:00', e: '18:45' }, { n: 10, s: '18:55', e: '19:40' },
-  { n: 11, s: '20:00', e: '20:45' }, { n: 12, s: '20:55', e: '21:40' },
-];
-const ROW_H = 78;   // height of one period row
+/** Rows of the week grid are derived from the lessons themselves, not from a fixed bell schedule:
+ *  every distinct start-end pair this week becomes one equal-height row, ordered by time. Breaks between
+ *  slots take no height, and a lesson spanning several slots merges into one block. */
+const ROW_H = 116;   // height of one time-slot row (fits a two-line title + time/place/teacher)
 
-/** Which periods a lesson spans; times that don't sit on the bell schedule snap to the nearest period. */
-function periodSpan(startT?: string, endT?: string): { from: number; to: number } {
-  const st = toMin(startT);
-  if (st == null) return { from: 1, to: 1 };
-  let from = 1, best = Infinity;
-  PERIODS.forEach((p) => {
-    const d = Math.abs((toMin(p.s) as number) - st);
-    if (d < best) { best = d; from = p.n; }
+interface Slot { s: string; e: string; from: number; to: number }
+
+/** Build the week's time slots and tell each lesson which rows it covers. */
+function buildSlots(items: { time?: string; endTime?: string }[]): Slot[] {
+  const seen = new Map<string, Slot>();
+  items.forEach((x) => {
+    const st = toMin(x.time);
+    if (st == null) return;
+    const en = toMin(x.endTime) ?? st + 45;
+    const key = `${x.time}-${x.endTime ?? ''}`;
+    if (!seen.has(key)) seen.set(key, { s: x.time as string, e: x.endTime || '', from: st, to: Math.max(en, st + 1) });
   });
-  const en = toMin(endT);
-  if (en == null) return { from, to: from };
-  let to = from, bestE = Infinity;
-  PERIODS.forEach((p) => {
-    if (p.n < from) return;
-    const d = Math.abs((toMin(p.e) as number) - en);
-    if (d < bestE) { bestE = d; to = p.n; }
+  const raw = [...seen.values()].sort((a, b) => a.from - b.from || a.to - b.to);
+  // Merge slots that fully contain one another so a long lesson doesn't create a duplicate row
+  const out: Slot[] = [];
+  raw.forEach((slot) => {
+    const covering = out.find((o) => slot.from >= o.from && slot.to <= o.to);
+    if (!covering) out.push(slot);
   });
-  return { from, to };
+  return out;
 }
 
 function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick }: WeekViewProps) {
@@ -470,16 +465,22 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
   const drill = (d: Date) => onDateClick(d.getFullYear(), d.getMonth(), d.getDate());   // week → that day's view
   const cols = weekDates.map((d) => {
     const key = formatDate(d.getFullYear(), d.getMonth(), d.getDate());
-    const list = (sessionsByDate[key] ?? []).map((s) => ({ s, span: periodSpan(s.time, s.endTime) }));
-    return { d, key, list };
+    return { d, key, list: sessionsByDate[key] ?? [] };
   });
   const isToday = (d: Date) =>
     d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
 
-  // Show only the periods this week actually uses (keeps the grid tight), but never fewer than periods 1-8.
+  // Rows come from the lessons actually scheduled this week
   const used = cols.flatMap((c) => c.list);
-  const last = used.length ? Math.max(...used.map((x) => x.span.to)) : 8;
-  const rows = PERIODS.filter((p) => p.n <= Math.max(last, 8));
+  const rows = buildSlots(used);
+  /** Which rows a lesson covers: any slot overlapping its real time range. */
+  const rowSpan = (x: { time?: string; endTime?: string }) => {
+    const st = toMin(x.time);
+    if (st == null) return null;
+    const en = toMin(x.endTime) ?? st + 45;
+    const idx = rows.map((r, i) => ({ r, i })).filter(({ r }) => r.from < en && r.to > st).map(({ i }) => i);
+    return idx.length ? { first: idx[0], last: idx[idx.length - 1] } : null;
+  };
 
   return (
     <div className="p-4 overflow-x-auto">
@@ -507,13 +508,13 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
           <div className="grid" style={{ gridTemplateColumns: '62px repeat(7, 1fr)' }}>
             {/* Period ruler: number on top, start/end time under it */}
             <div>
-              {rows.map((p) => (
-                <div key={p.n} className="flex flex-col items-center justify-center border-t border-background-100"
+              {rows.map((p, i) => (
+                <div key={`${p.s}-${p.e}-${i}`} className="flex flex-col items-center justify-center border-t border-background-100"
                      style={{ height: ROW_H }}>
                   {/* Times only -- not every timetable is organised into numbered periods */}
                   <span className="text-[13px] font-mono font-semibold text-foreground-600 leading-none tabular-nums">{p.s}</span>
-                  <span className="text-[10px] text-foreground-300 leading-none my-[3px]">|</span>
-                  <span className="text-[13px] font-mono text-foreground-400 leading-none tabular-nums">{p.e}</span>
+                  {p.e && <><span className="text-[10px] text-foreground-300 leading-none my-[3px]">|</span>
+                  <span className="text-[13px] font-mono text-foreground-400 leading-none tabular-nums">{p.e}</span></>}
                 </div>
               ))}
             </div>
@@ -521,14 +522,15 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
             {cols.map((c) => (
               <div key={c.key} className="relative border-l border-background-100" style={{ height: rows.length * ROW_H }}>
                 {rows.map((p, i) => (
-                  <div key={p.n} className="absolute left-0 right-0 border-t border-background-100"
+                  <div key={`${p.s}-${p.e}-${i}`} className="absolute left-0 right-0 border-t border-background-100"
                        style={{ top: i * ROW_H }}></div>
                 ))}
                 <button onClick={() => drill(c.d)} className="absolute inset-0 w-full h-full hover:bg-background-100/40 cursor-pointer" aria-label={t('查看这一天')} />
-                {c.list.map(({ s, span }) => {
-                  const top = (span.from - rows[0].n) * ROW_H;
-                  const h = (span.to - span.from + 1) * ROW_H;
-                  if (top < 0) return null;
+                {c.list.map((s) => {
+                  const span = rowSpan(s);
+                  if (!span) return null;
+                  const top = span.first * ROW_H;
+                  const h = (span.last - span.first + 1) * ROW_H;
                   return (
                     <button
                       key={s.id}
@@ -537,7 +539,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       className={`absolute left-1.5 right-1.5 overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
                       title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place || '未填', s.teacher].filter(Boolean).join(' · ')}
                     >
-                      <div className="text-[14px] font-semibold leading-tight line-clamp-2">
+                      <div className="text-[14px] font-semibold leading-snug line-clamp-2">
                         {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
                       </div>
                       <div className="text-[12.5px] opacity-90 leading-snug truncate">
