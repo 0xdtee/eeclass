@@ -485,7 +485,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
     <div className="p-4 overflow-x-auto">
       <div className="min-w-[780px]">
         {/* Header: weekday + date, today emphasized */}
-        <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
+        <div className="grid" style={{ gridTemplateColumns: '62px repeat(7, 1fr)' }}>
           <div></div>
           {cols.map((c, i) => (
             <button key={c.key} type="button" onClick={() => drill(c.d)} className="p-0 pb-2 text-center cursor-pointer group bg-transparent" title={t('查看这一天')}>
@@ -504,15 +504,17 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
         {used.length === 0 ? (
           <div className="py-16 text-center text-sm text-foreground-400">{t('本周暂无课程。请切换到有课程的周,或导入课表。')}</div>
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
+          <div className="grid" style={{ gridTemplateColumns: '62px repeat(7, 1fr)' }}>
             {/* Period ruler: number on top, start/end time under it */}
             <div>
               {rows.map((p) => (
-                <div key={p.n} className="flex flex-col items-center justify-center text-foreground-400 border-t border-background-100"
+                <div key={p.n} className="flex flex-col items-center justify-center border-t border-background-100"
                      style={{ height: ROW_H }}>
                   <span className="text-[15px] font-bold text-foreground-600 leading-none">{p.n}</span>
-                  <span className="text-[11px] font-mono leading-tight mt-1 text-foreground-500">{p.s}</span>
-                  <span className="text-[11px] font-mono leading-tight text-foreground-400">{p.e}</span>
+                  {/* one line per bound, each tagged, so the start can't be misread as the end */}
+                  <span className="mt-1.5 text-[12px] font-mono font-semibold text-foreground-600 leading-none tabular-nums">{p.s}</span>
+                  <span className="text-[10px] text-foreground-300 leading-none my-[3px]">|</span>
+                  <span className="text-[12px] font-mono text-foreground-400 leading-none tabular-nums">{p.e}</span>
                 </div>
               ))}
             </div>
