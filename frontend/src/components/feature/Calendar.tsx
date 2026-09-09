@@ -510,11 +510,10 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
               {rows.map((p) => (
                 <div key={p.n} className="flex flex-col items-center justify-center border-t border-background-100"
                      style={{ height: ROW_H }}>
-                  <span className="text-[15px] font-bold text-foreground-600 leading-none">{p.n}</span>
-                  {/* one line per bound, each tagged, so the start can't be misread as the end */}
-                  <span className="mt-1.5 text-[12px] font-mono font-semibold text-foreground-600 leading-none tabular-nums">{p.s}</span>
+                  {/* Times only -- not every timetable is organised into numbered periods */}
+                  <span className="text-[13px] font-mono font-semibold text-foreground-600 leading-none tabular-nums">{p.s}</span>
                   <span className="text-[10px] text-foreground-300 leading-none my-[3px]">|</span>
-                  <span className="text-[12px] font-mono text-foreground-400 leading-none tabular-nums">{p.e}</span>
+                  <span className="text-[13px] font-mono text-foreground-400 leading-none tabular-nums">{p.e}</span>
                 </div>
               ))}
             </div>
