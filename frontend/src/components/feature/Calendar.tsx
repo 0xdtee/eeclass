@@ -443,7 +443,7 @@ const PERIODS: { n: number; s: string; e: string }[] = [
   { n: 9, s: '18:00', e: '18:45' }, { n: 10, s: '18:55', e: '19:40' },
   { n: 11, s: '20:00', e: '20:45' }, { n: 12, s: '20:55', e: '21:40' },
 ];
-const ROW_H = 62;   // height of one period row
+const ROW_H = 68;   // height of one period row
 
 /** Which periods a lesson spans; times that don't sit on the bell schedule snap to the nearest period. */
 function periodSpan(startT?: string, endT?: string): { from: number; to: number } {
@@ -532,15 +532,26 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                     <button
                       key={s.id}
                       onClick={() => drill(c.d)}
-                      style={{ top: top + 2, height: h - 4 }}
-                      className={`absolute left-[3px] right-[3px] overflow-hidden text-center px-1 py-1.5 rounded-lg border cursor-pointer hover:brightness-95 flex flex-col items-center justify-center gap-0.5 ${blockColor(s.title)}`}
-                      title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place, s.teacher].filter(Boolean).join(' · ')}
+                      style={{ top: top + 5, height: h - 10 }}
+                      className={`absolute left-1.5 right-1.5 overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
+                      title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place || '未填', s.teacher].filter(Boolean).join(' · ')}
                     >
-                      <div className="text-[12px] font-semibold leading-tight line-clamp-3">
+                      <div className="text-[12px] font-semibold leading-tight line-clamp-2">
                         {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
                       </div>
-                      {s.place && <div className="text-[11px] opacity-80 leading-tight truncate w-full">@{s.place}</div>}
-                      {s.teacher && h >= 100 && <div className="text-[11px] opacity-75 leading-tight truncate w-full">{s.teacher}</div>}
+                      <div className="text-[11px] opacity-85 leading-snug truncate">
+                        <span className="opacity-70">{t('时间：')}</span>
+                        <span className="font-mono">{s.endTime ? `${s.time}-${s.endTime}` : s.time}</span>
+                      </div>
+                      <div className="text-[11px] opacity-85 leading-snug truncate">
+                        <span className="opacity-70">{t('地点：')}</span>
+                        {s.place || <span className="opacity-50">{t('未填')}</span>}
+                      </div>
+                      {s.teacher && (
+                        <div className="text-[11px] opacity-85 leading-snug truncate">
+                          <span className="opacity-70">{t('老师：')}</span>{s.teacher}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
