@@ -104,6 +104,14 @@ export default function DashboardHome() {
           title: sessionTitle(s),
           date: m ? m[1] : '',
           time: m ? `${m[2]}:${m[3]}` : '',
+          // real end time, so a short recording shows as the fragment it is instead of a full-length block
+          endTime: m && s.duration_s
+            ? (() => {
+                const t0 = Number(m[2]) * 60 + Number(m[3]) + Math.round(s.duration_s / 60);
+                const hh = Math.floor(t0 / 60) % 24, mm = t0 % 60;
+                return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+              })()
+            : '',
           duration: fmtDuration(s.duration_s),
           durationSec: s.duration_s,
           tags: [] as string[],

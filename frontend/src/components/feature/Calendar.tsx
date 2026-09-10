@@ -437,27 +437,37 @@ function toMin(x?: string): number | null {
  *  every distinct start-end pair this week becomes one equal-height row, ordered by time. Breaks between
  *  slots take no height, and a lesson spanning several slots merges into one block. */
 const ROW_H = 116;   // height of one time-slot row (fits a two-line title + time/place/teacher)
+const CARD_GAP = 26;   // room kept under a card so a fragment chip can sit in the same row
 
 interface Slot { s: string; e: string; from: number; to: number }
 
-/** Build the week's time slots and tell each lesson which rows it covers. */
+const SHORT_MIN = 30;   // anything shorter than this is a fragment (e.g. a few minutes of recording)
+
+/** Time range of one item; a missing end time is treated as a 45-minute lesson. */
+function rangeOf(x: { time?: string; endTime?: string }): { from: number; to: number } | null {
+  const st = toMin(x.time);
+  if (st == null) return null;
+  const en = toMin(x.endTime);
+  return { from: st, to: en != null && en > st ? en : st + 45 };
+}
+
+/** Build the week's rows. Full-length lessons define the grid; a short fragment only earns its own row
+ *  when no lesson's slot already covers it, so a five-minute recording never claims a whole row. */
 function buildSlots(items: { time?: string; endTime?: string }[]): Slot[] {
-  const seen = new Map<string, Slot>();
-  items.forEach((x) => {
-    const st = toMin(x.time);
-    if (st == null) return;
-    const en = toMin(x.endTime) ?? st + 45;
-    const key = `${x.time}-${x.endTime ?? ''}`;
-    if (!seen.has(key)) seen.set(key, { s: x.time as string, e: x.endTime || '', from: st, to: Math.max(en, st + 1) });
-  });
-  const raw = [...seen.values()].sort((a, b) => a.from - b.from || a.to - b.to);
-  // Merge slots that fully contain one another so a long lesson doesn't create a duplicate row
+  const withRange = items.map((x) => ({ x, r: rangeOf(x) })).filter((v): v is { x: typeof items[0]; r: { from: number; to: number } } => v.r != null);
+  const add = (out: Slot[], x: { time?: string; endTime?: string }, r: { from: number; to: number }) => {
+    if (out.some((o) => r.from >= o.from && r.to <= o.to)) return;   // already covered by an existing row
+    out.push({ s: x.time as string, e: x.endTime || '', from: r.from, to: r.to });
+  };
   const out: Slot[] = [];
-  raw.forEach((slot) => {
-    const covering = out.find((o) => slot.from >= o.from && slot.to <= o.to);
-    if (!covering) out.push(slot);
-  });
-  return out;
+  // long lessons first, longest first, so they establish the rows
+  withRange.filter(({ r }) => r.to - r.from >= SHORT_MIN)
+    .sort((a, b) => (b.r.to - b.r.from) - (a.r.to - a.r.from))
+    .forEach(({ x, r }) => add(out, x, r));
+  // then fragments that fall outside every existing row
+  withRange.filter(({ r }) => r.to - r.from < SHORT_MIN)
+    .forEach(({ x, r }) => { if (!out.some((o) => r.from < o.to && r.to > o.from)) add(out, x, r); });
+  return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
 
 function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick }: WeekViewProps) {
@@ -475,11 +485,42 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
   const rows = buildSlots(used);
   /** Which rows a lesson covers: any slot overlapping its real time range. */
   const rowSpan = (x: { time?: string; endTime?: string }) => {
-    const st = toMin(x.time);
-    if (st == null) return null;
-    const en = toMin(x.endTime) ?? st + 45;
-    const idx = rows.map((r, i) => ({ r, i })).filter(({ r }) => r.from < en && r.to > st).map(({ i }) => i);
+    const r = rangeOf(x);
+    if (!r) return null;
+    const idx = rows.map((row, i) => ({ row, i })).filter(({ row }) => row.from < r.to && row.to > r.from).map(({ i }) => i);
     return idx.length ? { first: idx[0], last: idx[idx.length - 1] } : null;
+  };
+  /** Lay out one day's items. Full lessons sharing a row split the width; a short fragment never squeezes
+   *  them -- it rides along the bottom of the row as a compact chip (or fills the row when it is alone). */
+  const placeDay = (list: SessionRef[]) => {
+    const withSpan = list
+      .map((s) => {
+        const span = rowSpan(s);
+        const r = rangeOf(s);
+        return span && r ? { s, span, short: r.to - r.from < SHORT_MIN } : null;
+      })
+      .filter((v): v is { s: SessionRef; span: { first: number; last: number }; short: boolean } => v != null);
+
+    const longByRow = new Map<number, number>();
+    withSpan.filter((v) => !v.short).forEach((v) => longByRow.set(v.span.first, (longByRow.get(v.span.first) ?? 0) + 1));
+    const seenLong = new Map<number, number>();
+    const fragByRow = new Map<number, number>();
+    withSpan.filter((v) => v.short).forEach((v) => fragByRow.set(v.span.first, (fragByRow.get(v.span.first) ?? 0) + 1));
+    const seenFrag = new Map<number, number>();
+
+    return withSpan.map((v) => {
+      if (!v.short) {
+        const n = longByRow.get(v.span.first) ?? 1;
+        const i = seenLong.get(v.span.first) ?? 0;
+        seenLong.set(v.span.first, i + 1);
+        return { ...v, lane: i, lanes: n, chip: false };
+      }
+      const alone = (longByRow.get(v.span.first) ?? 0) === 0;
+      const n = fragByRow.get(v.span.first) ?? 1;
+      const i = seenFrag.get(v.span.first) ?? 0;
+      seenFrag.set(v.span.first, i + 1);
+      return { ...v, lane: i, lanes: n, chip: !alone };
+    });
   };
 
   return (
@@ -526,18 +567,35 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                        style={{ top: i * ROW_H }}></div>
                 ))}
                 <button onClick={() => drill(c.d)} className="absolute inset-0 w-full h-full hover:bg-background-100/40 cursor-pointer" aria-label={t('查看这一天')} />
-                {c.list.map((s) => {
-                  const span = rowSpan(s);
-                  if (!span) return null;
+                {(() => { const placed = placeDay(c.list); const chipRows = new Set(placed.filter((x) => x.chip).map((x) => x.span.first));
+                  return placed.map(({ s, span, lane, lanes, short, chip }) => {
+                  const hasChip = !chip && chipRows.has(span.first);
                   const top = span.first * ROW_H;
                   const h = (span.last - span.first + 1) * ROW_H;
+                  const w = 100 / lanes;
+                  const info = [s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.duration, s.place || '未填', s.teacher].filter(Boolean).join(' · ');
+                  // A few-minute recording alongside a lesson: show it as a slim chip pinned to the row's foot
+                  if (chip) {
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => drill(c.d)}
+                        style={{ top: top + h - CARD_GAP + 2 + lane * 22 }}
+                        className={`absolute z-10 left-1.5 right-1.5 truncate px-2 py-0.5 rounded-md border text-[11px] font-medium shadow-sm cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
+                        title={info}
+                      >
+                        <i className="ri-mic-line mr-1"></i>{s.title} · {s.time}
+                        {s.duration && <span className="opacity-70"> · {s.duration}</span>}
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={s.id}
                       onClick={() => drill(c.d)}
-                      style={{ top: top + 5, height: h - 10 }}
-                      className={`absolute left-1.5 right-1.5 overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
-                      title={[s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.place || '未填', s.teacher].filter(Boolean).join(' · ')}
+                      style={{ top: top + 5, height: h - 10 - (hasChip ? CARD_GAP : 0), left: `calc(${lane * w}% + 6px)`, width: `calc(${w}% - 12px)` }}
+                      className={`absolute overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
+                      title={info}
                     >
                       <div className="text-[14px] font-semibold leading-snug line-clamp-2">
                         {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
@@ -545,6 +603,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       <div className="text-[12.5px] opacity-90 leading-snug truncate">
                         <span className="opacity-70">{t('时间：')}</span>
                         <span className="font-mono">{s.endTime ? `${s.time}-${s.endTime}` : s.time}</span>
+                        {short && s.duration && <span className="ml-1 opacity-75">({s.duration})</span>}
                       </div>
                       <div className="text-[12.5px] opacity-90 leading-snug truncate">
                         <span className="opacity-70">{t('地点：')}</span>
@@ -557,7 +616,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       )}
                     </button>
                   );
-                })}
+                }); })()}
               </div>
             ))}
           </div>
