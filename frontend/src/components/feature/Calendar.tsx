@@ -436,8 +436,9 @@ function toMin(x?: string): number | null {
 /** Rows of the week grid are derived from the lessons themselves, not from a fixed bell schedule:
  *  every distinct start-end pair this week becomes one equal-height row, ordered by time. Breaks between
  *  slots take no height, and a lesson spanning several slots merges into one block. */
-const ROW_H = 116;   // height of one time-slot row (fits a two-line title + time/place/teacher)
-const CARD_GAP = 26;   // room kept under a card so a fragment chip can sit in the same row
+const ROW_H = 116;        // height of one time-slot row (fits a two-line title + time/place/teacher)
+const CHIP_H = 40;        // a two-line fragment chip
+
 
 interface Slot { s: string; e: string; from: number; to: number }
 
@@ -491,7 +492,8 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
     return idx.length ? { first: idx[0], last: idx[idx.length - 1] } : null;
   };
   /** Lay out one day's items. Full lessons sharing a row split the width; a short fragment never squeezes
-   *  them -- it rides along the bottom of the row as a compact chip (or fills the row when it is alone). */
+   *  them -- it rides along the bottom of the row as a compact chip (or fills the row when it is alone).
+   *  Rows hosting chips grow taller instead of squashing the lesson card. */
   const placeDay = (list: SessionRef[]) => {
     const withSpan = list
       .map((s) => {
@@ -523,6 +525,22 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
     });
   };
 
+  // How many chips each row must host (worst day), so every column keeps the same row geometry
+  const chipsPerRow = new Map<number, number>();
+  cols.forEach((c) => {
+    const per = new Map<number, number>();
+    placeDay(c.list).filter((x) => x.chip).forEach((x) => per.set(x.span.first, (per.get(x.span.first) ?? 0) + 1));
+    per.forEach((n, row) => chipsPerRow.set(row, Math.max(chipsPerRow.get(row) ?? 0, n)));
+  });
+  const rowH = rows.map((_, i) => ROW_H + (chipsPerRow.get(i) ?? 0) * (CHIP_H + 2));
+  const rowTop = rowH.reduce<number[]>((acc, h, i) => [...acc, (acc[i - 1] ?? 0) + (rowH[i - 1] ?? 0)], []);
+  const totalH = rowH.reduce((a, b) => a + b, 0);
+  /** Pixel span of rows [first..last]. */
+  const boxOf = (first: number, last: number) => ({
+    top: rowTop[first] ?? 0,
+    height: rowH.slice(first, last + 1).reduce((a, b) => a + b, 0),
+  });
+
   return (
     <div className="p-4 overflow-x-auto">
       <div className="min-w-[780px]">
@@ -551,7 +569,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
             <div>
               {rows.map((p, i) => (
                 <div key={`${p.s}-${p.e}-${i}`} className="flex flex-col items-center justify-center border-t border-background-100"
-                     style={{ height: ROW_H }}>
+                     style={{ height: rowH[i] }}>
                   {/* Times only -- not every timetable is organised into numbered periods */}
                   <span className="text-[13px] font-mono font-semibold text-foreground-600 leading-none tabular-nums">{p.s}</span>
                   {p.e && <><span className="text-[10px] text-foreground-300 leading-none my-[3px]">|</span>
@@ -561,17 +579,18 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
             </div>
             {/* One column per day: lessons are integer rectangles over the period grid */}
             {cols.map((c) => (
-              <div key={c.key} className="relative border-l border-background-100" style={{ height: rows.length * ROW_H }}>
+              <div key={c.key} className="relative border-l border-background-100" style={{ height: totalH }}>
                 {rows.map((p, i) => (
                   <div key={`${p.s}-${p.e}-${i}`} className="absolute left-0 right-0 border-t border-background-100"
-                       style={{ top: i * ROW_H }}></div>
+                       style={{ top: rowTop[i] }}></div>
                 ))}
                 <button onClick={() => drill(c.d)} className="absolute inset-0 w-full h-full hover:bg-background-100/40 cursor-pointer" aria-label={t('查看这一天')} />
-                {(() => { const placed = placeDay(c.list); const chipRows = new Set(placed.filter((x) => x.chip).map((x) => x.span.first));
+                {(() => { const placed = placeDay(c.list);
                   return placed.map(({ s, span, lane, lanes, short, chip }) => {
-                  const hasChip = !chip && chipRows.has(span.first);
-                  const top = span.first * ROW_H;
-                  const h = (span.last - span.first + 1) * ROW_H;
+                  const box = boxOf(span.first, span.last);
+                  const top = box.top;
+                  const h = box.height;
+                  const chipRoom = (chipsPerRow.get(span.first) ?? 0) * (CHIP_H + 2);
                   const w = 100 / lanes;
                   const info = [s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.duration, s.place || '未填', s.teacher].filter(Boolean).join(' · ');
                   // A few-minute recording alongside a lesson: show it as a slim chip pinned to the row's foot
@@ -580,12 +599,17 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       <button
                         key={s.id}
                         onClick={() => drill(c.d)}
-                        style={{ top: top + h - CARD_GAP + 2 + lane * 22 }}
-                        className={`absolute z-10 left-1.5 right-1.5 truncate px-2 py-0.5 rounded-md border text-[11px] font-medium shadow-sm cursor-pointer hover:brightness-95 ${blockColor(s.title)}`}
+                        style={{ top: top + h - chipRoom + 2 + lane * (CHIP_H + 2), height: CHIP_H }}
+                        className={`absolute z-10 left-1.5 right-1.5 px-2 py-1 rounded-md border shadow-sm cursor-pointer hover:brightness-95 text-left ${blockColor(s.title)}`}
                         title={info}
                       >
-                        <i className="ri-mic-line mr-1"></i>{s.title} · {s.time}
-                        {s.duration && <span className="opacity-70"> · {s.duration}</span>}
+                        <div className="text-[11.5px] font-medium leading-tight truncate">
+                          <i className="ri-mic-line mr-1"></i>{s.title}
+                        </div>
+                        <div className="text-[11px] font-mono leading-tight opacity-80 truncate">
+                          {s.endTime ? `${s.time}-${s.endTime}` : s.time}
+                          {s.duration && <span className="opacity-75"> · {s.duration}</span>}
+                        </div>
                       </button>
                     );
                   }
@@ -593,7 +617,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                     <button
                       key={s.id}
                       onClick={() => drill(c.d)}
-                      style={{ top: top + 5, height: h - 10 - (hasChip ? CARD_GAP : 0), left: `calc(${lane * w}% + 6px)`, width: `calc(${w}% - 12px)` }}
+                      style={{ top: top + 5, height: h - 10 - chipRoom, left: `calc(${lane * w}% + 6px)`, width: `calc(${w}% - 12px)` }}
                       className={`absolute overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
                       title={info}
                     >
