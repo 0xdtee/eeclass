@@ -35,6 +35,7 @@ export interface ScheduleCourse {
   location: string;
   room: string;
   teacher?: string;   // recognized teacher name(s)
+  credits?: string;   // recognized credit value, e.g. "5.0"
   weeks?: number[];   // recognized teaching weeks, e.g. [1..16] or [1,5,9,13]; [] = unknown
 }
 
@@ -47,6 +48,7 @@ export interface ScheduleEvent {
   location: string;
   room: string;
   teacher?: string;   // teacher name(s), shown on the calendar
+  credits?: string;   // credit value, shown on the calendar
   tag?: string;       // This course's tag (stored as label); on image import, auto-matched to an existing one by course name / created if none
 }
 

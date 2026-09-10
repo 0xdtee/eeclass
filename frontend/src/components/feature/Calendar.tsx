@@ -10,6 +10,7 @@ interface SessionRef {
   endTime?: string;
   place?: string;
   teacher?: string;
+  credits?: string;
   duration: string;
   tags: string[];
   description: string;
@@ -436,7 +437,7 @@ function toMin(x?: string): number | null {
 /** Rows of the week grid are derived from the lessons themselves, not from a fixed bell schedule:
  *  every distinct start-end pair this week becomes one equal-height row, ordered by time. Breaks between
  *  slots take no height, and a lesson spanning several slots merges into one block. */
-const ROW_H = 116;        // height of one time-slot row (fits a two-line title + time/place/teacher)
+const ROW_H = 138;        // one time-slot row: two-line title + time/place/teacher/credits
 const CHIP_H = 40;        // a two-line fragment chip
 
 
@@ -592,7 +593,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                   const h = box.height;
                   const chipRoom = (chipsPerRow.get(span.first) ?? 0) * (CHIP_H + 2);
                   const w = 100 / lanes;
-                  const info = [s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.duration, s.place || '未填', s.teacher].filter(Boolean).join(' · ');
+                  const info = [s.title, s.endTime ? `${s.time}-${s.endTime}` : s.time, s.duration, s.place || '未填', s.teacher, s.credits ? `${s.credits} 学分` : ''].filter(Boolean).join(' · ');
                   // A few-minute recording alongside a lesson: show it as a slim chip pinned to the row's foot
                   if (chip) {
                     return (
@@ -636,6 +637,11 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       {s.teacher && (
                         <div className="text-[12.5px] opacity-90 leading-snug truncate">
                           <span className="opacity-70">{t('老师：')}</span>{s.teacher}
+                        </div>
+                      )}
+                      {s.credits && (
+                        <div className="text-[12.5px] opacity-90 leading-snug truncate">
+                          <span className="opacity-70">{t('学分：')}</span>{s.credits}
                         </div>
                       )}
                     </button>
@@ -875,7 +881,8 @@ function MonthView({
                       <div
                         title={[session.title,
                                 session.endTime ? `${session.time}-${session.endTime}` : session.time,
-                                session.place, session.teacher].filter(Boolean).join(' · ')}
+                                session.place, session.teacher,
+                                session.credits ? `${session.credits} 学分` : ''].filter(Boolean).join(' · ')}
                         className={`px-1 py-0.5 rounded text-[10px] leading-tight ${bgClass} bg-background-50/60`}>
                         <div className="flex items-center gap-1">
                           <span className={`w-1 h-1 rounded-full ${dotClass} flex-shrink-0`}></span>
@@ -1045,6 +1052,11 @@ function DayView({
                               {session.teacher && (
                                 <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
                                   <i className="ri-user-line"></i>{session.teacher}
+                                </span>
+                              )}
+                              {session.credits && (
+                                <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
+                                  <i className="ri-award-line"></i>{t('{n} 学分', { n: session.credits })}
                                 </span>
                               )}
                               <div className="flex items-center gap-1">

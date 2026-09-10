@@ -145,7 +145,7 @@ export default function DashboardHome() {
         arr.push(e);
         byName.set(e.name, arr);
       });
-    const out: Array<{ id: string; title: string; date: string; time: string; endTime?: string; place?: string; teacher?: string; duration: string; tags: string[]; description: string; summary: string; keyPoints: string[] }> = [];
+    const out: Array<{ id: string; title: string; date: string; time: string; endTime?: string; place?: string; teacher?: string; credits?: string; duration: string; tags: string[]; description: string; summary: string; keyPoints: string[] }> = [];
     byName.forEach((arr, name) => {
       arr.forEach((e, i) => {
         const tagId = e.tag ? labelToId[e.tag.trim()] : undefined;
@@ -156,6 +156,7 @@ export default function DashboardHome() {
           endTime: e.end || '',
           place: `${e.location || ''} ${e.room || ''}`.trim(),
           teacher: e.teacher || '',
+          credits: e.credits || '',
           duration: '', tags: tagId ? [tagId] : [],
           description: `${e.location} ${e.room}`.trim(),
           summary: '', keyPoints: [] as string[],
@@ -379,6 +380,7 @@ export default function DashboardHome() {
           date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
           start: c.start, end: c.end, location: c.location, room: c.room,
           teacher: c.teacher || undefined,
+          credits: c.credits || undefined,
           tag: nameToTag.get(c.name) || undefined,
         });
       }
