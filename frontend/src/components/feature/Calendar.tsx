@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useT } from '@/lib/i18n';
+import { loadSettings } from '@/lib/settings';
 
 interface SessionRef {
   id: string;
@@ -57,6 +58,23 @@ function blockColor(name: string): string {
   return BLOCK_COLORS[h % BLOCK_COLORS.length];
 }
 
+// Credit-weighted palette: light for a small course, deepening as the credits go up, so a glance at the
+// week shows where the heavy courses are. Unknown credits fall back to neutral.
+const CREDIT_COLORS: { max: number; cls: string; label: string }[] = [
+  { max: 1, cls: 'bg-sky-50 text-sky-700 border-sky-200', label: '1 学分及以下' },
+  { max: 2, cls: 'bg-teal-100 text-teal-800 border-teal-300', label: '1–2 学分' },
+  { max: 3, cls: 'bg-amber-100 text-amber-800 border-amber-300', label: '2–3 学分' },
+  { max: 4, cls: 'bg-orange-200 text-orange-900 border-orange-300', label: '3–4 学分' },
+  { max: 99, cls: 'bg-rose-200 text-rose-900 border-rose-300', label: '4 学分以上' },
+];
+const NO_CREDIT = 'bg-background-100 text-foreground-600 border-background-300';
+
+function creditColor(credits?: string): string {
+  const v = parseFloat((credits || '').replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(v) || v <= 0) return NO_CREDIT;
+  return (CREDIT_COLORS.find((c) => v <= c.max) ?? CREDIT_COLORS[CREDIT_COLORS.length - 1]).cls;
+}
+
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -82,6 +100,12 @@ function getColorClass(color: string, type: 'bg' | 'border' | 'text' | 'dot' | '
 
 export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, onImport, onUndo, onRedo, canUndo, canRedo, focusDate }: CalendarProps) {
   const t = useT();
+  // Course block coloring follows the user's setting: per course, or shaded by credits
+  const colorMode = loadSettings().calendarColor;
+  const colorOf = useCallback(
+    (s: SessionRef) => (colorMode === 'credits' ? creditColor(s.credits) : blockColor(s.title)),
+    [colorMode]
+  );
   const today = new Date();
   const [viewMode, setViewMode] = useState<CalendarView>('week');
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -389,6 +413,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 
       {viewMode === 'week' && (
         <WeekView
+          colorOf={colorOf}
           weekDates={weekDates}
           today={today}
           sessionsByDate={sessionsByDate}
@@ -418,6 +443,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 /* ============ WEEK VIEW (schedule grid) ============ */
 
 interface WeekViewProps {
+  colorOf: (s: SessionRef) => string;
   weekDates: Date[];
   today: Date;
   sessionsByDate: Record<string, SessionRef[]>;
@@ -472,7 +498,7 @@ function buildSlots(items: { time?: string; endTime?: string }[]): Slot[] {
   return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
 
-function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick }: WeekViewProps) {
+function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick, colorOf }: WeekViewProps) {
   const t = useT();
   const drill = (d: Date) => onDateClick(d.getFullYear(), d.getMonth(), d.getDate());   // week → that day's view
   const cols = weekDates.map((d) => {
@@ -601,7 +627,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                         key={s.id}
                         onClick={() => drill(c.d)}
                         style={{ top: top + h - chipRoom + 2 + lane * (CHIP_H + 2), height: CHIP_H }}
-                        className={`absolute z-10 left-1.5 right-1.5 px-2 py-1 rounded-md border shadow-sm cursor-pointer hover:brightness-95 text-left ${blockColor(s.title)}`}
+                        className={`absolute z-10 left-1.5 right-1.5 px-2 py-1 rounded-md border shadow-sm cursor-pointer hover:brightness-95 text-left ${colorOf(s)}`}
                         title={info}
                       >
                         <div className="text-[11.5px] font-medium leading-tight truncate">
@@ -619,7 +645,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       key={s.id}
                       onClick={() => drill(c.d)}
                       style={{ top: top + 5, height: h - 10 - chipRoom, left: `calc(${lane * w}% + 6px)`, width: `calc(${w}% - 12px)` }}
-                      className={`absolute overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${blockColor(s.title)}`}
+                      className={`absolute overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${colorOf(s)}`}
                       title={info}
                     >
                       <div className="text-[14px] font-semibold leading-snug line-clamp-2">

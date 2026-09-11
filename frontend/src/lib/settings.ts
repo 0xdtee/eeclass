@@ -18,6 +18,8 @@ export interface AppSettings {
   /** How class material is folded into the summary: 'manual' asks you to pick files after recording,
    *  'auto' silently matches the hidden knowledge index against the transcript. */
   materialMode: 'manual' | 'auto';
+  /** Calendar course colors: 'course' gives each course its own color, 'credits' shades by credit value. */
+  calendarColor: 'course' | 'credits';
   importTagSimilar: boolean;                           // On course import: assign similar ones to existing tags
   importTagNew: boolean;                               // On course import: create a new tag when none is similar
 }
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   toWord: false,
   autoSummary: true,
   materialMode: 'manual',
+  calendarColor: 'course',
   importTagSimilar: true,
   importTagNew: true,
 };

@@ -136,6 +136,43 @@ export default function SettingsPage() {
                   );
                 })}
               </div>
+              {/* calendar course-block coloring */}
+              <div className="px-5 pb-4 pt-1 border-t border-background-100">
+                <p className="text-sm font-medium text-foreground-800">{t('课表配色')}</p>
+                <p className="text-xs text-foreground-400 mt-1 leading-relaxed">
+                  {t('默认:每门课一个固定颜色,方便认课。按学分:学分越高颜色越深,一眼看出哪几门课分量重。')}
+                </p>
+                <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl mt-2.5">
+                  {([{ v: 'course', label: '默认（按课程）' }, { v: 'credits', label: '按学分深浅' }] as const).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => set('calendarColor', o.v)}
+                      className={`flex-1 text-xs sm:text-sm py-2 px-1 rounded-lg cursor-pointer whitespace-nowrap transition-all active:scale-95 ${
+                        s.calendarColor === o.v ? 'bg-accent-500 text-background-50 font-semibold shadow-sm' : 'text-foreground-500 hover:text-foreground-800'
+                      }`}
+                    >
+                      {t(o.label)}
+                    </button>
+                  ))}
+                </div>
+                {s.calendarColor === 'credits' && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                    {([
+                      { c: 'bg-sky-50 border-sky-200', l: '≤1' },
+                      { c: 'bg-teal-100 border-teal-300', l: '1–2' },
+                      { c: 'bg-amber-100 border-amber-300', l: '2–3' },
+                      { c: 'bg-orange-200 border-orange-300', l: '3–4' },
+                      { c: 'bg-rose-200 border-rose-300', l: '>4' },
+                    ]).map((x) => (
+                      <span key={x.l} className="flex items-center gap-1 text-[11px] text-foreground-400">
+                        <span className={`w-4 h-4 rounded border ${x.c}`}></span>{x.l}
+                      </span>
+                    ))}
+                    <span className="text-[11px] text-foreground-300">{t('学分')}</span>
+                  </div>
+                )}
+              </div>
               {/* how course material from the class file library gets folded into the summary */}
               <div className="px-5 pb-4 pt-1 border-t border-background-100">
                 <p className="text-sm font-medium text-foreground-800">{t('结合课堂文件库资料')}</p>
