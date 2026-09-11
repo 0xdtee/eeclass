@@ -718,7 +718,7 @@ export default function MeetingPage() {
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-foreground-300'}`}
                 title={connected ? t('已连接') : t('未连接')}></span>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <button
               onClick={() => setShowHistory(true)}
               className="h-9 px-3 rounded-lg bg-background-100 text-foreground-500 text-sm flex items-center gap-1.5 cursor-pointer hover:bg-background-200 transition-colors"
@@ -992,7 +992,7 @@ export default function MeetingPage() {
             <div className="flex items-center gap-2 px-5 py-3.5 border-b border-background-200">
               <i className="ri-file-list-3-line text-accent-500"></i>
               <h3 className="text-sm font-semibold text-foreground-900">{t('会议纪要')}</h3>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                 {minutes && (
                   <>
                     <button

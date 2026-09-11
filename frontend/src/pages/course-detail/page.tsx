@@ -244,7 +244,7 @@ export default function CourseDetailPage() {
     <div className="min-h-screen bg-background-100">
       {/* Top bar */}
       <nav className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-sm border-b border-background-200">
-        <div className="flex items-center justify-between h-14 px-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between gap-2 h-14 px-4 sm:px-6 max-w-7xl mx-auto">
           <div className="flex items-center gap-3 min-w-0">
             <BackButton className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-background-100 text-foreground-500 cursor-pointer">
               <i className="ri-arrow-left-line"></i>
@@ -253,7 +253,7 @@ export default function CourseDetailPage() {
               <h1 className="text-sm font-semibold text-foreground-900 truncate">
                 {byTag ? t('标签:{tag}', { tag }) : (name || t('课程'))}
               </h1>
-              <p className="text-xs text-foreground-400">
+              <p className="text-xs text-foreground-400 truncate">
                 {byTag
                   ? t('汇总所有打了「{tag}」标签的录音 · 共 {n} 段 · AI 聚合分析', { tag, n: courseSessions.length })
                   : t('共 {n} 节录音 · AI 课程分析', { n: courseSessions.length })}
@@ -274,8 +274,9 @@ export default function CourseDetailPage() {
       </nav>
 
       {/* Tabs */}
-      <div className="max-w-7xl mx-auto px-6 pt-4">
-        <div className="flex items-center gap-1 bg-background-50 border border-background-200 rounded-full p-1 w-fit">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+        <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
+        <div className="flex items-center gap-1 bg-background-50 border border-background-200 rounded-full p-1 w-fit min-w-max">
           {TABS.map((tb) => (
             <button
               key={tb.id}
@@ -289,9 +290,10 @@ export default function CourseDetailPage() {
             </button>
           ))}
         </div>
+        </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-5">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5">
         {err && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
             <p className="text-sm text-red-700"><i className="ri-error-warning-line mr-1"></i>{err}</p>
@@ -343,7 +345,7 @@ export default function CourseDetailPage() {
             <div className="space-y-3">
               {courseSessions.map((s) => (
                 <div key={s.id} className="p-4 bg-background-50 border border-background-100 rounded-xl">
-                  <div className="flex items-center gap-3 mb-2.5">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2.5">
                     <div className="w-8 h-8 flex items-center justify-center bg-primary-100 rounded-lg flex-shrink-0">
                       <i className="ri-file-music-line text-primary-600 text-sm"></i>
                     </div>

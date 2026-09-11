@@ -139,6 +139,13 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewDay, setViewDay] = useState(today.getDate());
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  // A 7-column week grid can't fit a phone; below this width we show the day view instead.
+  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 760 : false));
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 760);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // After importing a schedule, jump to the course's month, otherwise courses in other months aren't visible
   useEffect(() => {
@@ -302,7 +309,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   return (
     <div className="bg-background-50 rounded-2xl border border-background-200 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-background-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 py-3 sm:py-4 border-b border-background-100">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 flex items-center justify-center">
             <i className="ri-calendar-line text-accent-500 text-lg"></i>
@@ -310,7 +317,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
           <h3 className="text-sm font-semibold text-foreground-800">{t('课程日历')}</h3>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2">
             <button
               onClick={() => onCreateSession('')}
@@ -354,7 +361,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <div className="flex items-center bg-background-100 rounded-full px-1 py-1">
               {(['year', 'month', 'week', 'day'] as CalendarView[]).map((mode) => (
                 <button
@@ -438,7 +445,19 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
         />
       )}
 
-      {viewMode === 'week' && (
+      {viewMode === 'week' && (narrow ? (
+        <DayView
+          viewYear={viewYear}
+          viewMonth={viewMonth}
+          viewDay={viewDay}
+          today={today}
+          currentSessions={currentSessions}
+          tagLabels={tagLabels}
+          tagColorMap={tagColorMap}
+          onSelectSession={onSelectSession}
+          onCreateSession={() => onCreateSession(currentDateStr)}
+        />
+        ) : (
         <WeekView
           colorOf={colorOf}
           weekDates={weekDates}
@@ -448,7 +467,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
           tagColorMap={tagColorMap}
           onDateClick={handleDateClick}
         />
-      )}
+      ))}
 
       {viewMode === 'day' && (
         <DayView
@@ -899,7 +918,7 @@ function MonthView({
               onClick={() => onDateClick(viewYear, viewMonth, day)}
               onMouseEnter={() => hasSessions && setHoveredDate(dateStr)}
               onMouseLeave={() => setHoveredDate(null)}
-              className={`relative flex flex-col items-start p-1.5 h-[150px] rounded-lg transition-all cursor-pointer group border text-left overflow-hidden ${
+              className={`relative flex flex-col items-start p-1 sm:p-1.5 h-[96px] sm:h-[150px] rounded-lg transition-all cursor-pointer group border text-left overflow-hidden ${
                 hasSessions
                   ? `${bgClass} ${borderClass} hover:border-accent-400`
                   : isToday
@@ -1092,30 +1111,32 @@ function DayView({
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             {/* Meta row */}
-                            <div className="flex items-center gap-2 mb-1.5">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
                               <span className={`text-xs font-medium ${textClass} ${bgClass} px-2 py-0.5 rounded-full whitespace-nowrap`}>
                                 {session.endTime ? `${session.time}-${session.endTime}` : session.time}
                               </span>
                               <span className="text-xs text-foreground-400">{session.duration}</span>
                               {session.place && (
-                                <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
+                                <span className="flex items-center gap-1 text-xs text-foreground-400 whitespace-nowrap">
                                   <i className="ri-map-pin-line"></i>{session.place}
                                 </span>
                               )}
                               {session.teacher && (
-                                <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
+                                <span className="flex items-center gap-1 text-xs text-foreground-400 whitespace-nowrap">
                                   <i className="ri-user-line"></i>{session.teacher}
                                 </span>
                               )}
                               {session.credits && (
-                                <span className="flex items-center gap-1 text-xs text-foreground-400 truncate">
+                                <span className="flex items-center gap-1 text-xs text-foreground-400 whitespace-nowrap">
                                   <i className="ri-award-line"></i>{t('{n} 学分', { n: session.credits })}
                                 </span>
                               )}
-                              <div className="flex items-center gap-1">
-                                <div className={`w-1 h-1 rounded-full ${dotClass}`}></div>
-                                <span className="text-xs text-foreground-400">{t('{n} 个重点', { n: session.keyPoints?.length ?? 0 })}</span>
-                              </div>
+                              {(session.keyPoints?.length ?? 0) > 0 && (
+                                <span className="flex items-center gap-1 whitespace-nowrap">
+                                  <span className={`w-1 h-1 rounded-full ${dotClass}`}></span>
+                                  <span className="text-xs text-foreground-400">{t('{n} 个重点', { n: session.keyPoints?.length ?? 0 })}</span>
+                                </span>
+                              )}
                             </div>
 
                             {/* Title */}

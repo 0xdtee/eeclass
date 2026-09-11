@@ -439,11 +439,11 @@ export default function DashboardHome() {
       )}
 
       {/* Hero Header */}
-      <div className="relative z-20 bg-background-50 border-b border-background-200">
+      <div className="relative z-20 bg-background-50 border-b border-background-200 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-accent-50/60 via-transparent to-primary-50/40"></div>
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary-50/40 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-10 md:py-14">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] max-w-full bg-accent-100/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] max-w-full bg-primary-50/40 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none"></div>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-7 md:py-14">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-3">
@@ -459,35 +459,38 @@ export default function DashboardHome() {
               </p>
               <SearchBar sessions={allSessions} tagLabels={tagLabels} />
             </div>
+            {/* Actions wrap onto shared rows on a phone instead of stacking one per line */}
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 self-start md:self-auto">
             <button
               onClick={() => navigate('/meeting')}
-              className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
+              className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap border border-background-200"
             >
               <i className="ri-translate-2 text-lg"></i>
               {t('会议翻译')}
             </button>
             <button
               onClick={() => setShowFiles(true)}
-              className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
+              className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap border border-background-200"
             >
               <i className="ri-folder-3-line text-lg"></i>
               {t('文件库')}
             </button>
             <button
               onClick={() => navigate('/reference')}
-              className="flex items-center gap-2 px-4 py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto border border-background-200"
+              className="flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 bg-background-100 text-foreground-700 rounded-xl text-sm font-medium hover:bg-background-200 transition-all cursor-pointer whitespace-nowrap border border-background-200"
             >
               <i className="ri-booklet-line text-lg"></i>
               {t('参考资料')}
             </button>
             <button
               onClick={() => navigate('/course')}
-              className="flex items-center gap-2 px-6 py-3 bg-accent-500 text-background-50 rounded-xl text-sm font-semibold hover:bg-accent-600 transition-all cursor-pointer whitespace-nowrap self-start md:self-auto"
+              className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-accent-500 text-background-50 rounded-xl text-sm font-semibold hover:bg-accent-600 transition-all cursor-pointer whitespace-nowrap"
             >
               <i className="ri-mic-line text-lg"></i>
               {t('开始新课录制')}
             </button>
-            <div className="flex items-center gap-3 self-start md:self-auto">
+            </div>
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 self-start md:self-auto">
               <div className="flex items-center gap-2 px-3 py-2 bg-background-100 rounded-lg">
                 <div className="w-7 h-7 flex items-center justify-center bg-accent-100 rounded-full">
                   <i className={`${user?.role === 'teacher' ? 'ri-user-star-line' : 'ri-user-line'} text-accent-600 text-xs`}></i>
