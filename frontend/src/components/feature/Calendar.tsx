@@ -52,27 +52,54 @@ function courseBaseName(t: string): string {
   return (t || '').replace(/\s*第\s*\d+\s*[课讲节]\s*$/, '').trim();
 }
 function blockColor(name: string): string {
-  const b = courseBaseName(name);
-  let h = 0;
-  for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
-  return BLOCK_COLORS[h % BLOCK_COLORS.length];
+  return BLOCK_COLORS[nameHash(name) % BLOCK_COLORS.length];
 }
 
-// Credit-weighted palette: light for a small course, deepening as the credits go up, so a glance at the
-// week shows where the heavy courses are. Unknown credits fall back to neutral.
-const CREDIT_COLORS: { max: number; cls: string; label: string }[] = [
-  { max: 1, cls: 'bg-sky-50 text-sky-700 border-sky-200', label: '1 学分及以下' },
-  { max: 2, cls: 'bg-teal-100 text-teal-800 border-teal-300', label: '1–2 学分' },
-  { max: 3, cls: 'bg-amber-100 text-amber-800 border-amber-300', label: '2–3 学分' },
-  { max: 4, cls: 'bg-orange-200 text-orange-900 border-orange-300', label: '3–4 学分' },
-  { max: 99, cls: 'bg-rose-200 text-rose-900 border-rose-300', label: '4 学分以上' },
+// Credit-weighted palette: the credit value picks how deep/warm the block is, and within that band the
+// course name picks one of a few tones -- so the same course is always the same color, while two different
+// courses worth the same credits stay distinguishable.
+const CREDIT_BANDS: { max: number; tones: string[] }[] = [
+  { max: 1, tones: [
+    'bg-sky-50 text-sky-700 border-sky-200',
+    'bg-cyan-50 text-cyan-700 border-cyan-200',
+    'bg-slate-100 text-slate-600 border-slate-200',
+  ] },
+  { max: 2, tones: [
+    'bg-teal-100 text-teal-800 border-teal-300',
+    'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'bg-green-100 text-green-800 border-green-300',
+  ] },
+  { max: 3, tones: [
+    'bg-amber-100 text-amber-800 border-amber-300',
+    'bg-yellow-100 text-yellow-800 border-yellow-300',
+    'bg-lime-100 text-lime-800 border-lime-300',
+  ] },
+  { max: 4, tones: [
+    'bg-orange-200 text-orange-900 border-orange-300',
+    'bg-amber-200 text-amber-900 border-amber-400',
+    'bg-yellow-200 text-yellow-900 border-yellow-400',
+  ] },
+  { max: 99, tones: [
+    'bg-rose-200 text-rose-900 border-rose-300',
+    'bg-red-200 text-red-900 border-red-300',
+    'bg-pink-200 text-pink-900 border-pink-300',
+  ] },
 ];
 const NO_CREDIT = 'bg-background-100 text-foreground-600 border-background-300';
 
-function creditColor(credits?: string): string {
+/** Stable hash of a course name with its "第N课" numbering stripped, so every session of one course agrees. */
+function nameHash(name: string): number {
+  const b = courseBaseName(name);
+  let h = 0;
+  for (let i = 0; i < b.length; i++) h = (h * 31 + b.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function creditColor(credits: string | undefined, name: string): string {
   const v = parseFloat((credits || '').replace(/[^\d.]/g, ''));
   if (!Number.isFinite(v) || v <= 0) return NO_CREDIT;
-  return (CREDIT_COLORS.find((c) => v <= c.max) ?? CREDIT_COLORS[CREDIT_COLORS.length - 1]).cls;
+  const band = CREDIT_BANDS.find((c) => v <= c.max) ?? CREDIT_BANDS[CREDIT_BANDS.length - 1];
+  return band.tones[nameHash(name) % band.tones.length];
 }
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -103,7 +130,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   // Course block coloring follows the user's setting: per course, or shaded by credits
   const colorMode = loadSettings().calendarColor;
   const colorOf = useCallback(
-    (s: SessionRef) => (colorMode === 'credits' ? creditColor(s.credits) : blockColor(s.title)),
+    (s: SessionRef) => (colorMode === 'credits' ? creditColor(s.credits, s.title) : blockColor(s.title)),
     [colorMode]
   );
   const today = new Date();
