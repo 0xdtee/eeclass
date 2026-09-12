@@ -447,6 +447,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 
       {viewMode === 'week' && (narrow ? (
         <DayView
+          colorOf={colorOf}
           viewYear={viewYear}
           viewMonth={viewMonth}
           viewDay={viewDay}
@@ -471,6 +472,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 
       {viewMode === 'day' && (
         <DayView
+          colorOf={colorOf}
           viewYear={viewYear}
           viewMonth={viewMonth}
           viewDay={viewDay}
@@ -997,6 +999,8 @@ function MonthView({
 /* ============ DAY VIEW ============ */
 
 interface DayViewProps {
+  /** Same coloring rule as the week grid, so the 课表配色 setting applies here too */
+  colorOf: (s: SessionRef) => string;
   viewYear: number;
   viewMonth: number;
   viewDay: number;
@@ -1010,7 +1014,7 @@ interface DayViewProps {
 
 function DayView({
   viewYear, viewMonth, viewDay, today,
-  currentSessions, tagLabels, tagColorMap, onSelectSession, onCreateSession,
+  currentSessions, tagLabels, tagColorMap, onSelectSession, onCreateSession, colorOf,
 }: DayViewProps) {
   const t = useT();
   const isToday = viewYear === today.getFullYear() && viewMonth === today.getMonth() && viewDay === today.getDate();
@@ -1093,6 +1097,7 @@ function DayView({
               <div className="space-y-3 pl-4">
                 {slot.sessions.map((session) => {
                   const color = getSessionColor(session);
+                  const palette = colorOf(session);   // 课表配色: per course, or shaded by credits
                   const barClass = getColorClass(color, 'bar');
                   const textClass = getColorClass(color, 'text');
                   const bgClass = getColorClass(color, 'bg');
@@ -1104,15 +1109,15 @@ function DayView({
                       onClick={() => onSelectSession(session.id)}
                       className="w-full text-left bg-background-50 rounded-xl border border-background-200 overflow-hidden hover:border-accent-300 transition-all cursor-pointer group"
                     >
-                      {/* Color accent top bar */}
-                      <div className={`h-1 w-full ${barClass}`}></div>
+                      {/* Color accent top bar -- follows the 课表配色 setting */}
+                      <div className={`h-1.5 w-full ${palette.split(' ').find((c) => c.startsWith('bg-')) ?? barClass}`}></div>
 
                       <div className="p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             {/* Meta row */}
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
-                              <span className={`text-xs font-medium ${textClass} ${bgClass} px-2 py-0.5 rounded-full whitespace-nowrap`}>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap border ${palette}`}>
                                 {session.endTime ? `${session.time}-${session.endTime}` : session.time}
                               </span>
                               <span className="text-xs text-foreground-400">{session.duration}</span>
