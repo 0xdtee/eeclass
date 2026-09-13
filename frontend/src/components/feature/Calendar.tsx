@@ -59,35 +59,35 @@ function blockColor(name: string): string {
 // course name picks one of a few tones -- so the same course is always the same color, while two different
 // courses worth the same credits stay distinguishable.
 const CREDIT_BANDS: { max: number; tones: string[] }[] = [
-  // One hue per credit band, three shades within it: same credits always read as the same colour family,
-  // while two courses of equal weight still differ by depth.
-  { max: 1, tones: [
+  // Hue carries the weight, highest to lowest: purple > red > yellow > green > blue (white = no credits).
+  // Within a band only the shade changes, so equal-weight courses share a colour family.
+  { max: 1, tones: [                       // blue -- lightest load
     'bg-sky-50 text-sky-800 border-sky-200',
     'bg-sky-100 text-sky-800 border-sky-300',
     'bg-sky-200 text-sky-900 border-sky-400',
   ] },
-  { max: 2, tones: [
-    'bg-teal-50 text-teal-800 border-teal-200',
-    'bg-teal-100 text-teal-800 border-teal-300',
-    'bg-teal-200 text-teal-900 border-teal-400',
+  { max: 2, tones: [                       // green
+    'bg-green-50 text-green-800 border-green-200',
+    'bg-green-100 text-green-800 border-green-300',
+    'bg-green-200 text-green-900 border-green-400',
   ] },
-  { max: 3, tones: [
-    'bg-amber-50 text-amber-800 border-amber-200',
-    'bg-amber-100 text-amber-800 border-amber-300',
-    'bg-amber-200 text-amber-900 border-amber-400',
+  { max: 3, tones: [                       // yellow
+    'bg-yellow-50 text-yellow-800 border-yellow-200',
+    'bg-yellow-100 text-yellow-800 border-yellow-300',
+    'bg-yellow-200 text-yellow-900 border-yellow-400',
   ] },
-  { max: 4, tones: [
-    'bg-orange-100 text-orange-800 border-orange-300',
-    'bg-orange-200 text-orange-900 border-orange-400',
-    'bg-orange-300 text-orange-900 border-orange-500',
+  { max: 4, tones: [                       // red
+    'bg-red-100 text-red-800 border-red-300',
+    'bg-red-200 text-red-900 border-red-400',
+    'bg-red-300 text-red-900 border-red-500',
   ] },
-  { max: 99, tones: [
-    'bg-rose-100 text-rose-800 border-rose-300',
-    'bg-rose-200 text-rose-900 border-rose-400',
-    'bg-rose-300 text-rose-900 border-rose-500',
+  { max: 99, tones: [                      // purple -- heaviest load
+    'bg-purple-100 text-purple-800 border-purple-300',
+    'bg-purple-200 text-purple-900 border-purple-400',
+    'bg-purple-300 text-purple-900 border-purple-500',
   ] },
 ];
-const NO_CREDIT = 'bg-background-100 text-foreground-600 border-background-300';
+const NO_CREDIT = 'bg-background-50 text-foreground-600 border-background-300';   // white -- no credits recognized
 
 /** Stable hash of a course name with its "第N课" numbering stripped, so every session of one course agrees. */
 function nameHash(name: string): number {

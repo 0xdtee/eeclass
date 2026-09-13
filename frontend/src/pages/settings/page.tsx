@@ -140,7 +140,7 @@ export default function SettingsPage() {
               <div className="px-5 pb-4 pt-1 border-t border-background-100">
                 <p className="text-sm font-medium text-foreground-800">{t('课表配色')}</p>
                 <p className="text-xs text-foreground-400 mt-1 leading-relaxed">
-                  {t('默认:每门课一个固定颜色,方便认课。按学分:每个学分一个色系(学分越高越暖越深),同学分的不同课用同色系的深浅区分。')}
+                  {t('默认:每门课一个固定颜色,方便认课。按学分:紫→红→黄→绿→蓝,学分由高到低;同学分的不同课用同色系的深浅区分。')}
                 </p>
                 <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl mt-2.5">
                   {([{ v: 'course', label: '默认（按课程）' }, { v: 'credits', label: '按学分深浅' }] as const).map((o) => (
@@ -159,11 +159,12 @@ export default function SettingsPage() {
                 {s.calendarColor === 'credits' && (
                   <div className="flex flex-wrap items-center gap-2 mt-2.5">
                     {([
+                      { c: 'bg-purple-200 border-purple-400', l: '>4' },
+                      { c: 'bg-red-200 border-red-400', l: '3–4' },
+                      { c: 'bg-yellow-100 border-yellow-300', l: '2–3' },
+                      { c: 'bg-green-100 border-green-300', l: '1–2' },
                       { c: 'bg-sky-100 border-sky-300', l: '≤1' },
-                      { c: 'bg-teal-100 border-teal-300', l: '1–2' },
-                      { c: 'bg-amber-100 border-amber-300', l: '2–3' },
-                      { c: 'bg-orange-200 border-orange-400', l: '3–4' },
-                      { c: 'bg-rose-200 border-rose-400', l: '>4' },
+                      { c: 'bg-background-50 border-background-300', l: '无' },
                     ]).map((x) => (
                       <span key={x.l} className="flex items-center gap-1 text-[11px] text-foreground-400">
                         <span className={`w-4 h-4 rounded border ${x.c}`}></span>{x.l}
