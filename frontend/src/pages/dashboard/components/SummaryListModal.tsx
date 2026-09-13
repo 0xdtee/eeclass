@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/base/Modal';
 import { useT } from '@/lib/i18n';
+import { exportWord } from '@/lib/exportWord';
+import { exportPdf, exportPdfBatch } from '@/lib/exportPdf';
 
 interface SessionItem {
   id: string;
@@ -139,6 +141,8 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
   const t = useT();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const filtered = sessions.filter((s) => {
     if (!search.trim()) return true;
@@ -149,6 +153,33 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
       s.tags.some((t) => (tagLabels[t] ?? t).toLowerCase().includes(q))
     );
   });
+
+  /** Export whatever is currently listed (search-filtered): one doc per class, zipped when there are several. */
+  const doExport = async (fmt: 'word' | 'pdf') => {
+    setExportOpen(false);
+    if (!filtered.length || exporting) return;
+    setExporting(true);
+    try {
+      const docs = filtered.map((s) => ({
+        title: s.title,
+        subtitle: [s.date, s.time, s.duration].filter(Boolean).join(' · '),
+        summary: s.summary,
+        keyPoints: s.keyPoints ?? [],
+      }));
+      if (fmt === 'word') {
+        // .docx has no batch container; emit them one after another
+        for (const d of docs) await exportWord(d);
+      } else if (docs.length === 1) {
+        await exportPdf(docs[0]);
+      } else {
+        await exportPdfBatch(docs, t('课堂摘要合集'));
+      }
+    } catch {
+      /* the browser cancelled the download; nothing to recover */
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleNavigate = (sessionId: string, view: 'summary' | 'transcript') => {
     onClose();
@@ -161,7 +192,7 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
     <Modal isOpen={isOpen} onClose={onClose} title={t('AI 摘要列表')} width="max-w-2xl">
       <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
         {/* Stats bar */}
-        <div className="flex items-center justify-between px-1 pb-4 border-b border-background-100 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-4 border-b border-background-100 mb-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 flex items-center justify-center bg-accent-100 rounded-lg">
@@ -173,6 +204,34 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
               </div>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+          {/* Export everything currently listed */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen((v) => !v)}
+              disabled={filtered.length === 0 || exporting}
+              className="h-8 px-3 flex items-center gap-1.5 bg-accent-500 text-background-50 rounded-lg text-xs font-semibold hover:bg-accent-600 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <i className={`${exporting ? 'ri-loader-4-line animate-spin' : 'ri-download-2-line'} text-sm`}></i>
+              {exporting ? t('导出中…') : t('导出全部')}
+            </button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 z-20 w-44 bg-background-50 border border-background-200 rounded-xl shadow-lg p-2">
+                  <p className="px-2 pb-1 text-[11px] text-foreground-400">
+                    {t('导出这 {n} 份摘要', { n: filtered.length })}
+                  </p>
+                  <button onClick={() => void doExport('pdf')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-foreground-700 hover:bg-background-100 cursor-pointer">
+                    <i className="ri-file-pdf-2-line text-foreground-400"></i>{t('导出为 PDF')}
+                  </button>
+                  <button onClick={() => void doExport('word')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-foreground-700 hover:bg-background-100 cursor-pointer">
+                    <i className="ri-file-word-2-line text-foreground-400"></i>{t('导出为 Word')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {/* Search */}
           <div className="relative">
             <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -183,8 +242,9 @@ export default function SummaryListModal({ isOpen, onClose, sessions, tagLabels 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('搜索摘要…')}
-              className="h-8 pl-8 pr-3 w-44 bg-background-100 border border-background-200 rounded-lg text-xs text-foreground-700 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-1 focus:ring-accent-100 transition-all"
+              className="h-8 pl-8 pr-3 w-36 sm:w-44 bg-background-100 border border-background-200 rounded-lg text-xs text-foreground-700 placeholder:text-foreground-300 focus:outline-none focus:border-accent-400 focus:ring-1 focus:ring-accent-100 transition-all"
             />
+          </div>
           </div>
         </div>
 
