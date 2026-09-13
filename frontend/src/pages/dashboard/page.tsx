@@ -128,6 +128,13 @@ export default function DashboardHome() {
     [realSessions, createdSessions]
   );
 
+  // Only sessions that actually have an AI summary -- used by both the stat card and the summary list,
+  // so the count and the list can't disagree (they used to both report every recording).
+  const summarySessions = useMemo(
+    () => allSessions.filter((s) => (s.summary || '').trim().length > 0),
+    [allSessions]
+  );
+
   // Read back the saved course events
   useEffect(() => {
     void records.loadSchedule().then((r) => setScheduleEvents(r.events || [])).catch(() => {});
@@ -280,7 +287,7 @@ export default function DashboardHome() {
   const stats = [
     { label: '课程总数', value: distinctCourses.length, suffix: ' 门', icon: 'ri-book-open-line', color: 'accent' },
     { label: '录音时长', value: totalMinutes, suffix: ' 分钟', icon: 'ri-mic-line', color: 'primary' },
-    { label: '总摘要数', value: allSessions.length, suffix: ' 份', icon: 'ri-sparkling-2-line', color: 'accent' },
+    { label: '总摘要数', value: summarySessions.length, suffix: ' 份', icon: 'ri-sparkling-2-line', color: 'accent' },
     { label: '标签数量', value: tags.length, suffix: ' 个', icon: 'ri-price-tag-3-line', color: 'secondary' },
   ];
 
@@ -814,7 +821,7 @@ export default function DashboardHome() {
       <SummaryListModal
         isOpen={showSummaryList}
         onClose={() => setShowSummaryList(false)}
-        sessions={allSessions}
+        sessions={summarySessions}
         tagLabels={tagLabels}
       />
 
