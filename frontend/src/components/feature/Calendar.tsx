@@ -141,14 +141,6 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewDay, setViewDay] = useState(today.getDate());
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
-  // A 7-column week grid can't fit a phone; below this width we show the day view instead.
-  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 760 : false));
-  useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < 760);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
   // After importing a schedule, jump to the course's month, otherwise courses in other months aren't visible
   useEffect(() => {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(focusDate || '');
@@ -447,20 +439,9 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
         />
       )}
 
-      {viewMode === 'week' && (narrow ? (
-        <DayView
-          colorOf={colorOf}
-          viewYear={viewYear}
-          viewMonth={viewMonth}
-          viewDay={viewDay}
-          today={today}
-          currentSessions={currentSessions}
-          tagLabels={tagLabels}
-          tagColorMap={tagColorMap}
-          onSelectSession={onSelectSession}
-          onCreateSession={() => onCreateSession(currentDateStr)}
-        />
-        ) : (
+      {/* "Week" always means the week grid -- on a narrow screen it scrolls sideways rather than
+          silently turning into the day view, which reads as the button having done nothing. */}
+      {viewMode === 'week' && (
         <WeekView
           colorOf={colorOf}
           onSelectSession={onSelectSession}
@@ -471,7 +452,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
           tagColorMap={tagColorMap}
           onDateClick={handleDateClick}
         />
-      ))}
+      )}
 
       {viewMode === 'day' && (
         <DayView
