@@ -219,6 +219,7 @@ class Session:
         self.spk = SpeakerID(cfg)
         self._utt_recs = []        # [(line_start_sec, voiceprint)] per utterance, for post-hoc global re-clustering at stop
         self.hl = Highlighter(cfg)
+        self.for_date = None       # timetable lesson date this recording belongs to (set on start when known)
         self.asr = ASRWorker(cfg, self._on_text, self._on_status)
         records_root = os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"]))
         # resume recording: append to an existing session (audio/transcript continue, line numbers and timestamps stay continuous)
@@ -437,6 +438,8 @@ class Session:
             self.word.close()
         meta = {
             "title": self.title,
+            # the timetable lesson this belongs to, when recording was started from the calendar
+            **({"sched_date": self.for_date} if self.for_date else {}),
             "owner": self._owner_id(),       # this session's owning account (a hash, no plaintext email) -- data isolation filters by it
             # persist the selected subject tags (Advanced Mathematics/College Physics...), used for tag-based aggregation; on stop, meta is written to both meta.json and PG
             "tags": [t for t in (self.subjects or []) if isinstance(t, str) and t.strip()],
@@ -1583,6 +1586,10 @@ class App:
                         word_doc=m.get("word_doc") or "active",
                         append_sid=append_sid, user_key=user_key)
             s.user_key = user_key                       # this recording's owning account -> private voiceprint library + data isolation
+            # Started from a timetable entry: remember which lesson day it belongs to, so recording a class
+            # early still files under that class rather than under the day it happened to be recorded.
+            _fd = str(m.get("for_date") or "").strip()
+            s.for_date = _fd if re.fullmatch(r"\d{4}-\d{2}-\d{2}", _fd) else None
             s.only_key = bool(m.get("only_key"))
             s.ai_correct = bool(m.get("ai_correct"))    # AI real-time correction toggle
             s.smart_seg = bool(m.get("smart_seg"))      # AI smart segmentation toggle

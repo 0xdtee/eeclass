@@ -66,6 +66,8 @@ export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [autoNew] = useState(() => searchParams.get('new') === '1');
   const [initialTitle] = useState(() => searchParams.get('title') || '');   // Course name prefilled when arriving from the timetable
+  // Arriving from a timetable entry: the lesson's date, so recording it early still files under that class
+  const [forDate] = useState(() => searchParams.get('for_date') || '');
   // Arriving from the dashboard 「查看纪要」 (?tab=summary&sid=…): after landing on the summary page, auto-generate once if not generated before
   const wantAutoSummary = useRef(
     searchParams.get('tab') === 'summary' && !!searchParams.get('sid')
@@ -412,8 +414,9 @@ export default function HomePage() {
     setHistLines([]);
     setSummary(''); setKeyPoints([]); setCorrections([]); setAppliedCorrections([]); setSummaryError('');
     setFocusLineId(null);
-    void live.start({ ...o });
-  }, [live, activeSessionId, activeSession, say]);
+    // started from a timetable entry -> file this recording under that lesson's date
+    void live.start({ ...o, forDate: forDate || null });
+  }, [live, activeSessionId, activeSession, say, forDate]);
 
   // Hide the "saved" banner when starting a new recording
   useEffect(() => {

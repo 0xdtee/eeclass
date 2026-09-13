@@ -13,6 +13,8 @@ export interface SessionMeta {
   id: string;
   dir: string;
   title?: string | null;
+  /** Timetable lesson this recording belongs to (set when started from the calendar) */
+  sched_date?: string;
   duration_s?: number;
   lines?: number;
   rtf?: number;

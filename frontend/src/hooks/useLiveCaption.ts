@@ -123,6 +123,8 @@ export interface AiSummary {
 
 export interface StartOptions {
   title?: string | null;
+  /** Date (yyyy-mm-dd) of the timetable lesson this recording belongs to, when started from the calendar */
+  forDate?: string | null;
   device?: string | null;
   toWord?: boolean;
   onlyKey?: boolean;
@@ -598,6 +600,7 @@ export function useLiveCaption() {
       send({
         cmd: 'start',
         title: opts.title ?? null,
+        for_date: opts.forDate || null,
         device: opts.device ?? null,
         loopback: dev ? dev.kind === 'loopback' : false,
         to_word: !!opts.toWord,

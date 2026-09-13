@@ -102,7 +102,9 @@ export default function DashboardHome() {
         return {
           id: s.id,
           title: sessionTitle(s),
-          date: m ? m[1] : '',
+          // a recording started from a timetable entry belongs to that lesson's day, even if it was
+          // actually recorded earlier; otherwise fall back to when it was recorded
+          date: s.sched_date || (m ? m[1] : ''),
           time: m ? `${m[2]}:${m[3]}` : '',
           // real end time, so a short recording shows as the fragment it is instead of a full-length block
           endTime: m && s.duration_s
@@ -307,7 +309,9 @@ export default function DashboardHome() {
     if (id.startsWith('sched-')) {
       const ev = scheduleSessions.find((s) => s.id === id);
       const q = ev?.title ? `&title=${encodeURIComponent(ev.title)}` : '';
-      navigate(`/course?new=1${q}`);
+      // carry the lesson's own date, so a recording made early still belongs to that class
+      const forDate = ev?.date ? `&for_date=${encodeURIComponent(ev.date)}` : '';
+      navigate(`/course?new=1${q}${forDate}`);
       return;
     }
     navigate('/course?sid=' + encodeURIComponent(id));
