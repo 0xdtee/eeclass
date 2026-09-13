@@ -27,6 +27,11 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
+/** Strip the 「第N课」 numbering the calendar adds, so a lesson and its recording compare equal. */
+function courseBaseName(t: string): string {
+  return (t || '').replace(/\s*第\s*\d+\s*[课讲节]\s*$/, '').trim();
+}
+
 interface CreatedSession {
   id: string;
   title: string;
@@ -308,6 +313,21 @@ export default function DashboardHome() {
     // A timetable course (not yet recorded) -> start a new recording and prefill its title with the course name; an already-recorded one -> open it
     if (id.startsWith('sched-')) {
       const ev = scheduleSessions.find((s) => s.id === id);
+      // Already recorded this lesson? Open that recording instead of starting a blank one. A recording made
+      // ahead of time carries the lesson's date (sched_date), so match on that first, then on same-day+name.
+      if (ev) {
+        const base = courseBaseName(ev.title);
+        const done = records.sessions.find((r) => {
+          const title = courseBaseName(sessionTitle(r));
+          if (title !== base) return false;
+          if (r.sched_date) return r.sched_date === ev.date;
+          return (r.id.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1] === ev.date;
+        });
+        if (done) {
+          navigate('/course?sid=' + encodeURIComponent(done.id));
+          return;
+        }
+      }
       const q = ev?.title ? `&title=${encodeURIComponent(ev.title)}` : '';
       // carry the lesson's own date, so a recording made early still belongs to that class
       const forDate = ev?.date ? `&for_date=${encodeURIComponent(ev.date)}` : '';

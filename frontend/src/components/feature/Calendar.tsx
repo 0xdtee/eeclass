@@ -463,6 +463,7 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
         ) : (
         <WeekView
           colorOf={colorOf}
+          onSelectSession={onSelectSession}
           weekDates={weekDates}
           today={today}
           sessionsByDate={sessionsByDate}
@@ -494,6 +495,8 @@ export default function Calendar({ sessions, tagLabels, tagColorMap, onSelectSes
 
 interface WeekViewProps {
   colorOf: (s: SessionRef) => string;
+  /** Opening a lesson/recording directly from its block, instead of only drilling into the day */
+  onSelectSession: (id: string) => void;
   weekDates: Date[];
   today: Date;
   sessionsByDate: Record<string, SessionRef[]>;
@@ -548,7 +551,7 @@ function buildSlots(items: { time?: string; endTime?: string }[]): Slot[] {
   return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
 
-function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick, colorOf }: WeekViewProps) {
+function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, onDateClick, colorOf, onSelectSession }: WeekViewProps) {
   const t = useT();
   const drill = (d: Date) => onDateClick(d.getFullYear(), d.getMonth(), d.getDate());   // week → that day's view
   const cols = weekDates.map((d) => {
@@ -675,7 +678,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                     return (
                       <button
                         key={s.id}
-                        onClick={() => drill(c.d)}
+                        onClick={(e) => { e.stopPropagation(); onSelectSession(s.id); }}
                         style={{ top: top + h - chipRoom + 2 + lane * (CHIP_H + 2), height: CHIP_H }}
                         className={`absolute z-10 left-1.5 right-1.5 px-2 py-1 rounded-md border shadow-sm cursor-pointer hover:brightness-95 text-left ${colorOf(s)}`}
                         title={info}
@@ -693,7 +696,7 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                   return (
                     <button
                       key={s.id}
-                      onClick={() => drill(c.d)}
+                      onClick={(e) => { e.stopPropagation(); onSelectSession(s.id); }}
                       style={{ top: top + 5, height: h - 10 - chipRoom, left: `calc(${lane * w}% + 6px)`, width: `calc(${w}% - 12px)` }}
                       className={`absolute overflow-hidden text-left px-2 py-1.5 rounded-lg border shadow-sm cursor-pointer hover:brightness-95 flex flex-col justify-center gap-0.5 ${colorOf(s)}`}
                       title={info}
