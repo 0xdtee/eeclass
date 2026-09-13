@@ -27,7 +27,9 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   aiCorrect: false,
   smartSeg: true,
-  translateFrom: 'en',   // Chinese UI default: English -> Chinese; switching UI to English flips it to zh -> en
+  // Translation off by default (from === to means off). Most classes are taught in one language, and the
+  // extra subtitle line only gets in the way until someone asks for it.
+  translateFrom: 'zh',
   translateTo: 'zh',
   model: 'aliyun',   // Default to the cloud Mandarin/English model (regular users only get cloud models)
   sensitivity: 'high',
@@ -42,11 +44,21 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 const KEY = 'lc_settings_v1';
 
+const TRANS_OFF_MIGRATION = 'lc_trans_off_v2';
+
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const s = JSON.parse(raw) as Partial<AppSettings>;
+    // Translation used to default to on (en -> zh). Turn it off once on devices carrying that old default;
+    // anything chosen after this migration is kept.
+    if (localStorage.getItem(TRANS_OFF_MIGRATION) !== '1') {
+      localStorage.setItem(TRANS_OFF_MIGRATION, '1');
+      s.translateFrom = 'zh';
+      s.translateTo = 'zh';
+      try { localStorage.setItem(KEY, JSON.stringify({ ...DEFAULT_SETTINGS, ...s })); } catch { /* ignore */ }
+    }
     return { ...DEFAULT_SETTINGS, ...s };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -92,7 +104,19 @@ export async function hydrateSettingsFromServer() {
     if (!r.ok) return;
     const j = await r.json();
     if (j.settings && typeof j.settings === 'object') {
-      localStorage.setItem(KEY, JSON.stringify({ ...DEFAULT_SETTINGS, ...j.settings }));
+      const incoming = { ...DEFAULT_SETTINGS, ...j.settings } as AppSettings;
+      // The account may still carry the old "translate by default" pair; turn it off once, per account,
+      // and push the correction back so it sticks across devices.
+      const doneKey = TRANS_OFF_MIGRATION + ':' + getToken().slice(0, 12);
+      if (localStorage.getItem(doneKey) !== '1') {
+        localStorage.setItem(doneKey, '1');
+        incoming.translateFrom = 'zh';
+        incoming.translateTo = 'zh';
+        localStorage.setItem(KEY, JSON.stringify(incoming));
+        pushSettings();
+        return;
+      }
+      localStorage.setItem(KEY, JSON.stringify(incoming));
     } else {
       pushSettings();   // This account has none yet → use defaults and store a baseline
     }

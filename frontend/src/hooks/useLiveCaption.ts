@@ -185,8 +185,17 @@ export function useLiveCaption() {
   const [micActive, setMicActive] = useState(false);
   const [deepseekReady, setDeepseekReady] = useState(false);
   // Pickup gain (收音增益): amplify the browser-mic signal 1×–6×, adjustable live like the meeting translator.
+  // Classroom mics sit far from the lecturer, so full gain is the useful default. This resets every device
+  // once (including ones that had picked a lower value) and is freely adjustable afterwards.
   const [gain, setGain] = useState<number>(() => {
-    try { return Number(localStorage.getItem('rec_gain')) || 1; } catch { return 1; }
+    try {
+      if (localStorage.getItem('rec_gain_default_v2') !== '1') {
+        localStorage.setItem('rec_gain', '6');
+        localStorage.setItem('rec_gain_default_v2', '1');
+        return 6;
+      }
+      return Number(localStorage.getItem('rec_gain')) || 6;
+    } catch { return 6; }
   });
   const gainRef = useRef(gain);
   const gainNodeRef = useRef<GainNode | null>(null);

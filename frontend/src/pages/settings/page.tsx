@@ -288,7 +288,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-foreground-800 mb-2">{t('界面语言')}</p>
                   <div className="flex gap-1.5 p-1 bg-background-100 rounded-xl">
                     {LANGS.map((l) => (
-                      <button key={l.value} type="button" onClick={() => { setLang(l.value); if (l.value === 'en') { set('translateFrom', 'zh'); set('translateTo', 'en'); } else { set('translateFrom', 'en'); set('translateTo', 'zh'); } }} className={segBtn(lang === l.value)}>
+                      <button key={l.value} type="button" onClick={() => setLang(l.value)}   /* changing the UI language no longer switches translation on */ className={segBtn(lang === l.value)}>
                         {l.label}
                       </button>
                     ))}

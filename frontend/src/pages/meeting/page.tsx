@@ -105,8 +105,16 @@ export default function MeetingPage() {
   const [micId, setMicId] = useState<string>(() => {
     try { return localStorage.getItem(DEV_KEY) || ''; } catch { return ''; }
   });
+  // Full gain by default (rooms are large and the mic is far away); resets existing devices once, then free to adjust.
   const [gain, setGain] = useState<number>(() => {
-    try { return Number(localStorage.getItem(GAIN_KEY)) || 2.5; } catch { return 2.5; }
+    try {
+      if (localStorage.getItem('meeting_gain_default_v2') !== '1') {
+        localStorage.setItem(GAIN_KEY, '6');
+        localStorage.setItem('meeting_gain_default_v2', '1');
+        return 6;
+      }
+      return Number(localStorage.getItem(GAIN_KEY)) || 6;
+    } catch { return 6; }
   });
   const [selectedLangs, setSelectedLangs] = useState<string[]>(() => {
     try {
