@@ -235,6 +235,7 @@ export default function TranscriptionTab({
         notice={live.notice}
         sessionTitle={sessionTitle}
         micActive={live.micActive}
+        audioStalled={live.audioStalled}
         gain={live.gain}
         onGainChange={live.setGain}
         courses={courses}

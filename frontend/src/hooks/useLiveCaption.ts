@@ -158,6 +158,10 @@ const EMPTY_STATUS: LiveStatus = {
   elapsed: 0, level: 0, backlog: 0, rtf: 0, lines: 0, speakers: [],
 };
 
+/** A few milliseconds of silence, looped to hold an active media session. */
+const SILENT_LOOP =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQQAAAAAAAAA';
+
 const TARGET_SR = 16000;
 
 export function useLiveCaption() {
@@ -196,6 +200,38 @@ export function useLiveCaption() {
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aliveRef = useRef(true);
   const micRef = useRef<{ ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode } | null>(null);
+  // Phones/tablets suspend the AudioContext when the page goes to the background or the screen locks:
+  // the socket stays open, so the UI would claim it is still recording while no audio is captured at all.
+  // Track when audio last actually flowed and surface a stall.
+  const lastAudioRef = useRef(0);
+  const [audioStalled, setAudioStalled] = useState(false);
+  // A silent looping track: while it plays the OS treats this page as an active media session, which keeps
+  // it alive in the background far longer (and puts it in the lock-screen controls). It cannot defeat iOS's
+  // rule that only native apps capture audio with the screen locked, but it covers app-switching.
+  const keepAliveRef = useRef<HTMLAudioElement | null>(null);
+  const startKeepAlive = useCallback(() => {
+    if (keepAliveRef.current) return;
+    try {
+      const a = new Audio(SILENT_LOOP);
+      a.loop = true;
+      a.volume = 0.001;          // not 0: some browsers treat a muted element as "not playing"
+      (a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      void a.play().catch(() => {});
+      keepAliveRef.current = a;
+      const ms = (navigator as Navigator & { mediaSession?: MediaSession }).mediaSession;
+      if (ms && 'MediaMetadata' in window) {
+        ms.metadata = new MediaMetadata({ title: '课堂录音进行中', artist: 'eeclass' });
+        ms.playbackState = 'playing';
+      }
+    } catch { /* keep-alive is best effort */ }
+  }, []);
+  const stopKeepAlive = useCallback(() => {
+    const a = keepAliveRef.current;
+    keepAliveRef.current = null;
+    try { a?.pause(); } catch { /* ignore */ }
+    const ms = (navigator as Navigator & { mediaSession?: MediaSession }).mediaSession;
+    if (ms) ms.playbackState = 'none';
+  }, []);
   // For reconnect recovery: whether recording, and which device (browser mic must reopen and re-stream on recovery)
   const recordingRef = useRef(false);
   const deviceRef = useRef<string | null>(null);
@@ -230,6 +266,7 @@ export function useLiveCaption() {
     const ratio = ctx.sampleRate / TARGET_SR;
 
     node.onaudioprocess = (e) => {
+      lastAudioRef.current = Date.now();
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const input = e.inputBuffer.getChannelData(0);
@@ -258,6 +295,8 @@ export function useLiveCaption() {
     mute.connect(ctx.destination);
 
     micRef.current = { ctx, stream, node };
+    lastAudioRef.current = Date.now();
+    setAudioStalled(false);
     setMicActive(true);
   }, []);
 
@@ -535,18 +574,39 @@ export function useLiveCaption() {
 
   // Keep the screen awake while recording (prevent lock-screen interruption); release on stop
   useEffect(() => {
-    if (running) void requestWakeLock();
-    else releaseWakeLock();
-  }, [running, requestWakeLock, releaseWakeLock]);
+    if (running) { void requestWakeLock(); startKeepAlive(); }
+    else { releaseWakeLock(); stopKeepAlive(); }
+  }, [running, requestWakeLock, releaseWakeLock, startKeepAlive, stopKeepAlive]);
 
-  // Going to the background releases the wake lock; re-request it when returning to the foreground while still recording
+  // Going to the background releases the wake lock; re-request it when returning to the foreground while still
+  // recording, and resume the AudioContext the system suspended while we were away.
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === 'visible' && recordingRef.current) void requestWakeLock();
+      if (document.visibilityState !== 'visible' || !recordingRef.current) return;
+      void requestWakeLock();
+      const mic = micRef.current;
+      if (mic && mic.ctx.state !== 'running') {
+        void mic.ctx.resume().then(() => { lastAudioRef.current = Date.now(); }).catch(() => {});
+      }
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [requestWakeLock]);
+
+  // Watch that audio is actually flowing. Phones suspend capture in the background even though the socket
+  // stays open, which would otherwise look exactly like a healthy recording.
+  useEffect(() => {
+    if (!running) { setAudioStalled(false); return; }
+    const id = window.setInterval(() => {
+      const mic = micRef.current;
+      if (!mic) return;                                   // recording the machine's own input, not a browser mic
+      const gap = Date.now() - lastAudioRef.current;
+      const suspended = mic.ctx.state !== 'running';
+      if (suspended) void mic.ctx.resume().catch(() => {});
+      setAudioStalled(gap > 4000 || suspended);
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [running]);
 
   const start = useCallback(
     async (opts: StartOptions = {}) => {
@@ -658,6 +718,6 @@ export function useLiveCaption() {
     connected, authFailed, running, paused, starting, micActive, deepseekReady,
     devices, defaultDevice, lines, partial, status, notice, error, lastDir, liveSid, reclustered,
     gain, setGain,
-    start, stop, setPaused: setPausedCmd, mark, rename, summarize,
+    start, stop, setPaused: setPausedCmd, mark, rename, summarize, audioStalled,
   };
 }

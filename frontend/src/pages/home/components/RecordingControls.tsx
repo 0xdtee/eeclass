@@ -31,6 +31,8 @@ interface RecordingControlsProps {
   notice: string;
   sessionTitle: string;
   micActive: boolean;
+  /** Capture was suspended (page backgrounded / screen locked) while the socket stayed open */
+  audioStalled?: boolean;
   gain: number;
   onGainChange: (v: number) => void;
   courses: { id: string; name: string }[];
@@ -83,6 +85,7 @@ export default function RecordingControls({
   error,
   notice,
   micActive,
+  audioStalled,
   gain,
   onGainChange,
   courses,
@@ -513,12 +516,19 @@ export default function RecordingControls({
           )}
 
           {uiStatus === 'recording' && (
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-              <span className="text-xs font-medium text-red-600">
-                {micActive ? t('本设备录制中') : t('录制中')}
+            audioStalled ? (
+              <span className="flex items-center gap-1.5">
+                <i className="ri-error-warning-fill text-amber-500"></i>
+                <span className="text-xs font-semibold text-amber-600">{t('录音已中断 — 请回到本页面')}</span>
               </span>
-            </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                <span className="text-xs font-medium text-red-600">
+                  {micActive ? t('本设备录制中') : t('录制中')}
+                </span>
+              </span>
+            )
           )}
           {uiStatus === 'paused' && <span className="text-xs font-medium text-accent-600">{t('已暂停')}</span>}
           {uiStatus === 'idle' && (
