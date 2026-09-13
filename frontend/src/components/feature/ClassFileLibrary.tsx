@@ -42,12 +42,14 @@ const READABLE = ['.txt', '.md', '.markdown', '.csv', '.log', '.json', '.pdf', '
 
 interface Props {
   mode?: 'manage' | 'pick';
+  /** pick mode: 'ended' right after a recording, 'regen' when re-running a past class's summary */
+  reason?: 'ended' | 'regen';
   onClose: () => void;
   /** pick mode: continue with the ticked files (empty array = skip and summarize without material) */
   onConfirm?: (fileIds: string[]) => void;
 }
 
-export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }: Props) {
+export default function ClassFileLibrary({ mode = 'manage', reason = 'ended', onClose, onConfirm }: Props) {
   const t = useT();
   const picking = mode === 'pick';
   const [files, setFiles] = useState<ClassFile[]>([]);
@@ -107,7 +109,9 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
           <div className="flex items-center gap-2">
             <i className="ri-folder-3-line text-accent-500"></i>
             <h3 className="text-sm font-semibold text-foreground-900">
-              {picking ? t('这节课要结合资料整理吗?') : t('课堂文件库')}
+              {picking
+                ? (reason === 'regen' ? t('重新整理摘要:要结合哪些资料?') : t('这节课要结合资料整理吗?'))
+                : t('课堂文件库')}
             </h3>
             <div className="ml-auto flex items-center gap-2">
               <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} />
@@ -125,7 +129,9 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
           </div>
           <p className="text-[11px] text-foreground-400 mt-1.5">
             {picking
-              ? t('勾选与这节课相关的资料,AI 会结合资料和转写内容整理摘要;也可以直接跳过。')
+              ? (reason === 'regen'
+                  ? t('勾选资料后重新生成:AI 会结合资料校正术语、补全老师让自学的部分;也可以不选直接重新生成。')
+                  : t('勾选与这节课相关的资料,AI 会结合资料和转写内容整理摘要;也可以直接跳过。'))
               : t('上传课件、讲义、大纲等资料(可直接拖进来)。AI 会读取其中的文字,整理摘要时用来校正术语、补全知识点。')}
           </p>
           <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-foreground-500 cursor-pointer">
@@ -199,7 +205,7 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
               onClick={() => onConfirm?.([])}
               className="flex-1 py-2.5 bg-background-100 text-foreground-600 rounded-lg text-sm font-medium hover:bg-background-200 cursor-pointer"
             >
-              {t('跳过,直接生成摘要')}
+              {reason === 'regen' ? t('不结合资料,直接重新生成') : t('跳过,直接生成摘要')}
             </button>
             <button
               onClick={() => onConfirm?.(checked)}

@@ -48,7 +48,7 @@ export default function HomePage() {
   const [focusLineId, setFocusLineId] = useState<number | null>(null);
   const [toast, setToast] = useState('');
   const [showFiles, setShowFiles] = useState(false);            // class file library (manage)
-  const [pendingPick, setPendingPick] = useState<{ lines: TranscriptLine[]; sid: string } | null>(null);  // manual mode: ask which material to combine
+  const [pendingPick, setPendingPick] = useState<{ lines: TranscriptLine[]; sid: string; reason: 'ended' | 'regen' } | null>(null);  // manual mode: ask which material to combine
   const [justEnded, setJustEnded] = useState(false);   // Just finished recording; show the "saved · back to home" banner
   const [note, setNote] = useState('');
   const [noteStatus, setNoteStatus] = useState<'' | 'saving' | 'saved'>('');
@@ -307,8 +307,18 @@ export default function HomePage() {
     }
   }, [live, title]);
 
+  // Generating a summary by hand (a past class, or re-running one): in manual material mode ask which
+  // files to combine first -- the same prompt shown right after a recording -- rather than going straight in.
   const handleGenerateSummary = useCallback(
-    () => generateSummaryFor(viewLines, activeSessionId || live.liveSid),
+    (opts?: { skipPick?: boolean }) => {
+      const sid = activeSessionId || live.liveSid;
+      const st = loadSettings();
+      if (!opts?.skipPick && st.materialMode === 'manual' && viewLines.length > 0) {
+        setPendingPick({ lines: viewLines, sid, reason: 'regen' });
+        return Promise.resolve();
+      }
+      return generateSummaryFor(viewLines, sid, st.materialMode === 'auto' ? { auto: true } : undefined);
+    },
     [generateSummaryFor, viewLines, activeSessionId, live.liveSid]
   );
 
@@ -322,7 +332,7 @@ export default function HomePage() {
       !isGenerating
     ) {
       wantAutoSummary.current = false;
-      void handleGenerateSummary();
+      void handleGenerateSummary({ skipPick: true });
     }
   }, [activeSessionId, histLines, summary, isGenerating, handleGenerateSummary]);
 
@@ -374,7 +384,7 @@ export default function HomePage() {
         if (!st.autoSummary) return;
         // auto material mode: match the hidden knowledge base silently. manual: ask which files to combine first.
         if (st.materialMode === 'auto') void generateSummaryFor(j.lines, sid, { auto: true });
-        else setPendingPick({ lines: j.lines, sid });
+        else setPendingPick({ lines: j.lines, sid, reason: 'ended' });
       })  // After a continued recording, refresh to the full transcript
       .catch(() => { /* Give up if the transcript can't be read */ });
   }, [live.running, records, generateSummaryFor]);
@@ -807,6 +817,7 @@ export default function HomePage() {
       {pendingPick && (
         <ClassFileLibrary
           mode="pick"
+          reason={pendingPick.reason}
           onClose={() => { const p = pendingPick; setPendingPick(null); if (p) void generateSummaryFor(p.lines, p.sid); }}
           onConfirm={(ids) => { const p = pendingPick; setPendingPick(null); if (p) void generateSummaryFor(p.lines, p.sid, { fileIds: ids }); }}
         />
