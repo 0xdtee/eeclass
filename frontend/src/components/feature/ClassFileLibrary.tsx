@@ -57,6 +57,7 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
   const [sync, setSync] = useState(false);
   const [checked, setChecked] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,15 +67,18 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  const upload = useCallback(async (file: File | undefined) => {
-    if (!file) return;
+  const upload = useCallback(async (files?: File[] | FileList | File | null) => {
+    const list = !files ? [] : files instanceof File ? [files] : Array.from(files);
+    if (!list.length) return;
     setUploading(true);
     setErr('');
     try {
-      const fd = new FormData();
-      if (sync) fd.append('sync', '1');
-      fd.append('file', file);
-      await api('/api/class/files', 'POST', fd);
+      for (const file of list) {
+        const fd = new FormData();
+        if (sync) fd.append('sync', '1');
+        fd.append('file', file);
+        await api('/api/class/files', 'POST', fd);
+      }
       await load();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -106,7 +110,7 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
               {picking ? t('这节课要结合资料整理吗?') : t('课堂文件库')}
             </h3>
             <div className="ml-auto flex items-center gap-2">
-              <input ref={inputRef} type="file" className="hidden" onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
+              <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} />
               <button
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading}
@@ -122,7 +126,7 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
           <p className="text-[11px] text-foreground-400 mt-1.5">
             {picking
               ? t('勾选与这节课相关的资料,AI 会结合资料和转写内容整理摘要;也可以直接跳过。')
-              : t('上传课件、讲义、大纲等资料。AI 会读取其中的文字,整理摘要时用来校正术语、补全知识点。')}
+              : t('上传课件、讲义、大纲等资料(可直接拖进来)。AI 会读取其中的文字,整理摘要时用来校正术语、补全知识点。')}
           </p>
           <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-foreground-500 cursor-pointer">
             <input type="checkbox" checked={sync} onChange={(e) => setSync(e.target.checked)} className="accent-accent-500 w-3.5 h-3.5" />
@@ -132,11 +136,22 @@ export default function ClassFileLibrary({ mode = 'manage', onClose, onConfirm }
 
         {err && <div className="px-5 py-2 text-xs text-red-600">{err}</div>}
 
-        <div className="flex-1 overflow-y-auto p-3">
+        <div
+          className={`flex-1 overflow-y-auto p-3 transition-colors ${dragOver ? 'bg-accent-50 ring-2 ring-inset ring-accent-300' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); void upload(e.dataTransfer.files); }}
+        >
+          {dragOver && (
+            <div className="py-10 text-center text-accent-600 text-sm font-medium">
+              <i className="ri-upload-cloud-2-line text-3xl block mb-2"></i>{t('松开即可上传')}
+            </div>
+          )}
           {loading ? (
             <div className="py-10 text-center text-foreground-300 text-sm"><i className="ri-loader-4-line animate-spin text-2xl"></i></div>
           ) : files.length === 0 ? (
-            <div className="py-12 text-center text-foreground-300 text-sm"><i className="ri-inbox-line text-3xl block mb-2"></i>{t('还没有资料,点「新增文件」上传')}</div>
+            <div className="py-12 text-center text-foreground-300 text-sm"><i className="ri-inbox-line text-3xl block mb-2"></i>{t('还没有资料 — 把文件拖到这里,或点「新增文件」')}</div>
           ) : (
             <ul className="space-y-1">
               {files.map((f) => {
