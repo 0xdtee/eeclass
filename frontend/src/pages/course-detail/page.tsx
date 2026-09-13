@@ -174,6 +174,7 @@ export default function CourseDetailPage() {
   const loadTab = useCallback(
     async (t: TabId, opts: { refresh?: boolean; aiOnly?: boolean } = {}) => {
       const { refresh = false, aiOnly = false } = opts;
+      if (!name && !tag) return;   // opened without a course: the request would only 400
       setErr('');
       try {
         if (t === 'summary' && (summary === null || refresh || aiOnly)) {

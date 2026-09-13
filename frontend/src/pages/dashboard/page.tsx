@@ -317,12 +317,13 @@ export default function DashboardHome() {
       // ahead of time carries the lesson's date (sched_date), so match on that first, then on same-day+name.
       if (ev) {
         const base = courseBaseName(ev.title);
-        const done = records.sessions.find((r) => {
-          const title = courseBaseName(sessionTitle(r));
-          if (title !== base) return false;
-          if (r.sched_date) return r.sched_date === ev.date;
-          return (r.id.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1] === ev.date;
-        });
+        const sameDay = (r: (typeof records.sessions)[number]) =>
+          r.sched_date ? r.sched_date === ev.date : (r.id.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1] === ev.date;
+        // Prefer the exact lesson title ("高等数学A(1) 第3课"): a course meeting twice in one day would
+        // otherwise be ambiguous once the lesson number is stripped, and open whichever came first.
+        const done =
+          records.sessions.find((r) => sessionTitle(r) === ev.title && sameDay(r)) ||
+          records.sessions.find((r) => courseBaseName(sessionTitle(r)) === base && sameDay(r));
         if (done) {
           navigate('/course?sid=' + encodeURIComponent(done.id));
           return;

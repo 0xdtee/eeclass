@@ -22,6 +22,9 @@ export interface AppSettings {
   calendarColor: 'course' | 'credits';
   importTagSimilar: boolean;                           // On course import: assign similar ones to existing tags
   importTagNew: boolean;                               // On course import: create a new tag when none is similar
+  /** Set once this account's old "translate by default" pair has been turned off. Stored with the settings
+   *  (and so synced per account) so the migration can never fire a second time and undo a later choice. */
+  transOffV2?: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -40,6 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   calendarColor: 'course',
   importTagSimilar: true,
   importTagNew: true,
+  transOffV2: true,   // a brand-new account starts with translation off, so it has nothing to migrate
 };
 
 const KEY = 'lc_settings_v1';
@@ -105,11 +109,11 @@ export async function hydrateSettingsFromServer() {
     const j = await r.json();
     if (j.settings && typeof j.settings === 'object') {
       const incoming = { ...DEFAULT_SETTINGS, ...j.settings } as AppSettings;
-      // The account may still carry the old "translate by default" pair; turn it off once, per account,
-      // and push the correction back so it sticks across devices.
-      const doneKey = TRANS_OFF_MIGRATION + ':' + getToken().slice(0, 12);
-      if (localStorage.getItem(doneKey) !== '1') {
-        localStorage.setItem(doneKey, '1');
+      // The account may still carry the old "translate by default" pair; turn it off once, per account.
+      // The marker lives in the account's own settings (not under the token, which is reissued on every
+      // login) -- otherwise logging back in would wipe a translation the user had deliberately turned on.
+      if ((j.settings as Partial<AppSettings>).transOffV2 !== true) {
+        incoming.transOffV2 = true;
         incoming.translateFrom = 'zh';
         incoming.translateTo = 'zh';
         localStorage.setItem(KEY, JSON.stringify(incoming));
