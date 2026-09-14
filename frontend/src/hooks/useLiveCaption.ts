@@ -54,6 +54,28 @@ export function authFailed() {
 }
 
 const CID_KEY = 'live_caption_cid';
+const LIVE_KEY = 'live_caption_active';   // a recording is in progress; lets other pages offer a way back to it
+
+/** Note that a recording is running, refreshing the heartbeat so a stale flag can be told apart from a live one. */
+function markLive(sid: string) {
+  try { localStorage.setItem(LIVE_KEY, JSON.stringify({ sid, at: Date.now() })); } catch { /* ignore */ }
+}
+function clearLive() {
+  try { localStorage.removeItem(LIVE_KEY); } catch { /* ignore */ }
+}
+/**
+ * The recording in progress, if any. Leaving the recording page drops the WebSocket and the server keeps
+ * the session for a grace period only (server detach_grace_s), so an older heartbeat means it is finished.
+ */
+export function getLiveRecording(graceMs = 900_000): { sid: string; at: number } | null {
+  try {
+    const raw = localStorage.getItem(LIVE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { sid?: string; at?: number };
+    if (!v || typeof v.at !== 'number' || Date.now() - v.at > graceMs) return null;
+    return { sid: v.sid || '', at: v.at };
+  } catch { return null; }
+}
 const DEVICE_KEY = 'live_caption_device';   // remember the audio source so a full page reload can resume browser-mic streaming
 
 function savedDevice(): string | null {
@@ -192,7 +214,8 @@ export function useLiveCaption() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [lastDir, setLastDir] = useState('');
-  const [liveSid, setLiveSid] = useState('');   // Directory name of the class being recorded, needed for blackboard shots
+  const [liveSid, setLiveSid] = useState('');
+  const liveSidRef = useRef('');   // Directory name of the class being recorded, needed for blackboard shots
   // Bumped when the backend finishes its post-stop speaker re-clustering and rewrites the transcript, so the
   // page can re-fetch and the "just recorded" view matches the "reopen from history" view (no speaker divergence).
   const [reclustered, setReclustered] = useState<{ sid: string; tick: number }>({ sid: '', tick: 0 });
@@ -481,7 +504,8 @@ export function useLiveCaption() {
             // Reconnected, the server's session is still recording → resume, **don't clear existing captions**
             setRunning(true);
             setStarting(false);
-            if (m.sid) setLiveSid(m.sid as string);
+            if (m.sid) { setLiveSid(m.sid as string); liveSidRef.current = m.sid as string; }
+            markLive((m.sid as string) || '');
             // After a FULL page reload the in-memory deviceRef is null, so fall back to the persisted
             // choice -- otherwise a browser-mic recording silently stops streaming while the UI still
             // says "已恢复录制" and the rest of the class is lost.
@@ -509,6 +533,7 @@ export function useLiveCaption() {
           break;
         case 'started':
           recordingRef.current = true;
+          markLive((m.sid as string) || '');
           setRunning(true);
           setStarting(false);
           setPaused(false);
@@ -516,10 +541,12 @@ export function useLiveCaption() {
           setPartial('');
           setLastDir((m.dir as string) || '');
           setLiveSid((m.sid as string) || '');
+          liveSidRef.current = (m.sid as string) || '';
           setNotice(t('已开始录制：{name}', { name: String(m.name) }));
           break;
         case 'stopped':
           recordingRef.current = false;
+          clearLive();
           setRunning(false);
           setPaused(false);
           setPartial('');
@@ -564,6 +591,8 @@ export function useLiveCaption() {
         case 'status':
           setRunning(!!m.running);
           setPaused(!!m.paused);
+          if (m.running) markLive((m.sid as string) || liveSidRef.current);
+          else clearLive();
           if (m.running) {
             setStatus({
               elapsed: (m.elapsed as number) ?? 0,

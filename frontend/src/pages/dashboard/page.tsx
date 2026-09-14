@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { quickActions } from '@/mocks/dashboardData';
 import { useRecords, sessionTitle, fmtDuration } from '@/hooks/useRecords';
+import { getLiveRecording } from '@/hooks/useLiveCaption';
 import type { ScheduleEvent } from '@/hooks/useRecords';
 import { useTagsStore } from '@/hooks/useTagsStore';
 import { loadSettings } from '@/lib/settings';
@@ -53,6 +54,13 @@ export default function DashboardHome() {
   const [preselectedDate, setPreselectedDate] = useState('');
   const [createdSessions, setCreatedSessions] = useState<CreatedSession[]>([]);
   const [createdMessage, setCreatedMessage] = useState('');
+  // Poll rather than read once: the banner has to appear as soon as a recording starts in another tab,
+  // and disappear once the server's grace period lapses and the session is finalised.
+  const [liveRec, setLiveRec] = useState(() => getLiveRecording());
+  useEffect(() => {
+    const id = setInterval(() => setLiveRec(getLiveRecording()), 3000);
+    return () => clearInterval(id);
+  }, []);
   const [showImport, setShowImport] = useState(false);
   const [importDate, setImportDate] = useState('');
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // Dated course events (deduplicated)
@@ -469,6 +477,17 @@ export default function DashboardHome() {
           <i className="ri-check-line mr-2"></i>
           {createdMessage}
         </div>
+      )}
+
+      {/* A recording is still running -- leaving this page is the only way back to it, so keep the door visible. */}
+      {liveRec && (
+        <button
+          onClick={() => navigate('/course')}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 text-background-50 text-sm font-semibold hover:bg-red-600 cursor-pointer"
+        >
+          <span className="w-2 h-2 rounded-full bg-background-50 animate-pulse"></span>
+          {t('录音进行中 · 点此回到录音页')}
+        </button>
       )}
 
       {/* Hero Header */}

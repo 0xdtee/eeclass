@@ -1073,7 +1073,10 @@ class App:
         self.cid_user = {}        # {cid: voiceprint-library account id} -- computed from the token at connect time, used when recording starts / renaming
         self.cid_admin = {}       # {cid: bool} -- whether this connection's account is an admin; computed at connect (handle_cmd has no request in scope)
         self.max_sessions = int(self.cfg["server"].get("max_sessions", 8))
-        self.detach_grace = int(self.cfg["server"].get("detach_grace_s", 90))
+        # How long a session survives with no WebSocket attached. Leaving the recording page (going back
+        # to the dashboard, switching apps) drops the socket, and 90s was short enough that the class was
+        # quietly wrapped up before the user could return to it.
+        self.detach_grace = int(self.cfg["server"].get("detach_grace_s", 900))
         self.loop = None
         self.token = self._load_token()
         records_dir = os.path.normpath(
