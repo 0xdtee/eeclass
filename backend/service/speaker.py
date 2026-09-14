@@ -20,6 +20,13 @@ person split into classmate A/B/C" came from. Switching to eres2netv2 + threshol
 (A tried approach that didn't work: normalizing audio amplitude before extracting
 the voiceprint -- made no difference at all, don't try it again.)
 
+The threshold has to sit BETWEEN those two measured numbers: above the other-person
+95th percentile (0.256) so two people are never merged, and at or below the
+same-person minimum (0.319) so one person is never split. 0.35 / recluster 0.40 sat
+above 0.319, and a real lecture duly split the teacher into 老师 + 同学B -- his own
+two clusters were similar enough to be the same voice, but not to 0.40. Both are now
+0.30, inside the measured window.
+
 Even so, a real classroom is harder than the test set, so we add one more safety
 net: **merge only, never split**. After each sentence we scan the centroids again,
 and if two "people" centroids are similar to a certain degree we judge them the
