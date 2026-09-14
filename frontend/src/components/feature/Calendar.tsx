@@ -683,7 +683,10 @@ function WeekView({ weekDates, today, sessionsByDate, tagLabels, tagColorMap, on
                       title={info}
                     >
                       <div className="text-[14px] font-semibold leading-snug line-clamp-2">
-                        {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}{s.title}
+                        {s.id.startsWith('mtg-') && <i className="ri-translate-2 mr-0.5"></i>}
+                        {/* a timetable lesson that has been recorded -- its recording opens from this block */}
+                        {s.id.startsWith('sched-') && s.duration && <i className="ri-mic-line mr-0.5"></i>}
+                        {s.title}
                       </div>
                       <div className="text-[12.5px] opacity-90 leading-snug truncate">
                         <span className="opacity-70">{t('时间：')}</span>

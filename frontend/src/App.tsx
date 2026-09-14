@@ -4,15 +4,18 @@ import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
 import GuideOverlay from "@/components/feature/GuideOverlay";
 import AccountSync from "@/components/feature/AccountSync";
+import { LiveCaptionProvider } from "@/hooks/LiveCaptionProvider";
 
 
 function App() {
   return (
     <I18nextProvider i18n={i18n}>
       <BrowserRouter basename={__BASE_PATH__}>
-        <AppRoutes />
-        <GuideOverlay />
-        <AccountSync />
+        <LiveCaptionProvider>
+          <AppRoutes />
+          <GuideOverlay />
+          <AccountSync />
+        </LiveCaptionProvider>
       </BrowserRouter>
     </I18nextProvider>
   );

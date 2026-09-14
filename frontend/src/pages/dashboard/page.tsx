@@ -213,6 +213,32 @@ export default function DashboardHome() {
     });
   }, [meetingHistory, t]);
 
+  /**
+   * What the calendar draws. A recording started from a timetable lesson IS that lesson, so drawing both
+   * put two blocks side by side for one class. Keep the lesson -- it carries room, teacher and credits --
+   * note on it that it has been recorded, and drop the recording's own block. Clicking the lesson already
+   * opens its recording. A recording that matches no lesson (a stray one, or one from another day) keeps
+   * its own block.
+   */
+  const calendarSessions = useMemo(() => {
+    const recOf = new Map<string, (typeof allSessions)[number]>();
+    for (const r of allSessions) {
+      if (!r.date) continue;
+      recOf.set(`${r.date}|${r.title}`, r);
+      const base = `${r.date}|${courseBaseName(r.title)}`;
+      if (!recOf.has(base)) recOf.set(base, r);
+    }
+    const claimed = new Set<string>();
+    const lessons = scheduleSessions.map((l) => {
+      const hit = recOf.get(`${l.date}|${l.title}`) || recOf.get(`${l.date}|${courseBaseName(l.title)}`);
+      if (!hit) return l;
+      claimed.add(hit.id);
+      return { ...l, duration: hit.duration, description: hit.description };
+    });
+    return [...allSessions.filter((r) => !claimed.has(r.id)), ...lessons, ...meetingSessions];
+  }, [allSessions, scheduleSessions, meetingSessions]);
+
+
   // "Total courses" is grouped by the base name with numbering stripped: 高数第1课/第2课… all count as one 「高数」
   const distinctCourses = useMemo(() => {
     const baseName = (t: string) =>
@@ -648,7 +674,7 @@ export default function DashboardHome() {
 
         {/* Calendar */}
         <Calendar
-          sessions={[...allSessions, ...scheduleSessions, ...meetingSessions]}
+          sessions={calendarSessions}
           focusDate={calendarFocus}
           tagLabels={tagLabels}
           tagColorMap={tagColorMap}

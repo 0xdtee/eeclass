@@ -13,7 +13,6 @@ import { loadSettings } from '@/lib/settings';
 import CoursePanel from '@/pages/home/components/CoursePanel';
 import SearchBox from '@/components/feature/SearchBox';
 import type { AudioPlayerHandle } from '@/components/feature/AudioPlayer';
-import { useLiveCaption } from '@/hooks/useLiveCaption';
 import { fmtDuration, sessionDate, sessionTitle, useRecords } from '@/hooks/useRecords';
 import type { TranscriptLine } from '@/hooks/useRecords';
 import { compressImage, useLibrary } from '@/hooks/useLibrary';
@@ -21,6 +20,7 @@ import type { Course, Shot } from '@/hooks/useLibrary';
 import { exportWord } from '@/lib/exportWord';
 import { exportPdf, exportPdfBatch, type PdfDoc } from '@/lib/exportPdf';
 import { useT } from '@/lib/i18n';
+import { useLive } from '@/hooks/LiveCaptionProvider';
 
 const tabs = [
   { id: 'transcription', label: '实时转写', icon: 'ri-mic-line' },
@@ -55,7 +55,7 @@ export default function HomePage() {
 
   // The live-caption connection lives at the page layer: switching tabs unmounts the transcript component,
   // and if the connection dropped with it, the captions already shown would be lost (the server is in fact still recording).
-  const live = useLiveCaption();
+  const live = useLive();   // shared above the router, so leaving this page does not stop the recording
   const records = useRecords();
   const lib = useLibrary();
   const playerRef = useRef<AudioPlayerHandle | null>(null);
