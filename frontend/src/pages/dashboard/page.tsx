@@ -313,16 +313,17 @@ export default function DashboardHome() {
     // A timetable course (not yet recorded) -> start a new recording and prefill its title with the course name; an already-recorded one -> open it
     if (id.startsWith('sched-')) {
       const ev = scheduleSessions.find((s) => s.id === id);
-      // Already recorded this lesson? Open that recording instead of starting a blank one. A recording made
-      // ahead of time carries the lesson's date (sched_date), so match on that first, then on same-day+name.
+      // Already recorded this lesson? Open that recording instead of starting a blank one.
       if (ev) {
         const base = courseBaseName(ev.title);
         const sameDay = (r: (typeof records.sessions)[number]) =>
           r.sched_date ? r.sched_date === ev.date : (r.id.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1] === ev.date;
-        // Prefer the exact lesson title ("高等数学A(1) 第3课"): a course meeting twice in one day would
-        // otherwise be ambiguous once the lesson number is stripped, and open whichever came first.
+        // The full lesson title ("高等数学A(1) 第3课") is unique across the term, so it identifies the
+        // recording on its own -- requiring the same calendar day as well would miss one recorded the
+        // night before, or before sched_date existed. Only the bare course name needs the day to
+        // disambiguate. Recordings arrive newest first, so the most recent take wins.
         const done =
-          records.sessions.find((r) => sessionTitle(r) === ev.title && sameDay(r)) ||
+          records.sessions.find((r) => sessionTitle(r) === ev.title) ||
           records.sessions.find((r) => courseBaseName(sessionTitle(r)) === base && sameDay(r));
         if (done) {
           navigate('/course?sid=' + encodeURIComponent(done.id));
