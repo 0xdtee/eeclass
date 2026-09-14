@@ -318,12 +318,12 @@ export default function DashboardHome() {
         const base = courseBaseName(ev.title);
         const sameDay = (r: (typeof records.sessions)[number]) =>
           r.sched_date ? r.sched_date === ev.date : (r.id.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1] === ev.date;
-        // The full lesson title ("高等数学A(1) 第3课") is unique across the term, so it identifies the
-        // recording on its own -- requiring the same calendar day as well would miss one recorded the
-        // night before, or before sched_date existed. Only the bare course name needs the day to
-        // disambiguate. Recordings arrive newest first, so the most recent take wins.
+        // The day has to match. A title alone is not enough: the same lesson title is reused by every
+        // take of that class, so matching on it would hand today's lesson an older recording and file
+        // today's audio under that older date. A recording made ahead of time carries the lesson it was
+        // started from in sched_date; anything else is placed by the day it was recorded.
         const done =
-          records.sessions.find((r) => sessionTitle(r) === ev.title) ||
+          records.sessions.find((r) => sessionTitle(r) === ev.title && sameDay(r)) ||
           records.sessions.find((r) => courseBaseName(sessionTitle(r)) === base && sameDay(r));
         if (done) {
           navigate('/course?sid=' + encodeURIComponent(done.id));
