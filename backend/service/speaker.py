@@ -77,6 +77,10 @@ class SpeakerID:
         self._merges = []     # merges pending to be reported [(merged-away id, merged-into id)]
         self.library = []     # cross-session voiceprint store [(name, normalized vector)]; on a match, use the tagged identity
         self.vp_threshold = s.get("voiceprint_threshold", s["threshold"])
+        # An utterance long enough to embed is not necessarily long enough to prove a NEW person exists.
+        # A one-second interjection that matches nobody used to start its own identity, which is where the
+        # stray 同学C/D/E in a single-teacher lecture came from. Below this it joins the closest voice instead.
+        self.new_speaker_min_s = float(s.get("new_speaker_min_ms", 2000)) / 1000.0
 
         if not self.enabled:
             return
@@ -123,6 +127,13 @@ class SpeakerID:
         sims = np.array([float(np.dot(emb, c)) for c in self.centroids])
         best = int(np.argmax(sims))
         score = float(sims[best])
+
+        if score < self.threshold and dur < self.new_speaker_min_s and len(self.centroids) < self.max_speakers:
+            # too short to be trusted as a new person: attach it to the nearest voice, and leave that
+            # centroid untouched so a doubtful sentence cannot drag a good speaker model around
+            self.last_id = best
+            self._collapse()
+            return self.last_id, score
 
         if score >= self.threshold or len(self.centroids) >= self.max_speakers:
             # when the speaker count is maxed out, still assign to the closest one instead of growing forever
@@ -319,6 +330,32 @@ def recluster_session(session_dir, cfg, utt_recs, spk, name_fn):
         members[bi] += members[bj]
         del members[bj]
         del cents[bj]
+
+    # A real speaker holds more than a stray sentence. Agglomeration stops on similarity alone, so a single
+    # odd utterance can end up standing as its own person; absorb those scraps into the nearest cluster.
+    min_utts = int(sc.get("min_speaker_utterances", 3))
+    min_secs = float(sc.get("min_speaker_seconds", 8.0))
+
+    def _cluster_secs(ms):
+        return sum(max(0.0, float(lines[i].get("end", 0) or 0) - float(lines[i].get("start", 0) or 0)) for i in ms)
+
+    merged = True
+    while merged and len(members) > 1:
+        merged = False
+        for k in range(len(members)):
+            if len(members[k]) >= min_utts or _cluster_secs(members[k]) >= min_secs:
+                continue
+            sims = [(float(np.dot(_n(cents[k]), _n(cents[j]))), j) for j in range(len(members)) if j != k]
+            if not sims:
+                break
+            _, j = max(sims)
+            wk, wj = len(members[k]), len(members[j])
+            cents[j] = _n(cents[j] * wj + cents[k] * wk)
+            members[j] += members[k]
+            del members[k]
+            del cents[k]
+            merged = True
+            break
 
     # order clusters by total speech duration (desc) -> rank 0 is the teacher
     def _dur(members_of):
