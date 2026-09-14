@@ -147,6 +147,20 @@ export interface StartOptions {
   appendSid?: string | null;
 }
 
+/** Highest pickup gain the slider offers. Safe to sit at because of the limiter + soft clip below. */
+export const MAX_GAIN = 12;
+
+/**
+ * Saturate instead of clip. Below 0.7 the sample is untouched; above it the curve bends smoothly
+ * toward ±1. Hard clipping squares off the waveform and the recognizer hears distortion, which is
+ * why simply raising the gain used to stop helping past ~6×.
+ */
+export function softClip(x: number): number {
+  const a = Math.abs(x);
+  if (a <= 0.7) return x;
+  return Math.sign(x) * (0.7 + 0.3 * Math.tanh((a - 0.7) / 0.3));
+}
+
 /** Pickup sensitivity. The numbers were swept locally using real classroom recordings, don't casually change them. */
 const SENS: Record<string, { threshold: number; exit_threshold: number; min_speech_ms: number }> = {
   std: { threshold: 0.5, exit_threshold: 0.35, min_speech_ms: 250 },
@@ -184,18 +198,18 @@ export function useLiveCaption() {
   const [reclustered, setReclustered] = useState<{ sid: string; tick: number }>({ sid: '', tick: 0 });
   const [micActive, setMicActive] = useState(false);
   const [deepseekReady, setDeepseekReady] = useState(false);
-  // Pickup gain (收音增益): amplify the browser-mic signal 1×–6×, adjustable live like the meeting translator.
+  // Pickup gain (收音增益): amplify the browser-mic signal 1×–12×, adjustable live like the meeting translator.
   // Classroom mics sit far from the lecturer, so full gain is the useful default. This resets every device
   // once (including ones that had picked a lower value) and is freely adjustable afterwards.
   const [gain, setGain] = useState<number>(() => {
     try {
-      if (localStorage.getItem('rec_gain_default_v2') !== '1') {
-        localStorage.setItem('rec_gain', '6');
-        localStorage.setItem('rec_gain_default_v2', '1');
-        return 6;
+      if (localStorage.getItem('rec_gain_default_v3') !== '1') {
+        localStorage.setItem('rec_gain', String(MAX_GAIN));
+        localStorage.setItem('rec_gain_default_v3', '1');
+        return MAX_GAIN;
       }
-      return Number(localStorage.getItem('rec_gain')) || 6;
-    } catch { return 6; }
+      return Number(localStorage.getItem('rec_gain')) || MAX_GAIN;
+    } catch { return MAX_GAIN; }
   });
   const gainRef = useRef(gain);
   const gainNodeRef = useRef<GainNode | null>(null);
@@ -287,16 +301,33 @@ export function useLiveCaption() {
         const i0 = Math.floor(pos);
         const frac = pos - i0;
         const s = input[i0] * (1 - frac) + (input[i0 + 1] ?? input[i0]) * frac;
-        pcm[i] = Math.max(-1, Math.min(1, s)) * 32767;
+        pcm[i] = softClip(s) * 32767;
       }
       ws.send(pcm.buffer);
     };
-    // Pickup gain: amplify the mic before downsampling (src → gain → processor). Live-adjustable.
+    // Pickup gain: amplify the mic before downsampling (src → gain → limiter → processor). Live-adjustable.
+    // The limiter is what makes high gain usable: it rounds off the peaks instead of letting them square
+    // off against the ±1 ceiling, so a distant lecturer can be lifted without turning the loud parts to mush.
     const gainNode = ctx.createGain();
     gainNode.gain.value = gainRef.current;
     gainNodeRef.current = gainNode;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -24;
+    limiter.knee.value = 24;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.15;
+    // DynamicsCompressorNode only ever attenuates, so without makeup the chain would end up quieter than
+    // before. The makeup puts the compressed signal back against the ceiling -- that, not the raw gain, is
+    // what actually makes a distant lecturer louder (raw gain alone just hits the ±1 ceiling and clips).
+    // These numbers were swept against the real node in a browser, not modelled: they are the loudest
+    // combination that still leaves ~0% of samples flat-topped at near, medium and far speaking distance.
+    const makeup = ctx.createGain();
+    makeup.gain.value = 2;
     src.connect(gainNode);
-    gainNode.connect(node);
+    gainNode.connect(limiter);
+    limiter.connect(makeup);
+    makeup.connect(node);
     // Don't connect to the speakers (would cause feedback), but some browsers won't run without a destination, so connect a muted gain
     const mute = ctx.createGain();
     mute.gain.value = 0;

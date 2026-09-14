@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioDevice, LiveStatus } from '@/hooks/useLiveCaption';
-import { SERVICE_ORIGIN, getToken, setToken } from '@/hooks/useLiveCaption';
+import { SERVICE_ORIGIN, getToken, setToken, MAX_GAIN } from '@/hooks/useLiveCaption';
 import { loadSettings } from '@/lib/settings';
 import { useAuth } from '@/hooks/useAuth';
 import { useT, t } from '@/lib/i18n';
@@ -475,7 +475,7 @@ export default function RecordingControls({
               <i className="ri-mic-line text-foreground-500"></i>
               <span>{t('收音增益')}</span>
               <input
-                type="range" min={1} max={6} step={0.5} value={gain}
+                type="range" min={1} max={MAX_GAIN} step={0.5} value={gain}
                 onChange={(e) => onGainChange(Number(e.target.value))}
                 className="w-24 cursor-pointer accent-primary-500"
               />
@@ -499,7 +499,7 @@ export default function RecordingControls({
             <label className="inline-flex items-center gap-1.5 text-xs text-foreground-500 whitespace-nowrap" title={t('实时调整收音增益')}>
               <i className="ri-mic-line"></i>
               <input
-                type="range" min={1} max={6} step={0.5} value={gain}
+                type="range" min={1} max={MAX_GAIN} step={0.5} value={gain}
                 onChange={(e) => onGainChange(Number(e.target.value))}
                 className="w-20 cursor-pointer accent-primary-500"
               />

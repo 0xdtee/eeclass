@@ -15,7 +15,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useT, getLang } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
-import { SERVICE_ORIGIN, getToken } from '@/hooks/useLiveCaption';
+import { SERVICE_ORIGIN, getToken, MAX_GAIN, softClip } from '@/hooks/useLiveCaption';
 import { exportPdf, exportPdfBatch, type PdfDoc } from '@/lib/exportPdf';
 import FileLibrary from './FileLibrary';
 import FileViewer, { type LibFile } from './FileViewer';
@@ -108,13 +108,13 @@ export default function MeetingPage() {
   // Full gain by default (rooms are large and the mic is far away); resets existing devices once, then free to adjust.
   const [gain, setGain] = useState<number>(() => {
     try {
-      if (localStorage.getItem('meeting_gain_default_v2') !== '1') {
-        localStorage.setItem(GAIN_KEY, '6');
-        localStorage.setItem('meeting_gain_default_v2', '1');
-        return 6;
+      if (localStorage.getItem('meeting_gain_default_v3') !== '1') {
+        localStorage.setItem(GAIN_KEY, String(MAX_GAIN));
+        localStorage.setItem('meeting_gain_default_v3', '1');
+        return MAX_GAIN;
       }
-      return Number(localStorage.getItem(GAIN_KEY)) || 6;
-    } catch { return 6; }
+      return Number(localStorage.getItem(GAIN_KEY)) || MAX_GAIN;
+    } catch { return MAX_GAIN; }
   });
   const [selectedLangs, setSelectedLangs] = useState<string[]>(() => {
     try {
@@ -420,14 +420,26 @@ export default function MeetingPage() {
         const i0 = Math.floor(pos);
         const frac = pos - i0;
         const s = input[i0] * (1 - frac) + (input[i0 + 1] ?? input[i0]) * frac;
-        pcm[i] = Math.max(-1, Math.min(1, s)) * 32767;
+        pcm[i] = softClip(s) * 32767;
       }
       ws.send(pcm.buffer);
     };
-    // source -> gain -> (analyser tap) + (processor -> muted destination)
+    // source -> gain -> limiter -> (analyser tap) + (processor -> muted destination).
+    // The limiter rounds off peaks so the high end of the gain range stays usable instead of clipping.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -24;
+    limiter.knee.value = 24;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.15;
+    // The compressor only attenuates; this makeup gain puts the level back against the ceiling.
+    const makeup = ctx.createGain();
+    makeup.gain.value = 2;
     src.connect(gainNode);
-    gainNode.connect(analyser);
-    gainNode.connect(node);
+    gainNode.connect(limiter);
+    limiter.connect(makeup);
+    makeup.connect(analyser);
+    makeup.connect(node);
     const mute = ctx.createGain();
     mute.gain.value = 0;
     node.connect(mute);
@@ -886,7 +898,7 @@ export default function MeetingPage() {
           <label className="flex items-center gap-2">
             <span className="whitespace-nowrap">{t('收音增益')}</span>
             <input
-              type="range" min={1} max={6} step={0.5} value={gain}
+              type="range" min={1} max={MAX_GAIN} step={0.5} value={gain}
               onChange={(e) => setGain(Number(e.target.value))}
               className="w-28 sm:w-40 cursor-pointer accent-accent-500"
             />
