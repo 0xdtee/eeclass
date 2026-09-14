@@ -92,11 +92,12 @@ export default function HomePage() {
     () => (activeSessionId ? records.sessions.find((s) => s.id === activeSessionId) : undefined),
     [records.sessions, activeSessionId]
   );
-  // While live-recording, prefer showing the recording state rather than "not started" (new users have no saved sessions)
-  const title = live.running
-    ? t('正在录制…')
-    : activeSession
-      ? sessionTitle(activeSession)
+  // Name the class being recorded when we know it -- the red "录制中" indicator already says it is running,
+  // so the heading does not have to, and losing the course name on the way back is disorienting.
+  const title = activeSession
+    ? sessionTitle(activeSession)
+    : live.running
+      ? t('正在录制…')
       : t('未开始录制');
 
 
@@ -254,6 +255,13 @@ export default function HomePage() {
     if (live.lines.length > 0) return liveView;
     return histLines;
   }, [activeSessionId, live.liveSid, live.running, live.lines, histLines]);
+
+  // Coming back to a recording already in progress (the page was left and remounted): adopt it as the
+  // selected session, so what it has already transcribed loads and merges with the lines arriving now.
+  // Without this the view starts from empty and the class looks like it lost everything recorded so far.
+  useEffect(() => {
+    if (live.liveSid && !activeSessionId) setActiveSessionId(live.liveSid);
+  }, [live.liveSid, activeSessionId]);
 
   // Let callbacks like replace always access "the lines currently on screen" (including old lines when continuing), without stuffing viewLines into the deps
   const viewLinesRef = useRef<TranscriptLine[]>([]);
