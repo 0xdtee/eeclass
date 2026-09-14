@@ -252,16 +252,22 @@ export default function HomePage() {
     }
     // After stopping: prefer the selected session's full archive (old+new after a continued recording); fall back to live if there's no archive
     if (activeSessionId) return histLines.length ? histLines : liveView;
+    // A page opened to start a new recording shows nothing yet. The live session outlives this page now,
+    // so its lines may still hold a class that already finished -- they must not appear under a new one.
+    if (autoNew) return [];
     if (live.lines.length > 0) return liveView;
     return histLines;
-  }, [activeSessionId, live.liveSid, live.running, live.lines, histLines]);
+  }, [activeSessionId, live.liveSid, live.running, live.lines, histLines, autoNew]);
 
-  // Coming back to a recording already in progress (the page was left and remounted): adopt it as the
-  // selected session, so what it has already transcribed loads and merges with the lines arriving now.
-  // Without this the view starts from empty and the class looks like it lost everything recorded so far.
+  // Coming back to a recording still in progress: adopt it as the selected session, so what it has already
+  // transcribed loads and merges with the lines arriving now -- otherwise the view starts from empty and
+  // the class looks like it lost everything recorded so far.
+  // Only while it is actually running: the live session now outlives this page, so liveSid still names the
+  // last class after it stopped, and adopting that would open the previous course instead of the one asked
+  // for. For the same reason an explicit "start a new recording" link never adopts anything.
   useEffect(() => {
-    if (live.liveSid && !activeSessionId) setActiveSessionId(live.liveSid);
-  }, [live.liveSid, activeSessionId]);
+    if (live.running && live.liveSid && !activeSessionId && !autoNew) setActiveSessionId(live.liveSid);
+  }, [live.running, live.liveSid, activeSessionId, autoNew]);
 
   // Let callbacks like replace always access "the lines currently on screen" (including old lines when continuing), without stuffing viewLines into the deps
   const viewLinesRef = useRef<TranscriptLine[]>([]);
