@@ -209,18 +209,33 @@ export function useRecords() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const reload = useCallback(async () => {
+  /** Returns the fresh list as well as storing it, so a caller can decide on it without waiting for a render. */
+  const reload = useCallback(async (): Promise<SessionMeta[]> => {
     setLoading(true);
     try {
       const j = await api<{ sessions: SessionMeta[] }>('/api/sessions');
       setSessions(j.sessions);
       setError('');
+      return j.sessions;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return [];
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // A page left open goes stale: a class recorded meanwhile on a phone or tablet would be invisible here,
+  // and opening that lesson would start a second recording of it. Refresh whenever the tab is looked at again.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') void reload(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [reload]);
 
   useEffect(() => {
     void reload();

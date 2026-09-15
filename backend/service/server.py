@@ -1582,6 +1582,25 @@ class App:
                 if owner is not None and user_key != "owner" and owner != self._to_owner_id(user_key):
                     emit({"type": "notice", "msg": "这节课不属于当前账号,已新建一节录制。"})
                     append_sid = None
+            if append_sid:
+                # The class may still be open on another device -- recording started on a tablet and picked
+                # up on a laptop. Two sessions writing the same transcript and wav would interleave, so close
+                # that one cleanly first and take the class over here.
+                _target = os.path.basename(append_sid)
+                for _ocid, _ent in list(self.sessions.items()):
+                    _so = _ent.get("s")
+                    if _ocid == cid or _so is None or not getattr(_so, "running", False):
+                        continue
+                    if os.path.basename(getattr(getattr(_so, "rec", None), "dir", "") or "") != _target:
+                        continue
+                    print(f"[接管] {_target} 仍在 cid={_ocid} 上录制,先收尾再接管", flush=True)
+                    self.sessions.pop(_ocid, None)
+                    try:
+                        await asyncio.get_running_loop().run_in_executor(None, _so.stop)
+                    except Exception:
+                        traceback.print_exc()
+                    emit({"type": "notice", "msg": "这节课刚才在另一台设备上还开着,已接管并继续录制。"})
+                    break
             s = Session(cfg, self.loop, emit,
                         title=m.get("title"), device=m.get("device"),
                         loopback=bool(m.get("loopback")),

@@ -338,7 +338,7 @@ export default function DashboardHome() {
     secondary: { bg: 'bg-secondary-100', icon: 'text-secondary-600', bar: 'bg-secondary-500', glow: 'from-secondary-400/20' },
   };
 
-  const handleSelectSession = (id: string) => {
+  const handleSelectSession = async (id: string) => {
     // A meeting-translator session -> open it on the meeting page (it loads that session from history).
     if (id.startsWith('mtg-')) {
       navigate('/meeting?open=' + encodeURIComponent(id.slice(4)));
@@ -350,6 +350,9 @@ export default function DashboardHome() {
       // Already recorded this lesson? Open that recording instead of starting a blank one.
       if (ev) {
         const base = courseBaseName(ev.title);
+        // Decide on a freshly fetched list, not whatever this page loaded when it was opened: a class
+        // recorded meanwhile on another device would otherwise look unrecorded and get a second recording.
+        const known = await records.reload().catch(() => records.sessions);
         const sameDay = (r: (typeof records.sessions)[number]) =>
           r.sched_date ? r.sched_date === ev.date : (r.id.match(/^(\d{4}-\d{2}-\d{2})/) || [])[1] === ev.date;
         // The day has to match. A title alone is not enough: the same lesson title is reused by every
@@ -357,8 +360,8 @@ export default function DashboardHome() {
         // today's audio under that older date. A recording made ahead of time carries the lesson it was
         // started from in sched_date; anything else is placed by the day it was recorded.
         const done =
-          records.sessions.find((r) => sessionTitle(r) === ev.title && sameDay(r)) ||
-          records.sessions.find((r) => courseBaseName(sessionTitle(r)) === base && sameDay(r));
+          known.find((r) => sessionTitle(r) === ev.title && sameDay(r)) ||
+          known.find((r) => courseBaseName(sessionTitle(r)) === base && sameDay(r));
         if (done) {
           navigate('/course?sid=' + encodeURIComponent(done.id));
           return;
