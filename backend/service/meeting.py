@@ -396,7 +396,7 @@ async def remux_to_mp4(src_path, out_path):
 
 
 async def meeting_slides_http(request, *, check_token):
-    """Accept an uploaded .pptx/.ppt/.pdf and return it as a PDF (LibreOffice converts PPT to PDF), so
+    """Accept an uploaded slide deck or document and return it as a PDF (LibreOffice does the conversion), so
     the browser can page through the slides with pdf.js. Login required, like the other endpoints."""
     if not check_token(request):
         return web.json_response({"error": "令牌不对"}, status=401)
@@ -421,8 +421,9 @@ async def meeting_slides_http(request, *, check_token):
     ext = _os.path.splitext(filename)[1].lower()
     if ext == ".pdf":
         return web.Response(body=data, content_type="application/pdf")
-    if ext not in (".ppt", ".pptx", ".odp", ".key"):
-        return web.json_response({"error": "只支持 PPT / PPTX / PDF"}, status=400)
+    # LibreOffice converts Word and OpenDocument text too -- course handouts are as often .docx as .pptx
+    if ext not in (".ppt", ".pptx", ".odp", ".key", ".doc", ".docx", ".odt", ".rtf"):
+        return web.json_response({"error": "只支持 PPT / PPTX / Word / PDF"}, status=400)
 
     with tempfile.TemporaryDirectory() as d:
         src = _os.path.join(d, "in" + ext)

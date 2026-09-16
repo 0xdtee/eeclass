@@ -47,9 +47,11 @@ interface Props {
   onClose: () => void;
   /** pick mode: continue with the ticked files (empty array = skip and summarize without material) */
   onConfirm?: (fileIds: string[]) => void;
+  /** manage mode: show the file in the page (courseware next to the transcript) instead of a new tab */
+  onOpen?: (file: ClassFile) => void;
 }
 
-export default function ClassFileLibrary({ mode = 'manage', reason = 'ended', onClose, onConfirm }: Props) {
+export default function ClassFileLibrary({ mode = 'manage', reason = 'ended', onClose, onConfirm, onOpen }: Props) {
   const t = useT();
   const picking = mode === 'pick';
   const [files, setFiles] = useState<ClassFile[]>([]);
@@ -98,6 +100,7 @@ export default function ClassFileLibrary({ mode = 'manage', reason = 'ended', on
   }, []);
 
   const openFile = (f: ClassFile) => {
+    if (onOpen) { onOpen(f); onClose(); return; }
     window.open(`${SERVICE_ORIGIN}/api/class/files/${encodeURIComponent(f.id)}?token=${encodeURIComponent(getToken())}`, '_blank');
   };
   const toggle = (id: string) => setChecked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -165,9 +168,9 @@ export default function ClassFileLibrary({ mode = 'manage', reason = 'ended', on
                 return (
                   <li
                     key={f.id}
-                    onClick={() => (picking && readable ? toggle(f.id) : undefined)}
+                    onClick={() => (picking ? (readable ? toggle(f.id) : undefined) : openFile(f))}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg group ${
-                      picking && readable ? 'cursor-pointer' : ''
+                      !picking || readable ? 'cursor-pointer' : ''
                     } ${picking && checked.includes(f.id) ? 'bg-accent-100' : 'hover:bg-background-100'}`}
                   >
                     {picking && (

@@ -9,7 +9,9 @@ import { useT } from '@/lib/i18n';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PdfDocProxy = any;
 
-export default function SlideViewer({ data, onClose }: { data: ArrayBuffer; onClose: () => void }) {
+export default function SlideViewer(
+  { data, url, onClose }: { data?: ArrayBuffer; url?: string; onClose: () => void }
+) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -29,7 +31,12 @@ export default function SlideViewer({ data, onClose }: { data: ArrayBuffer; onCl
         pdfjsLib.GlobalWorkerOptions.workerSrc = (
           await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
         ).default;
-        const pdf = await pdfjsLib.getDocument({ data: data.slice(0) }).promise;
+        // With a url pdf.js streams the file over HTTP ranges and shows page one straight away; a
+        // textbook is tens of megabytes, and waiting for the whole download first took half a minute.
+        const pdf = await (url
+          ? pdfjsLib.getDocument({ url, rangeChunkSize: 262144, disableAutoFetch: true, disableStream: false })
+          : pdfjsLib.getDocument({ data: (data as ArrayBuffer).slice(0) })
+        ).promise;
         if (cancelled) { try { pdf.destroy(); } catch { /* ignore */ } return; }
         docRef.current = pdf;
         setTotal(pdf.numPages);
@@ -46,7 +53,7 @@ export default function SlideViewer({ data, onClose }: { data: ArrayBuffer; onCl
       }
     })();
     return () => { cancelled = true; try { docRef.current?.destroy?.(); } catch { /* ignore */ } docRef.current = null; };
-  }, [data]);
+  }, [data, url]);
 
   const renderPage = useCallback(async () => {
     const pdf = docRef.current;

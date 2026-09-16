@@ -8,6 +8,8 @@ import type { TranscriptLine } from '@/hooks/useRecords';
 import type { Course, Shot } from '@/hooks/useLibrary';
 import { audioUrl } from '@/hooks/useLibrary';
 import { useT } from '@/lib/i18n';
+import ClassFileLibrary, { type ClassFile } from '@/components/feature/ClassFileLibrary';
+import FileViewer from '@/pages/meeting/FileViewer';
 
 type RecordingStatus = 'idle' | 'recording' | 'paused';
 
@@ -94,6 +96,10 @@ export default function TranscriptionTab({
   const [saveError, setSaveError] = useState('');
   const [curTime, setCurTime] = useState(0);
   const [shotsOnly, setShotsOnly] = useState(false);
+  // Courseware shown beside the transcript: slides to follow along with while the class is being recorded.
+  const [pickCourseware, setPickCourseware] = useState(false);
+  const [courseware, setCourseware] = useState<ClassFile | null>(null);
+  const [cwTall, setCwTall] = useState(false);
   // Caption font size (Word-style zoom), remembered on this device. Applied to the transcript sentences.
   const [fontScale, setFontScale] = useState<number>(() => {
     try { return Math.min(220, Math.max(70, Number(localStorage.getItem('cc_fontscale')) || 100)); } catch { return 100; }
@@ -304,6 +310,38 @@ export default function TranscriptionTab({
         </div>
       )}
 
+      {pickCourseware && (
+        <ClassFileLibrary mode="manage" onClose={() => setPickCourseware(false)} onOpen={setCourseware} />
+      )}
+
+      {courseware && (
+        <div className="mb-4 bg-background-50 border border-background-200 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-background-200">
+            <i className="ri-slideshow-2-line text-accent-500"></i>
+            <span className="text-sm font-medium text-foreground-800 truncate">{courseware.name}</span>
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={() => setCwTall((v) => !v)}
+                className="h-8 px-2.5 rounded-lg text-xs text-foreground-500 hover:bg-background-100 cursor-pointer whitespace-nowrap"
+              >
+                <i className={cwTall ? 'ri-collapse-diagonal-line' : 'ri-expand-diagonal-line'}></i>
+                <span className="ml-1 hidden sm:inline">{cwTall ? t('缩小') : t('放大')}</span>
+              </button>
+              <button
+                onClick={() => setCourseware(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-foreground-400 hover:bg-background-100 cursor-pointer"
+                title={t('关闭课件')}
+              >
+                <i className="ri-close-line"></i>
+              </button>
+            </div>
+          </div>
+          <div className={cwTall ? 'h-[78vh]' : 'h-[46vh]'}>
+            <FileViewer file={courseware} base="/api/class/files" onClose={() => setCourseware(null)} />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-4 items-stretch">
       <div className="bg-background-50 border border-background-200 rounded-xl p-4 sm:p-6 lg:flex-1 min-w-0 w-full">
         {showPlayer && <AudioPlayer ref={playerRef} src={audioUrl(sid)} onTime={setCurTime} />}
@@ -342,6 +380,13 @@ export default function TranscriptionTab({
                 {t('自动滚动')}
               </label>
             )}
+            <button
+              onClick={() => setPickCourseware(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap"
+              title={t('打开课件,边听边看')}
+            >
+              <i className="ri-slideshow-2-line text-sm"></i>{t('课件')}
+            </button>
             <button
               onClick={exportText}
               disabled={lines.length === 0}
