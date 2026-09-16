@@ -68,6 +68,9 @@ export default function HomePage() {
   const [initialTitle] = useState(() => searchParams.get('title') || '');   // Course name prefilled when arriving from the timetable
   // Arriving from a timetable entry: the lesson's date, so recording it early still files under that class
   const [forDate] = useState(() => searchParams.get('for_date') || '');
+  // The session this page was opened for. Captured at mount because the adoption effect below runs in the
+  // same pass as the effect that applies it, and both read activeSessionId as still empty.
+  const [initialSid] = useState(() => searchParams.get('sid') || '');
   // Arriving from the dashboard 「查看纪要」 (?tab=summary&sid=…): after landing on the summary page, auto-generate once if not generated before
   const wantAutoSummary = useRef(
     searchParams.get('tab') === 'summary' && !!searchParams.get('sid')
@@ -264,10 +267,14 @@ export default function HomePage() {
   // the class looks like it lost everything recorded so far.
   // Only while it is actually running: the live session now outlives this page, so liveSid still names the
   // last class after it stopped, and adopting that would open the previous course instead of the one asked
-  // for. For the same reason an explicit "start a new recording" link never adopts anything.
+  // for. An explicit link -- "start a new recording", or one naming a session -- never adopts anything:
+  // both effects see activeSessionId as empty on mount, so without this the running class would win and
+  // the page would show its transcript under the name of the class the user actually asked for.
   useEffect(() => {
-    if (live.running && live.liveSid && !activeSessionId && !autoNew) setActiveSessionId(live.liveSid);
-  }, [live.running, live.liveSid, activeSessionId, autoNew]);
+    if (live.running && live.liveSid && !activeSessionId && !autoNew && !initialSid) {
+      setActiveSessionId(live.liveSid);
+    }
+  }, [live.running, live.liveSid, activeSessionId, autoNew, initialSid]);
 
   // Let callbacks like replace always access "the lines currently on screen" (including old lines when continuing), without stuffing viewLines into the deps
   const viewLinesRef = useRef<TranscriptLine[]>([]);
