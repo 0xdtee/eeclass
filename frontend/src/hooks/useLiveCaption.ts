@@ -666,6 +666,7 @@ export function useLiveCaption() {
   // stays open, which would otherwise look exactly like a healthy recording.
   useEffect(() => {
     if (!running) { setAudioStalled(false); return; }
+    let reopening = false;
     const id = window.setInterval(() => {
       const mic = micRef.current;
       if (!mic) return;                                   // recording the machine's own input, not a browser mic
@@ -673,9 +674,21 @@ export function useLiveCaption() {
       const suspended = mic.ctx.state !== 'running';
       if (suspended) void mic.ctx.resume().catch(() => {});
       setAudioStalled(gap > 4000 || suspended);
+      // Resuming the context is not always enough: a tab left in the background long enough has its mic
+      // track ended outright, and then nothing brings the audio back on its own -- the class looks like it
+      // is recording while nothing is captured. Once the page is visible again, reopen the mic.
+      const dead = mic.stream.getAudioTracks().every((tr) => tr.readyState === 'ended' || !tr.enabled);
+      if (!reopening && document.visibilityState === 'visible' && (dead || gap > 15000)) {
+        reopening = true;
+        stopMic();
+        startMic()
+          .then(() => setNotice(t('麦克风已断开,已自动重新接上')))
+          .catch(() => setNotice(t('麦克风已断开,且无法自动恢复,请重新点「开始录制」。')))
+          .finally(() => { reopening = false; });
+      }
     }, 1500);
     return () => window.clearInterval(id);
-  }, [running]);
+  }, [running, startMic, stopMic]);
 
   const start = useCallback(
     async (opts: StartOptions = {}) => {

@@ -167,7 +167,8 @@
   "records_dir": "../records",
   "save_wav": true,
   "max_sessions": 8,
-  "_max_sessions_note": "Maximum number of concurrent recording/transcription sessions. Sized for local CPU models (each session holds a recognition model in memory + CPU). When using the cloud (Aliyun) models recognition runs in the cloud, not on this machine, so you can raise this much higher; the real ceiling then becomes your DashScope concurrency quota."
+  "_max_sessions_note": "Maximum number of concurrent recording/transcription sessions. Sized for local CPU models (each session holds a recognition model in memory + CPU). When using the cloud (Aliyun) models recognition runs in the cloud, not on this machine, so you can raise this much higher; the real ceiling then becomes your DashScope concurrency quota.",
+  "silent_stop_s": 600
  },
  "deepseek": {
   "api_key": "",

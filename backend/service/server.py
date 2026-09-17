@@ -1077,6 +1077,10 @@ class App:
         # to the dashboard, switching apps) drops the socket, and 90s was short enough that the class was
         # quietly wrapped up before the user could return to it.
         self.detach_grace = int(self.cfg["server"].get("detach_grace_s", 900))
+        # A browser-mic session whose socket stays open but stops sending audio (the phone backgrounded the
+        # tab, the mic was revoked) used to run on silently -- one class sat "recording" for half an hour
+        # after the audio died, inflating its length and holding a slot. Wrap it up instead.
+        self.silent_stop = int(self.cfg["server"].get("silent_stop_s", 600))
         self.loop = None
         self.token = self._load_token()
         records_dir = os.path.normpath(
@@ -1497,6 +1501,7 @@ class App:
                     cap = getattr(ent["s"], "cap", None) if ent else None
                     if isinstance(cap, audio_mod.BrowserCapture):
                         cap.push_pcm(msg.data)
+                        ent["last_audio"] = time.time()   # watched by the ticker: silence means the mic died
                     continue
                 if msg.type != WSMsgType.TEXT:
                     continue
@@ -1549,7 +1554,8 @@ class App:
                       "msg": f"服务器繁忙（已有 {running} 路转写在跑），稍后再试"})
                 return
             # reserve the slot now (synchronously, before any await) so the count above already includes us
-            self.sessions[cid] = {"s": None, "ws": ws, "detached_at": None, "starting": True}
+            self.sessions[cid] = {"s": None, "ws": ws, "detached_at": None, "starting": True,
+                                  "last_audio": time.time()}
             # each session reads its own config copy, avoiding parameter clobbering when classes start concurrently
             cfg = load_config()
             for k in ("backend", "streaming", "model", "cpu_threads", "beam_size"):
@@ -1736,6 +1742,21 @@ class App:
                 if s is None:
                     continue                       # a reserved-but-not-yet-started slot; nothing to tick yet
                 if ent["ws"] is not None and s.running:
+                    # Connected but silent for too long: the page is still there, the audio is not. Only for
+                    # browser-mic sessions (a sound-card session never sends frames over the socket) and never
+                    # while deliberately paused.
+                    if (self.silent_stop > 0 and not getattr(s, "paused", False)
+                            and isinstance(getattr(s, "cap", None), audio_mod.BrowserCapture)
+                            and now - ent.get("last_audio", now) > self.silent_stop):
+                        print(f"[静音收尾] cid={cid} 已 {int(now - ent['last_audio'])}s 没有音频,结束这节课", flush=True)
+                        self._send_soon(ent["ws"], {"type": "notice",
+                                                    "msg": "麦克风已经很久没有声音送达,这节课已自动保存结束。"})
+                        self.sessions.pop(cid, None)
+                        try:
+                            await asyncio.get_running_loop().run_in_executor(None, s.stop)
+                        except Exception:
+                            traceback.print_exc()
+                        continue
                     self._send_soon(ent["ws"], s.status())   # has a connection: push status
                 elif ent["detached_at"] and now - ent["detached_at"] > self.detach_grace:
                     # disconnected past the grace period with no reconnect -> wrap up, persist, and free resources
