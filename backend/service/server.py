@@ -1779,7 +1779,10 @@ class App:
         # also accept logged-in users' session tokens -- registering/logging in is authentication, no need to copy the global token
         if not ok and got and self.accounts.session_user(got):
             ok = True
-        if not ok:
+        # Only a WRONG token counts toward the brute-force lockout. No token at all is an anonymous
+        # visitor -- someone on the login or registration page -- and counting those locked real users out
+        # of signing up before they ever had a token to get wrong.
+        if not ok and got:
             self._note_fail(request)
         return ok
 

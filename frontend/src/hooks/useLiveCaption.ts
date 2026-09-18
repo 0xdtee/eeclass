@@ -447,8 +447,15 @@ export function useLiveCaption() {
   const connect = useCallback(() => {
     if (!aliveRef.current) return;
     const token = getToken();
+    // No token yet -- this is the login or registration page. The session lives above the router, so it
+    // is mounted there too; connecting anonymously only made the server count failed authentications and
+    // eventually lock the visitor's address out of signing up. Wait for a token instead.
+    if (!token) {
+      retryRef.current = setTimeout(connect, 2000);
+      return;
+    }
     const params = new URLSearchParams();
-    if (token) params.set('token', token);
+    params.set('token', token);
     params.set('cid', getCid());       // Include the client ID so reconnects can recover the session
     const wsUrl = SERVICE_ORIGIN.replace(/^http/, 'ws') + '/ws?' + params.toString();
     let ws: WebSocket;
