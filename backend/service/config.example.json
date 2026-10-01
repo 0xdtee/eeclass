@@ -28,6 +28,8 @@
  "asr": {
   "backend": "sensevoice",
   "greek_symbols": true,
+  "accent_fuzzy": true,
+  "_accent_fuzzy_note": "Local term fixing treats accent-merged sounds as equal (zh/z, ch/c, sh/s, n/l, f/h, r/l, ang/an, eng/en, ing/in) for terms of 3+ characters: 拉格兰日 -> 拉格朗日, 电池感应 -> 电磁感应. Over 39,747 production lines it made a single extra change, a correct one.",
   "cloud_hotwords": true,
   "cloud_hotword_weight": 4,
   "_cloud_hotwords_note": "Send asr.hotwords + asr.terms + the course hotwords + learned terms (+ Greek letter names) to Alibaba Cloud paraformer as a hotword vocabulary, so recognition itself is biased toward them -- the biggest help for an accented teacher. Vocabularies are cached in records/asr_vocabularies.json (at most 8 kept, oldest rewritten). A/B on a real lecture: 14 of 25 lines changed, 影射/硬射/隐射 -> 映射, 职域 -> 值域. Weight 1-5.",

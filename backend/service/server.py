@@ -320,7 +320,8 @@ class Session:
             from term_fix import TermFixer
             terms = list(a.get("terms") or []) + hotwords + learned
             if terms:
-                self.tfix = TermFixer(terms)
+                # accent mode: zh/z, n/l, f/h, front/back nasals count as one sound for 3+ character terms
+                self.tfix = TermFixer(terms, fuzzy=bool(a.get("accent_fuzzy", True)))
         except Exception as e:
             print(f"⚠️ 同音术语纠正未启用: {e}")
 
