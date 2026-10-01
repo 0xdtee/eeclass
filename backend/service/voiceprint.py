@@ -8,10 +8,13 @@ Voiceprints judged to be the same person are merged into one entry (like "many
 users uploading the same file, the cloud only keeps one copy"); no matter how
 many classes or accounts captured it, one person keeps just one voiceprint vector.
 
-Each account's store lib_<account>.json holds only **references**: [{id, name, pid}]
--- pid points to that person in the registry. Names are private to each account;
-the voiceprints themselves are shared and deduplicated. The old format (embedding
-inlined in the entry) can still be read.
+Each account's store lib_<account>.json holds [{id, name, pid, embedding, n}]
+-- pid points to that person in the registry; embedding is the account's own tagged
+vector, frozen at tagging time. Names are private to each account. Naming matches
+against the frozen embedding, never the registry centroid: every finished recording
+folds its speakers into the registry, so a registry centroid drifts toward whoever
+sounds roughly alike. Old entries with only a pid fall back to the registry centroid
+until re-tagged (or repaired with repair_voiceprints.py).
 
 - Audio from some past class: from the speaker segments in transcript.jsonl plus
   audio.wav, compute each speaker's voiceprint centroid on the fly and cache it to
@@ -153,9 +156,11 @@ def _save_raw(root, lib, key=None):
 
 
 def load_library(root, key=None):
-    """Store for matching: [{id, name, embedding}]. Voiceprint vectors are fetched on the fly by pid from the
-    global dedup store (stored once, referenced in many places); embeddings inlined in old-format entries can
-    also be read. Entries whose vector can't be fetched are skipped."""
+    """Store for matching: [{id, name, embedding}]. The account's own frozen vector (inlined when the voice
+    was tagged) wins; only entries that never had one fall back to the registry centroid by pid. The registry
+    centroid can't be trusted for naming: every recording that ends folds its speakers into it, so an
+    enrolled person's centroid drifts toward everyone who sounds roughly alike (one entry here had absorbed
+    80 recordings and matched most teachers). Entries whose vector can't be fetched are skipped."""
     raw = _load_raw(root, key)
     if not raw:
         return []
@@ -163,7 +168,7 @@ def load_library(root, key=None):
     idx = {p.get("id"): p.get("centroid") for p in reg.get("persons", [])}
     out = []
     for v in raw:
-        emb = idx.get(v.get("pid")) if v.get("pid") else v.get("embedding")
+        emb = v.get("embedding") or idx.get(v.get("pid"))
         if emb:
             out.append({"id": v.get("id"), "name": v.get("name", ""), "embedding": emb})
     return out
@@ -174,9 +179,10 @@ def add_voice(root, name, embedding, key=None):
 
 
 def upsert_voice(root, name, embedding, key=None):
-    """Called when tagging/renaming: first register the voiceprint into the global dedup store (the same person
-    merged into one entry, stored only once), the account store only keeps a name->pid reference. Same name
-    updates the reference, none exists creates a new one."""
+    """Called when tagging/renaming: register the voiceprint into the global dedup store (pid), and keep this
+    tag's own vector frozen in the account entry -- that, not the drifting registry centroid, is what naming
+    matches against (see load_library). Tagging the same name again averages the account's own tags only.
+    Same name updates the entry, none exists creates a new one."""
     name = str(name).strip() or "未命名"
     e = _norm(embedding)
     if e.size == 0:
@@ -187,13 +193,16 @@ def upsert_voice(root, name, embedding, key=None):
         for v in lib:
             if v.get("name") == name:
                 v["pid"] = pid
-                v.pop("embedding", None)   # clear the old-format inlined vector, switch to a dedup-store reference
-                v.pop("n", None)
+                n = int(v.get("n", 0) or 0) if v.get("embedding") else 0
+                prev = _norm(v.get("embedding") or [])
+                c = _norm(prev * n + e) if n and prev.size == e.size else e
+                v["embedding"] = [float(x) for x in c]
+                v["n"] = n + 1
                 _save_raw(root, lib, key)
                 return v.get("id")
         import secrets
         vid = "v" + secrets.token_hex(4)
-        lib.append({"id": vid, "name": name, "pid": pid})
+        lib.append({"id": vid, "name": name, "pid": pid, "embedding": [float(x) for x in e], "n": 1})
         _save_raw(root, lib, key)
         return vid
 
@@ -234,9 +243,7 @@ def migrate_libraries(root, threshold=REG_MERGE_TH):
                 continue
             pid, reg, _ = register(root, v["embedding"], seconds=0.0,
                                    threshold=threshold, reg=reg)
-            v["pid"] = pid
-            v.pop("embedding", None)
-            v.pop("n", None)
+            v["pid"] = pid      # the inlined vector stays: it is the frozen one naming matches against
             changed = True
             moved += 1
         if changed:
@@ -320,7 +327,7 @@ def cluster_voices(voices, threshold):
     return out
 
 
-def extract_session_voices(session_dir, embed_fn, min_seconds=2.0, cap_seconds=12.0):
+def extract_session_voices(session_dir, embed_fn, min_seconds=2.0, cap_seconds=12.0, write_cache=True):
     """From a class's transcript.jsonl (speaker segments) + audio.wav, compute each speaker's voiceprint centroid
     plus preview timestamps, cache to <dir>/speakers.json and return it. embed_fn = SpeakerID.embed. Returns None if there's no audio/transcript."""
     cache = os.path.join(session_dir, "speakers.json")
@@ -382,6 +389,8 @@ def extract_session_voices(session_dir, embed_fn, min_seconds=2.0, cap_seconds=1
             "embedding": [float(x) for x in emb],
         })
     data = {"speakers": speakers}
+    if not write_cache:
+        return data
     try:
         with open(cache, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)

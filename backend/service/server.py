@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio as audio_mod
 from vad import Segmenter
 from asr import ASRWorker
-from speaker import SpeakerID
+from speaker import SpeakerID, VOICEPRINT_THRESHOLD
 from highlight import Highlighter
 from recorder import Recorder
 try:
@@ -338,7 +338,7 @@ class Session:
             import voiceprint
             root = os.path.normpath(os.path.join(HERE, self.cfg["server"]["records_dir"]))
             self.spk.set_library(voiceprint.load_library(root, self.user_key),
-                                 self.cfg["speaker"].get("voiceprint_threshold", self.cfg["speaker"]["threshold"]))
+                                 self.cfg["speaker"].get("voiceprint_threshold", VOICEPRINT_THRESHOLD))
         except Exception:
             pass
         if self.ai_correct:
@@ -2324,7 +2324,7 @@ class App:
             return 0
         e = e / n
         root = self._records_root()
-        th = self.cfg["speaker"].get("voiceprint_threshold", self.cfg["speaker"]["threshold"])
+        th = self.cfg["speaker"].get("voiceprint_threshold", VOICEPRINT_THRESHOLD)
         spk = self._voice_embedder()
         # snapshot to a list first: this runs in a worker thread while the event loop mutates self.sessions,
         # so iterating .values() directly can raise "dictionary changed size during iteration".

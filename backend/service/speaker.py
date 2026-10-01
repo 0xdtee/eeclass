@@ -44,6 +44,34 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 DEFAULT_MODEL = "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx"
 
+# Naming someone from the voiceprint library is a much stronger claim than "these two sentences in this
+# class are the same voice": it is made across sessions, rooms and microphones, and a wrong hit stamps a
+# real name on a stranger. So it gets its own, stricter bar instead of reusing the in-session clustering
+# threshold (0.30 sits barely above the other-person 95th percentile of 0.256). Same bar as the registry's
+# "quite sure it's the same person" merge threshold.
+VOICEPRINT_THRESHOLD = 0.45
+
+
+def assign_library_names(centroids, library, threshold):
+    """Give each enrolled name to at most ONE of this session's speakers: the one whose centroid is closest
+    to it, if that closeness clears `threshold`. centroids: {key: normalized vector}; library: [(name, normalized
+    vector)]. Returns {key: name}. Without this exclusivity a loose match hands the same name to several
+    people in one class (the teacher AND a student both shown as the same enrolled person)."""
+    best_for_name = {}   # name -> (score, key)
+    for key, c in centroids.items():
+        if c is None:
+            continue
+        best, bs = None, -1.0
+        for name, e in library:
+            s = float(np.dot(c, e))
+            if s > bs:
+                bs, best = s, name
+        if best is None or bs < threshold:
+            continue
+        if best not in best_for_name or bs > best_for_name[best][0]:
+            best_for_name[best] = (bs, key)
+    return {key: name for name, (_, key) in best_for_name.items()}
+
 # The eres2netv2 embedding extractor is the largest model a session loads -- and EVERY session loads it
 # (even cloud-ASR ones use it for diarization). It is stateless: each embed() opens its own create_stream(),
 # so one instance is safe to share across all concurrent sessions. Cache it per model path so 40 concurrent
@@ -83,7 +111,7 @@ class SpeakerID:
         self.err = None
         self._merges = []     # merges pending to be reported [(merged-away id, merged-into id)]
         self.library = []     # cross-session voiceprint store [(name, normalized vector)]; on a match, use the tagged identity
-        self.vp_threshold = s.get("voiceprint_threshold", s["threshold"])
+        self.vp_threshold = s.get("voiceprint_threshold", VOICEPRINT_THRESHOLD)
         # An utterance long enough to embed is not necessarily long enough to prove a NEW person exists.
         # A one-second interjection that matches nobody used to start its own identity, which is where the
         # stray 同学C/D/E in a single-teacher lecture came from. Below this it joins the closest voice instead.
@@ -215,13 +243,8 @@ class SpeakerID:
         """Match the voiceprint centroid of the idx-th speaker in this session against the voiceprint store; return the tagged name on a match, else None."""
         if not self.library or idx < 0 or idx >= len(self.centroids):
             return None
-        c = self.centroids[idx]
-        best, bs = None, -1.0
-        for name, e in self.library:
-            s = float(np.dot(c, e))
-            if s > bs:
-                bs, best = s, name
-        return best if bs >= self.vp_threshold else None
+        names = assign_library_names(dict(enumerate(self.centroids)), self.library, self.vp_threshold)
+        return names.get(idx)
 
     def centroid_of(self, idx):
         """The idx-th speaker's current voiceprint centroid (already normalized), None if there is none. Used to save into the account voiceprint store after renaming mid-recording."""
@@ -387,24 +410,17 @@ def recluster_session(session_dir, cfg, utt_recs, spk, name_fn):
             last = rank_of_line[i]
         labels.append(last)
 
-    # names: voiceprint-store match first, else 老师/同学A...
-    names = {}
-    for rank in range(len(order)):
-        nm = None
-        lib = getattr(spk, "library", None)
-        if lib:
-            c = cent_of_rank.get(rank)
-            best, bscore = None, -1.0
-            for lname, le in lib:
-                sc2 = float(np.dot(c, le))
-                if sc2 > bscore:
-                    bscore, best = sc2, lname
-            if best is not None and bscore >= getattr(spk, "vp_threshold", thr):
-                nm = best
-        names[rank] = nm or name_fn(rank)
+    # names: voiceprint-store match first (each enrolled name to one cluster at most), else 老师/同学A...
+    lib = getattr(spk, "library", None) or []
+    matched = assign_library_names({r: _n(c) for r, c in cent_of_rank.items()}, lib,
+                                   getattr(spk, "vp_threshold", VOICEPRINT_THRESHOLD)) if lib else {}
+    names = {rank: matched.get(rank) or name_fn(rank) for rank in range(len(order))}
 
-    # nothing changed? skip the rewrite
-    changed = any(int(lines[i].get("speaker_id", -999)) != labels[i] for i in range(len(lines)))
+    # nothing changed? skip the rewrite. Names count too: live naming is decided line by line as the
+    # centroids evolve, so one speaker can carry two names (老师 on early lines, a library name later) even
+    # when the clustering itself agrees with what was recorded.
+    changed = any(int(lines[i].get("speaker_id", -999)) != labels[i]
+                  or lines[i].get("speaker") != names[labels[i]] for i in range(len(lines)))
     if not changed:
         return False
     for i, L in enumerate(lines):
