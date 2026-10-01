@@ -10,6 +10,7 @@ import { audioUrl } from '@/hooks/useLibrary';
 import { useT } from '@/lib/i18n';
 import ClassFileLibrary, { type ClassFile } from '@/components/feature/ClassFileLibrary';
 import FileViewer from '@/pages/meeting/FileViewer';
+import { downloadSubtitle, hasSubtitleTiming, type SubtitleFormat } from '@/lib/exportSubtitle';
 
 type RecordingStatus = 'idle' | 'recording' | 'paused';
 
@@ -96,6 +97,7 @@ export default function TranscriptionTab({
   const [saveError, setSaveError] = useState('');
   const [curTime, setCurTime] = useState(0);
   const [shotsOnly, setShotsOnly] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   // Courseware shown beside the transcript: slides to follow along with while the class is being recorded.
   const [pickCourseware, setPickCourseware] = useState(false);
   const [courseware, setCourseware] = useState<ClassFile | null>(null);
@@ -209,6 +211,9 @@ export default function TranscriptionTab({
     a.click();
     URL.revokeObjectURL(a.href);
   };
+
+  const canSubtitle = hasSubtitleTiming(lines);
+  const exportSubtitle = (format: SubtitleFormat) => downloadSubtitle(lines, format, sessionTitle || '课堂转写');
 
   const save = async (id: number, before: string) => {
     setSaveError('');
@@ -387,13 +392,43 @@ export default function TranscriptionTab({
             >
               <i className="ri-slideshow-2-line text-sm"></i>{t('课件')}
             </button>
-            <button
-              onClick={exportText}
-              disabled={lines.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-            >
-              <i className="ri-download-line text-sm"></i>{t('导出文本')}
-            </button>
+            {/* Export: plain text as before, plus SRT/VTT subtitles timed to the class audio */}
+            <div className="relative">
+              <button
+                onClick={() => setExportOpen((v) => !v)}
+                disabled={lines.length === 0}
+                className="flex items-center gap-1.5 px-3 py-2 bg-background-100 text-foreground-600 rounded-full text-xs font-medium hover:bg-background-200 transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+              >
+                <i className="ri-download-line text-sm"></i>{t('导出文本')}
+                <i className={`ri-arrow-${exportOpen ? 'up' : 'down'}-s-line text-sm`}></i>
+              </button>
+              {exportOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 z-20 w-48 bg-background-50 border border-background-200 rounded-xl shadow-lg p-1.5">
+                    {([
+                      { k: 'txt', label: t('纯文本 (.txt)'), icon: 'ri-file-text-line', run: exportText, ok: true },
+                      { k: 'srt', label: t('字幕 (.srt)'), icon: 'ri-closed-captioning-line', run: () => exportSubtitle('srt'), ok: canSubtitle },
+                      { k: 'vtt', label: t('字幕 (.vtt)'), icon: 'ri-closed-captioning-line', run: () => exportSubtitle('vtt'), ok: canSubtitle },
+                    ]).map((it) => (
+                      <button
+                        key={it.k}
+                        onClick={() => { setExportOpen(false); it.run(); }}
+                        disabled={!it.ok}
+                        title={it.ok ? undefined : t('这节课没有时间戳,无法生成字幕')}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left text-sm text-foreground-700 hover:bg-background-100 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <i className={`${it.icon} text-foreground-400 text-sm`}></i>
+                        {it.label}
+                      </button>
+                    ))}
+                    {canSubtitle && (
+                      <p className="px-2.5 pt-1 pb-1.5 text-[11px] text-foreground-400">{t('字幕按录音时间轴对齐,有译文时附在原文下一行')}</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             {!isLive && onAutoHighlight && (
               <button
                 onClick={runAutoHighlight}
