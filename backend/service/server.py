@@ -312,13 +312,27 @@ class Session:
         # personalization feedback: terms this account learned from past one-click corrections (per-account,
         # so one user's corrections never leak into everyone else's recognition)
         learned = load_learned_terms(cfg, self.user_key)
+        # built-in textbook terms for the subject this class is named after (subject_terms.py)
+        records_root = os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"]))
+        subject, subject_local = [], []
+        try:
+            import subject_terms
+            ctx = " ".join([self.title or "", self.course_name or ""] + list(self.subjects or []))
+            for name, terms, cloud_only in subject_terms.match(ctx, records_root):
+                subject += terms
+                subject_local += subject_terms.local_terms(terms, cloud_only)
+                print(f"[terms] {name}: {len(terms)} 个教材术语", flush=True)
+        except Exception as e:
+            print(f"⚠️ 科目术语未启用: {e}")
 
         # homophone term correction: locally fix homophone errors (a correct term transcribed as a same-sounding
         # wrong one) using the term list. Effective on any backend (SenseVoice/Paraformer/whisper).
         self.tfix = None
         try:
             from term_fix import TermFixer
-            terms = list(a.get("terms") or []) + hotwords + learned
+            # subject terms: only the subset safe for local replacement (see subject_terms.local_terms);
+            # the rest still bias the cloud recognizer below
+            terms = list(a.get("terms") or []) + hotwords + learned + subject_local
             if terms:
                 # accent mode: zh/z, n/l, f/h, front/back nasals count as one sound for 3+ character terms
                 self.tfix = TermFixer(terms, fuzzy=bool(a.get("accent_fuzzy", True)))
@@ -328,14 +342,13 @@ class Session:
         # the same words, plus the spoken Greek letter names, also go to the cloud recognizer as a hotword
         # vocabulary (cloud_hotwords.py) -- that biases recognition itself, which matters most under an accent
         a.pop("_cloud_hotwords", None)
-        words = hotwords + list(a.get("terms") or []) + learned
+        words = hotwords + subject + list(a.get("terms") or []) + learned
         if a.get("greek_symbols", True):
             words += greek.spoken_names()
         if a.get("cloud_hotwords", True) and words:
             a["_cloud_hotwords"] = {
                 "words": words, "weight": int(a.get("cloud_hotword_weight", 4)),
-                "cache": os.path.join(os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"])),
-                                      "asr_vocabularies.json")}
+                "cache": os.path.join(records_root, "asr_vocabularies.json")}
 
     # ---------- lifecycle ----------
     def start(self):
