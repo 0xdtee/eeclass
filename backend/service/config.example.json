@@ -27,6 +27,8 @@
  },
  "asr": {
   "backend": "sensevoice",
+  "greek_symbols": true,
+  "_greek_symbols_note": "Turn spoken Greek letter names into symbols (兰姆达/莱姆达/兰达 -> λ, 2分之派 -> 2分之π). Names that are also ordinary words (派, 缪, 兰达...) are only replaced next to maths. See greek.py.",
   "_backend_note": "whisper | sensevoice | funasr | zipformer. Measured RTF on this machine: whisper-small 0.47, sensevoice 0.047, zipformer 0.144. Default is sensevoice: 10x faster with fewer Chinese character errors. For word-by-word streaming output use zipformer (via stream_asr).",
   "sensevoice": {
    "model_dir": "models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",

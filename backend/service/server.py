@@ -32,6 +32,7 @@ from vad import Segmenter
 from asr import ASRWorker
 from speaker import SpeakerID, VOICEPRINT_THRESHOLD
 from highlight import Highlighter
+import greek
 from recorder import Recorder
 try:
     from word_com import WordWriter          # only present on Windows + Word
@@ -624,6 +625,10 @@ class Session:
         # so what's written to the doc, saved to disk, and highlighted afterward is all the corrected text.
         if self.corrections:
             text = Library.apply_corrections(text, self.corrections)
+        # Greek letter names -> symbols (兰姆达 -> λ, 2分之派 -> 2分之π); after the course corrections so a
+        # course rule can still target the spoken form.
+        if self.cfg["asr"].get("greek_symbols", True):
+            text, _ = greek.normalize(text)
         text = (text or "").strip()
         if not text:
             return
