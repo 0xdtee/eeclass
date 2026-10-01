@@ -390,6 +390,11 @@ class ParaformerStreamingASR(GummyStreamingASR):
     """
     _model = "paraformer-realtime-v2"
 
+    def __init__(self, cfg, on_partial=None):
+        self._asr_cfg = cfg["asr"]
+        self._vocab_id = None       # "" once resolved to none
+        super().__init__(cfg, on_partial)
+
     def _open(self):
         from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
         outer = self
@@ -425,8 +430,14 @@ class ParaformerStreamingASR(GummyStreamingASR):
         # mode over-merges into run-on sentences, while a short silence threshold chops into fragments.
         # ~1000ms end-of-sentence silence gives natural pause-based breaks; intra-sentence punctuation (commas)
         # is still added, so the effect combines pause timing with meaning.
+        extra = {}
+        if self._vocab_id is None:                   # resolved once per session (an API call the first time)
+            import cloud_hotwords
+            self._vocab_id = cloud_hotwords.for_session(self._asr_cfg, model) or ""
+        if self._vocab_id:
+            extra["vocabulary_id"] = self._vocab_id   # course hotwords + Greek letter names bias recognition
         self._r = Recognition(model=model, callback=_CB(), format="pcm", sample_rate=SR,
-                              semantic_punctuation_enabled=False, max_sentence_silence=1000)
+                              semantic_punctuation_enabled=False, max_sentence_silence=1000, **extra)
         self._r.start()
         self._stream_base = self.samples   # this stream's timestamps are relative to audio sent from here on
         self._closed = False

@@ -271,9 +271,13 @@ class AliyunASRBackend(Backend):
                 w.setsampwidth(2)
                 w.setframerate(16000)
                 w.writeframes(pcm.tobytes())
+            if getattr(self, "_vocab_id", None) is None:   # resolved once (an API call the first time)
+                import cloud_hotwords
+                self._vocab_id = cloud_hotwords.for_session(self.cfg, self.model) or ""
+            extra = {"vocabulary_id": self._vocab_id} if self._vocab_id else {}
             res = Recognition(
                 model=self.model, format="wav",
-                sample_rate=16000, callback=None).call(tmp_path)
+                sample_rate=16000, callback=None, **extra).call(tmp_path)
             if getattr(res, "status_code", None) != 200:
                 if not AliyunASRBackend._warned:
                     AliyunASRBackend._warned = True

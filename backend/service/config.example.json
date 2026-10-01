@@ -28,6 +28,9 @@
  "asr": {
   "backend": "sensevoice",
   "greek_symbols": true,
+  "cloud_hotwords": true,
+  "cloud_hotword_weight": 4,
+  "_cloud_hotwords_note": "Send asr.hotwords + asr.terms + the course hotwords + learned terms (+ Greek letter names) to Alibaba Cloud paraformer as a hotword vocabulary, so recognition itself is biased toward them -- the biggest help for an accented teacher. Vocabularies are cached in records/asr_vocabularies.json (at most 8 kept, oldest rewritten). A/B on a real lecture: 14 of 25 lines changed, 影射/硬射/隐射 -> 映射, 职域 -> 值域. Weight 1-5.",
   "_greek_symbols_note": "Turn spoken Greek letter names into symbols (兰姆达/莱姆达/兰达 -> λ, 2分之派 -> 2分之π). Names that are also ordinary words (派, 缪, 兰达...) are only replaced next to maths. See greek.py.",
   "_backend_note": "whisper | sensevoice | funasr | zipformer. Measured RTF on this machine: whisper-small 0.47, sensevoice 0.047, zipformer 0.144. Default is sensevoice: 10x faster with fewer Chinese character errors. For word-by-word streaming output use zipformer (via stream_asr).",
   "sensevoice": {

@@ -192,22 +192,7 @@ class Session:
         self._emit_lock = threading.Lock()   # serialize emission (worker thread vs stop thread)
         self._trans_lock = threading.Lock()  # serialize read-modify-write of translations.json (concurrent translation pool)
 
-        # homophone term correction: locally fix homophone errors (a correct term transcribed as a same-sounding wrong one) using the term list.
-        # terms come from asr.terms + asr.hotwords; effective on any backend (SenseVoice/Paraformer/whisper).
-        self.tfix = None
-        try:
-            from term_fix import TermFixer
-            a = cfg["asr"]
-            terms = list(a.get("terms") or [])
-            hw = a.get("hotwords")
-            terms += hw.split() if isinstance(hw, str) else list(hw or [])
-            # personalization feedback: terms this account learned from past one-click corrections (per-account,
-            # so one user's corrections never leak into everyone else's recognition)
-            terms += load_learned_terms(cfg, self.user_key)
-            if terms:
-                self.tfix = TermFixer(terms)
-        except Exception as e:
-            print(f"⚠️ 同音术语纠正未启用: {e}")
+        self.tfix = None      # built in start(): course hotwords are merged into cfg after __init__
 
         # two mutually exclusive paths: streaming (the model segments as it listens) or VAD segmentation + whole-sentence recognition
         self.streaming = (not cfg["asr"].get("force_offline")) and (
@@ -317,8 +302,43 @@ class Session:
         k = self.user_key
         return "owner" if k in (None, "", "owner") else _key_id(k)
 
+    def _build_term_lists(self):
+        """Term lists for this session, built at start() rather than __init__: the course's hotwords are merged
+        into self.cfg after the session is constructed, so building earlier silently left them out."""
+        cfg = self.cfg
+        a = cfg["asr"]
+        hw = a.get("hotwords")
+        hotwords = hw.split() if isinstance(hw, str) else list(hw or [])
+        # personalization feedback: terms this account learned from past one-click corrections (per-account,
+        # so one user's corrections never leak into everyone else's recognition)
+        learned = load_learned_terms(cfg, self.user_key)
+
+        # homophone term correction: locally fix homophone errors (a correct term transcribed as a same-sounding
+        # wrong one) using the term list. Effective on any backend (SenseVoice/Paraformer/whisper).
+        self.tfix = None
+        try:
+            from term_fix import TermFixer
+            terms = list(a.get("terms") or []) + hotwords + learned
+            if terms:
+                self.tfix = TermFixer(terms)
+        except Exception as e:
+            print(f"⚠️ 同音术语纠正未启用: {e}")
+
+        # the same words, plus the spoken Greek letter names, also go to the cloud recognizer as a hotword
+        # vocabulary (cloud_hotwords.py) -- that biases recognition itself, which matters most under an accent
+        a.pop("_cloud_hotwords", None)
+        words = hotwords + list(a.get("terms") or []) + learned
+        if a.get("greek_symbols", True):
+            words += greek.spoken_names()
+        if a.get("cloud_hotwords", True) and words:
+            a["_cloud_hotwords"] = {
+                "words": words, "weight": int(a.get("cloud_hotword_weight", 4)),
+                "cache": os.path.join(os.path.normpath(os.path.join(HERE, cfg["server"]["records_dir"])),
+                                      "asr_vocabularies.json")}
+
     # ---------- lifecycle ----------
     def start(self):
+        self._build_term_lists()
         # ownership marker: write owner.json as soon as recording starts -- this session's meta isn't persisted until stop,
         # meanwhile the frontend fetches this session's notes/blackboard shots; without the marker, data isolation would wrongly block it with 403 (and log the user out).
         try:
