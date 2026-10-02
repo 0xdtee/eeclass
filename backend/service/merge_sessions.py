@@ -13,11 +13,14 @@ index, and its whole directory is MOVED (never deleted) out of records into ../m
 Before writing, every file of the first class that changes -- including its original audio -- is copied to
 ../merged-sessions/backup-<first sid>-<stamp>/, so the merge can be undone by copying them back.
 Audio offloaded to OSS is fetched first; the OSS sync then uploads the merged file on its next pass.
-The first class's summary is kept as it was: regenerate it to cover the whole class.
+The merged class keeps the first class's title, unless that is only the default 「课程 MM-DD HH:MM」 and the
+second has a real one. It keeps the summary of the LONGER part (a 40-second false start must not replace the
+summary of the 100-minute class behind it); regenerate it to cover the whole class.
 """
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -28,6 +31,8 @@ import soundfile as sf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SR = 16000
+# the title a class gets when nobody named it (server: "课程 MM-DD HH:MM"; English UI: "Course ...")
+DEFAULT_TITLE = re.compile(r"^(课程|Course) \d{2}-\d{2} \d{2}:?\d{2}$")
 
 
 def _load_json(p, default):
@@ -164,7 +169,15 @@ def main():
           f"shots {len(shots_b)}, note {'yes' if note_b else 'no'}, speaker names {len(names_b)}"
           + (f" (conflicting, first's kept: {clash})" if clash else ""))
     meta = {**ma, "duration_s": round(offset + dur_b, 1), "lines": len(la) + len(new_b)}
-    print(f"merged: {meta['lines']} lines, {meta['duration_s']}s")
+    if DEFAULT_TITLE.match(str(ma.get("title") or "")) and mb.get("title") and not DEFAULT_TITLE.match(str(mb["title"])):
+        meta["title"] = mb["title"]
+        for k in ("tags", "sched_date"):
+            if not ma.get(k) and mb.get(k):
+                meta[k] = mb[k]
+    sum_b = _load_json(os.path.join(B, "summary.json"), None)
+    take_b_summary = bool(sum_b and sum_b.get("summary")) and dur_b > offset
+    print(f"merged: {meta['lines']} lines, {meta['duration_s']}s, title 「{meta.get('title')}」, "
+          f"summary from the {'second' if take_b_summary else 'first'} part (the longer one)")
     if not a.apply:
         shutil.rmtree(tmpdir, ignore_errors=True)
         print("\nDry run only. Re-run with --apply to write.")
@@ -173,7 +186,7 @@ def main():
     # ---- backup everything of the first class that changes ----
     os.makedirs(backup, exist_ok=True)
     for fn in ("transcript.jsonl", "transcript.md", "meta.json", "marks.json", "translations.json",
-               "edits.jsonl", "note.txt", "speaker_names.json"):
+               "edits.jsonl", "note.txt", "speaker_names.json", "summary.json"):
         if os.path.exists(os.path.join(A, fn)):
             shutil.copy2(os.path.join(A, fn), backup)
     if os.path.exists(os.path.join(A, "shots")):
@@ -238,6 +251,8 @@ def main():
                 shutil.copy2(src, os.path.join(sa_dir, s["file"]))
             shots_a.append(s)
         _write_json(os.path.join(sa_dir, "shots.json"), sorted(shots_a, key=lambda x: x.get("at", 0)))
+    if take_b_summary:
+        shutil.copy2(os.path.join(B, "summary.json"), os.path.join(A, "summary.json"))
     _write_json(os.path.join(A, "meta.json"), meta)
     print("files of the first class updated")
 
@@ -245,7 +260,10 @@ def main():
     try:
         import recordings_db
         import db
-        recordings_db.upsert_recording(a.first, duration_s=meta["duration_s"], meta=meta)
+        recordings_db.upsert_recording(a.first, title=meta.get("title"), duration_s=meta["duration_s"], meta=meta)
+        if take_b_summary:
+            recordings_db.upsert_recording(a.first, summary=sum_b["summary"], key_points=sum_b.get("key_points") or [],
+                                           has_summary=True)
         with db.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM recordings WHERE sid = %s", (a.second,))
