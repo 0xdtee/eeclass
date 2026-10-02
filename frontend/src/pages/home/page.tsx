@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BackButton from '@/components/feature/BackButton';
-import ClassFileLibrary from '@/components/feature/ClassFileLibrary';
+import ClassFileLibrary, { type ClassFile } from '@/components/feature/ClassFileLibrary';
+import DocPanel from '@/components/feature/DocPanel';
 import Tabs from '@/components/base/Tabs';
 import TranscriptionTab from '@/pages/home/components/TranscriptionTab';
 import SummaryTab, { parseCorrection } from '@/pages/home/components/SummaryTab';
@@ -32,6 +33,8 @@ const tabs = [
 export default function HomePage() {
   const t = useT();
   const [activeTab, setActiveTab] = useState('transcription');
+  // a library file shown in the page (not a new tab); held here so it stays open across tabs
+  const [courseware, setCourseware] = useState<ClassFile | null>(null);
   const [activeSessionId, setActiveSessionId] = useState('');
   const [showSharePanel, setShowSharePanel] = useState(false);
   const [showEditHistory, setShowEditHistory] = useState(false);
@@ -718,8 +721,15 @@ export default function HomePage() {
           <Tabs tabs={tabs.map((tb) => ({ ...tb, label: t(tb.label) }))} activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
 
+        {/* on the transcript tab the panel sits under the recording controls (TranscriptionTab draws it there) */}
+        {courseware && activeTab !== 'transcription' && (
+          <DocPanel file={courseware} onClose={() => setCourseware(null)} storageKey="class_doc_h" className="mb-4" />
+        )}
+
         {activeTab === 'transcription' && (
           <TranscriptionTab
+            courseware={courseware}
+            onCourseware={setCourseware}
             sid={activeSessionId}
             sessionTitle={title}
             onGenerateSummary={handleGenerateSummary}
@@ -837,7 +847,7 @@ export default function HomePage() {
         onClose={() => setEditingCourse(null)}
         onSave={lib.updateCourse}
       />
-      {showFiles && <ClassFileLibrary mode="manage" onClose={() => setShowFiles(false)} />}
+      {showFiles && <ClassFileLibrary mode="manage" onClose={() => setShowFiles(false)} onOpen={setCourseware} />}
       {pendingPick && (
         <ClassFileLibrary
           mode="pick"

@@ -9,7 +9,7 @@ import type { Course, Shot } from '@/hooks/useLibrary';
 import { audioUrl } from '@/hooks/useLibrary';
 import { useT } from '@/lib/i18n';
 import ClassFileLibrary, { type ClassFile } from '@/components/feature/ClassFileLibrary';
-import FileViewer from '@/pages/meeting/FileViewer';
+import DocPanel from '@/components/feature/DocPanel';
 import { downloadSubtitle, hasSubtitleTiming, type SubtitleFormat } from '@/lib/exportSubtitle';
 
 type RecordingStatus = 'idle' | 'recording' | 'paused';
@@ -58,6 +58,9 @@ interface TranscriptionTabProps {
   playerRef: React.RefObject<AudioPlayerHandle | null>;
   /** The line to scroll to and highlight when arriving from a search jump */
   focusLineId?: number | null;
+  /** Courseware shown in the page (held by the page so it stays open across tabs) */
+  courseware: ClassFile | null;
+  onCourseware: (file: ClassFile | null) => void;
 }
 
 /** Highlight = yellow, definition = light green, matching the colors written into Word */
@@ -86,7 +89,7 @@ export default function TranscriptionTab({
   sid, sessionTitle, onGenerateSummary, onEndRecording, onStartRecording, autoStartNaming, initialCourseName, renameSid, onRenameSession, isGenerating, live, historyLines, shots, courses, subjectTags,
   note, noteStatus, canNote, onNoteChange,
   onEditLine, onMarkLine, onAutoHighlight, onRenameSpeaker, onProposeCorrection, onShoot, onDeleteShot, onNoteShot, canEdit,
-  playerRef, focusLineId,
+  playerRef, focusLineId, courseware, onCourseware,
 }: TranscriptionTabProps) {
   const t = useT();
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
@@ -100,8 +103,6 @@ export default function TranscriptionTab({
   const [exportOpen, setExportOpen] = useState(false);
   // Courseware shown beside the transcript: slides to follow along with while the class is being recorded.
   const [pickCourseware, setPickCourseware] = useState(false);
-  const [courseware, setCourseware] = useState<ClassFile | null>(null);
-  const [cwTall, setCwTall] = useState(false);
   // Caption font size (Word-style zoom), remembered on this device. Applied to the transcript sentences.
   const [fontScale, setFontScale] = useState<number>(() => {
     try { return Math.min(220, Math.max(70, Number(localStorage.getItem('cc_fontscale')) || 100)); } catch { return 100; }
@@ -316,35 +317,11 @@ export default function TranscriptionTab({
       )}
 
       {pickCourseware && (
-        <ClassFileLibrary mode="manage" onClose={() => setPickCourseware(false)} onOpen={setCourseware} />
+        <ClassFileLibrary mode="manage" onClose={() => setPickCourseware(false)} onOpen={onCourseware} />
       )}
 
       {courseware && (
-        <div className="mb-4 bg-background-50 border border-background-200 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-background-200">
-            <i className="ri-slideshow-2-line text-accent-500"></i>
-            <span className="text-sm font-medium text-foreground-800 truncate">{courseware.name}</span>
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                onClick={() => setCwTall((v) => !v)}
-                className="h-8 px-2.5 rounded-lg text-xs text-foreground-500 hover:bg-background-100 cursor-pointer whitespace-nowrap"
-              >
-                <i className={cwTall ? 'ri-collapse-diagonal-line' : 'ri-expand-diagonal-line'}></i>
-                <span className="ml-1 hidden sm:inline">{cwTall ? t('缩小') : t('放大')}</span>
-              </button>
-              <button
-                onClick={() => setCourseware(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-foreground-400 hover:bg-background-100 cursor-pointer"
-                title={t('关闭课件')}
-              >
-                <i className="ri-close-line"></i>
-              </button>
-            </div>
-          </div>
-          <div className={cwTall ? 'h-[78vh]' : 'h-[46vh]'}>
-            <FileViewer file={courseware} base="/api/class/files" onClose={() => setCourseware(null)} />
-          </div>
-        </div>
+        <DocPanel file={courseware} onClose={() => onCourseware(null)} storageKey="class_doc_h" className="mb-4" />
       )}
 
       <div className="flex flex-col lg:flex-row gap-4 items-stretch">

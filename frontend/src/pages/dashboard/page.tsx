@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { quickActions } from '@/mocks/dashboardData';
 import { useRecords, sessionTitle, fmtDuration } from '@/hooks/useRecords';
@@ -11,7 +11,8 @@ import AnimatedNumber from '@/components/feature/AnimatedNumber';
 import Calendar from '@/components/feature/Calendar';
 import NewSessionModal from '@/pages/dashboard/components/NewSessionModal';
 import ImportModal from '@/pages/dashboard/components/ImportModal';
-import ClassFileLibrary from '@/components/feature/ClassFileLibrary';
+import ClassFileLibrary, { type ClassFile } from '@/components/feature/ClassFileLibrary';
+import DocPanel from '@/components/feature/DocPanel';
 import type { ConfirmCourse } from '@/pages/dashboard/components/ImportModal';
 import SearchBar from '@/pages/dashboard/components/SearchBar';
 import { type MeetingSession, syncOnLoad, loadLocal } from '@/pages/meeting/history';
@@ -65,6 +66,9 @@ export default function DashboardHome() {
   const [importDate, setImportDate] = useState('');
   const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>([]);   // Dated course events (deduplicated)
   const [showFiles, setShowFiles] = useState(false);   // class file library
+  const [openDoc, setOpenDoc] = useState<ClassFile | null>(null);   // a library file shown in the page, not a new tab
+  const docRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { if (openDoc) docRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [openDoc]);
   const [schedUndo, setSchedUndo] = useState<ScheduleEvent[][]>([]);   // snapshots before each schedule change (undo)
   const [schedRedo, setSchedRedo] = useState<ScheduleEvent[][]>([]);   // undone snapshots (redo)
   const [calendarFocus, setCalendarFocus] = useState('');   // After import, make the calendar jump to the month of the courses
@@ -627,6 +631,11 @@ export default function DashboardHome() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        {openDoc && (
+          <div ref={docRef} className="scroll-mt-4">
+            <DocPanel file={openDoc} onClose={() => setOpenDoc(null)} storageKey="dash_doc_h" />
+          </div>
+        )}
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, sIdx) => {
@@ -907,7 +916,7 @@ export default function DashboardHome() {
 
       <VoicePrintModal isOpen={showVoices && user?.role === 'admin'} onClose={() => setShowVoices(false)} />
       <ChangelogModal isOpen={showChangelog} onClose={() => setShowChangelog(false)} />
-      {showFiles && <ClassFileLibrary mode="manage" onClose={() => setShowFiles(false)} />}
+      {showFiles && <ClassFileLibrary mode="manage" onClose={() => setShowFiles(false)} onOpen={setOpenDoc} />}
     </div>
   );
 }
