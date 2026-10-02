@@ -56,7 +56,9 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 
 - ⚡ **CPU-only, real-time** — ASR, speaker separation and voiceprints all run on CPU (sherpa-onnx SenseVoice, RTF ≈ 0.05); no GPU needed, an ordinary machine handles it.
 - 🗣️ **Overlapping-speech separation (experimental, opt-in)** — when two people talk at once, an optional GPU separation service splits the mixture into per-speaker streams, each recognized (with your chosen model) and attributed separately; falls back to normal recognition when the service is unavailable.
-- 🧬 **A voiceprint library that recognizes people** — name someone once and future recordings of the same voice are recognized automatically; each person is stored once, and renaming propagates **back across all past classes**.
+- 🧬 **A voiceprint library that recognizes people** — name someone once and future recordings of the same voice are recognized automatically, and renaming propagates **back across all past classes**. Matching uses the voiceprint frozen when *you* tagged them (other voices can't drift it), at a strict threshold, and within a class each name goes to the one closest speaker only.
+- 🎯 **Hears past accents and course terms** — course hotwords, words you've corrected and **textbook terms** are sent to the cloud recognizer as a hotword vocabulary, so recognition itself leans toward 拉格朗日 or 西格玛; local term fixing tolerates accent mix-ups (zh/z, n/l, f/h, front/back nasals: 拉格兰日 → 拉格朗日). Calculus, college physics, physics lab and 思想道德与法治 ship term lists built from their textbooks, attached by class name.
+- 🔣 **Greek letters as symbols** — spoken 兰姆达 / 西格玛 / 2分之派 are written λ, σ, 2分之π; everyday words such as 派出所 or 荒谬 are left alone.
 - 🖍️ **Highlights: real-time + after-class** — rule-based key/definition highlighting while lecturing; after class, one tap has the AI read the whole transcript and fill in the fragmented, keyword-less **real definitions** and **key points**, merged with your manual marks and re-runnable.
 - 📖 **Textbook-grounded summaries** — for academic courses the summary is organized around that course's **standard textbook chapters**, notes the corresponding textbook/chapters at the end, and tags textbook-core points with a 「【教材】」 (textbook) marker.
 - 🧠 **Course-level AI** — beyond per-class summaries, it **aggregates a whole course's classes into a grand summary**, predicts exam points (with a share pie chart), generates a mock paper, and **exports it to Word / PDF** (questions first, answer key after, formulas included).
@@ -76,6 +78,9 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 - **Real-time highlighting** — auto-marks the points the teacher stresses (yellow) and definitions (green); colors carry into exports.
 - **Real-time translation subtitles** — a translation line under each sentence in any direction among 9 languages (zh/en/fr/de/it/es/ru/ja/ko), chosen via an "original ⇄ target" dropdown; font size adjustable; defaults to the UI language.
 - **Snap the board** — one tap captures the board/slides, inserted into the transcript aligned to the timeline.
+- **Courseware beside the transcript** — files from the class library open inside the page (no new tab), resizable by dragging the bottom edge, and stay open across the summary/review tabs.
+- **Accents & terms** — course hotwords and textbook terms bias the cloud recognizer; local fixing matches through accent mix-ups; spoken Greek letters become symbols.
+- **One class, even after a drop-out** — when a phone/iPad reloads the page in the background, it comes back to the same class with everything recorded so far; if the mic didn't reconnect it says so, and 「重新接上麦克风」 continues the same class instead of starting a second one.
 - **Mic gain & caption font size** — adjustable on the fly for different rooms and eyesight.
 
 ### After class (AI, DeepSeek, optional)
@@ -103,7 +108,7 @@ Built for Chinese university classrooms, but the recognizer is multilingual (zh 
 ### Accounts, reference & export
 - **Accounts** — email verification-code sign-up, pbkdf2-hashed passwords, strict per-account data isolation; the voiceprint library is admin-only; accounts can be deleted.
 - **Syllabus library** — browse standard / official course outlines in-app (usable as the textbook basis for summaries).
-- **Export & share** — vector PDF export, real .docx (Windows writes into Word live via an Office add-in); read-only share links.
+- **Export & share** — vector PDF export, real .docx (Windows writes into Word live via an Office add-in), **SRT / VTT subtitles** (timed to the recording, bilingual when translated); read-only share links.
 - **More** — cross-course full-text search, line-by-line editable transcript, light/dark theme, optional Alibaba Cloud OSS for audio/file offload & backup.
 
 ## How it works
@@ -133,7 +138,7 @@ Web / iPad app / Word add-in ──WSS──►  Python backend (aiohttp, HTTPS 
 
 ## Quick start
 
-> 📖 Full install · config · usage guide: [docs/安装配置使用.md](docs/安装配置使用.md).
+> 📖 Full install · config · usage guide: [docs/安装配置使用.md](docs/安装配置使用.md). A survey of comparable open-source projects and a roadmap: [docs/开源同类项目调研.md](docs/开源同类项目调研.md).
 
 ### macOS
 
@@ -166,6 +171,16 @@ export ALIBABA_CLOUD_ACCESS_KEY_ID=...  ALIBABA_CLOUD_ACCESS_KEY_SECRET=...
 
 Speech recognition needs no key; only AI assistance and cloud recognition do.
 
+#### Recognition tuning (`asr` / `speaker` in `config.json`, all with defaults)
+
+| Setting | Default | What it does |
+|---|---|---|
+| `asr.cloud_hotwords` / `cloud_hotword_weight` | `true` / `4` | send hotwords, terms and Greek letter names to Alibaba Cloud as a hotword vocabulary |
+| `asr.accent_fuzzy` | `true` | accent-tolerant local term fixing (terms of 3+ characters) |
+| `asr.greek_symbols` | `true` | write spoken Greek letters as symbols |
+| `speaker.voiceprint_threshold` | `0.45` | how sure the voiceprint library must be before naming someone |
+| `backend/service/subject_terms.json` | — | built-in per-subject term lists; a copy at `records/subject_terms.json` overrides it |
+
 ## Development
 
 Two terminals:
@@ -191,6 +206,14 @@ cd frontend && BASE_PATH=/app/ npm run build     # desktop → out/
 The mobile build `/m` comes from the separate repo [eeclass-mobile](https://github.com/0xdtee/eeclass-mobile) (`BASE_PATH=/ npm run build`); drop its `out/` where the backend serves `/m`.
 
 The backend then serves the web app at **https://localhost:5901/app/course** and mobile at `/m`. On the same Wi-Fi, phones/tablets can open `https://<LAN-IP>:5901/app/course` (self-signed cert, accept the warning). With `server.require_token` on, access needs a token.
+
+## Maintenance tools
+
+In `backend/service/`. They **dry-run by default and write nothing**; `--apply` executes, backing files up first.
+
+- **`repair_voiceprints.py`** — repair data left by voiceprint misnaming: rebuild each name's voiceprint from the recordings it was tagged in, and relabel transcript lines whose voice no longer matches back to 老师 / 同学X.
+- **`merge_sessions.py <first> <second>`** — merge a class that got split in two, the way a continued recording would have written it: times shifted, line ids continued, audio appended (fetched from OSS when offloaded), board shots / marks / translations / edits carried over; the second class is moved out of `records/`, not deleted.
+- **Graceful restart** — on SIGTERM the server wraps up classes still recording, tells their pages, then closes every socket (pages reconnect by themselves) and exits within seconds.
 
 ## Security
 
