@@ -447,7 +447,7 @@ async def meeting_slides_http(request, *, check_token):
     return web.Response(body=out, content_type="application/pdf")
 
 
-async def meeting_ws(request, *, check_token, make_ds=None):
+async def meeting_ws(request, *, check_token, make_ds=None, on_open=None):
     """WebSocket endpoint for the meeting translator. Login required (like the app's other features);
     the concurrency cap limits abuse.
 
@@ -465,6 +465,8 @@ async def meeting_ws(request, *, check_token, make_ds=None):
 
     ws = web.WebSocketResponse(heartbeat=20, max_msg_size=8 * 1024 * 1024)
     await ws.prepare(request)
+    if on_open is not None:
+        on_open(ws)          # lets the server close it on shutdown instead of waiting on it
     loop = asyncio.get_running_loop()
 
     def _send(msg):

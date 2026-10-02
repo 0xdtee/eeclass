@@ -21,10 +21,11 @@ import sys
 import threading
 import time
 import traceback
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-from aiohttp import web, WSMsgType
+from aiohttp import web, WSMsgType, WSCloseCode
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio as audio_mod
@@ -1108,6 +1109,7 @@ class App:
         # each client (cid) gets its own independent session, isolated from others. Keyed by cid (not ws) so that
         # reconnection can recover: when the WS drops, don't end immediately, enter a grace period; a reconnect with the same cid keeps recording, losing no transcript.
         #   self.sessions[cid] = {"s": Session, "ws": ws or None, "detached_at": float or None}
+        self._open_ws = weakref.WeakSet()   # every live socket (/ws and /ws_meeting), closed on shutdown
         self.sessions = {}
         self.cid_user = {}        # {cid: voiceprint-library account id} -- computed from the token at connect time, used when recording starts / renaming
         self.cid_admin = {}       # {cid: bool} -- whether this connection's account is an admin; computed at connect (handle_cmd has no request in scope)
@@ -1179,7 +1181,7 @@ class App:
     async def meeting_ws(self, request):
         import meeting
         return await meeting.meeting_ws(
-            request, check_token=self.check_token, make_ds=lambda: DeepSeek(self.cfg))
+            request, check_token=self.check_token, make_ds=lambda: DeepSeek(self.cfg), on_open=self._open_ws.add)
 
     async def api_meeting_minutes(self, request):
         import meeting
@@ -1513,6 +1515,7 @@ class App:
         self.cid_admin[cid] = self.is_admin(request)   # remember admin status here; handle_cmd has no request
         ws = web.WebSocketResponse(heartbeat=20, max_msg_size=8 * 1024 * 1024)
         await ws.prepare(request)
+        self._open_ws.add(ws)
 
         # another connection with the same cid is still recording (dropped within the grace period) -> recover: attach the session to this new connection
         resumed = False
@@ -1804,6 +1807,37 @@ class App:
                         await asyncio.get_running_loop().run_in_executor(None, s.stop)
                     except Exception:
                         traceback.print_exc()
+
+    async def shutdown(self):
+        """SIGTERM / restart. aiohttp waits for every open handler before it exits, and a page left open keeps
+        its socket forever -- one idle page held shutdown ~29s (measured), so restarts ended in SIGKILL, and a
+        class still recording was never stopped: its last half-sentence and meta.json were lost. So: wrap up
+        running classes the same way the ticker does (stop() persists everything), then close every socket
+        with 1012 'service restart' so pages reconnect on their own once the new process is up."""
+        loop = asyncio.get_running_loop()
+        running = [(cid, ent) for cid, ent in list(self.sessions.items())
+                   if ent.get("s") is not None and ent["s"].running]
+        if running:
+            print(f"[shutdown] 收尾 {len(running)} 节正在录的课", flush=True)
+            for cid, ent in running:
+                self.sessions.pop(cid, None)
+                ws = ent.get("ws")
+                if ws is not None and not ws.closed:
+                    try:
+                        await ws.send_str(json.dumps({"type": "notice", "msg": "服务正在重启,这节课已自动保存;重启后可以继续录。"},
+                                                     ensure_ascii=False))
+                    except Exception:
+                        pass
+            try:
+                await asyncio.wait_for(asyncio.gather(*(loop.run_in_executor(None, ent["s"].stop) for _, ent in running),
+                                                      return_exceptions=True), timeout=45)
+            except asyncio.TimeoutError:
+                print("[shutdown] 收尾超时(45s),剩下的放弃", flush=True)
+        for ws in list(self._open_ws):
+            try:
+                await ws.close(code=WSCloseCode.SERVICE_RESTART, message=b"server restarting")
+            except Exception:
+                pass
 
     # ---------- tokens ----------
     def check_token(self, request):
@@ -3916,6 +3950,11 @@ def main():
         print("  关掉这个窗口就停止服务。\n")
 
     app.on_startup.append(on_start)
+
+    async def on_shutdown(_):
+        await app_obj.shutdown()
+
+    app.on_shutdown.append(on_shutdown)
     try:
         web.run_app(app, host=host, port=port, ssl_context=ctx,
                     print=None, access_log=None)
