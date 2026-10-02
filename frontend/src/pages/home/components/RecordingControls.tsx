@@ -33,6 +33,9 @@ interface RecordingControlsProps {
   micActive: boolean;
   /** Capture was suspended (page backgrounded / screen locked) while the socket stayed open */
   audioStalled?: boolean;
+  /** recording through the browser mic, but the mic isn't open (e.g. after a reload in the background) */
+  micLost?: boolean;
+  onReopenMic?: () => void;
   gain: number;
   onGainChange: (v: number) => void;
   courses: { id: string; name: string }[];
@@ -86,6 +89,8 @@ export default function RecordingControls({
   notice,
   micActive,
   audioStalled,
+  micLost,
+  onReopenMic,
   gain,
   onGainChange,
   courses,
@@ -516,10 +521,20 @@ export default function RecordingControls({
           )}
 
           {uiStatus === 'recording' && (
-            audioStalled ? (
+            micLost || audioStalled ? (
               <span className="flex items-center gap-1.5">
                 <i className="ri-error-warning-fill text-amber-500"></i>
-                <span className="text-xs font-semibold text-amber-600">{t('录音已中断 — 请回到本页面')}</span>
+                <span className="text-xs font-semibold text-amber-600">
+                  {micLost ? t('麦克风没接上,没在录音') : t('录音已中断 — 请回到本页面')}
+                </span>
+                {onReopenMic && (
+                  <button
+                    onClick={onReopenMic}
+                    className="ml-1 flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 cursor-pointer whitespace-nowrap"
+                  >
+                    <i className="ri-mic-line"></i>{t('重新接上麦克风')}
+                  </button>
+                )}
               </span>
             ) : (
               <span className="flex items-center gap-1.5">

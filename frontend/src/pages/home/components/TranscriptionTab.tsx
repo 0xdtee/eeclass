@@ -248,6 +248,8 @@ export default function TranscriptionTab({
         sessionTitle={sessionTitle}
         micActive={live.micActive}
         audioStalled={live.audioStalled}
+        micLost={live.micLost}
+        onReopenMic={live.reopenMic}
         gain={live.gain}
         onGainChange={live.setGain}
         courses={courses}

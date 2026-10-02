@@ -220,6 +220,8 @@ export function useLiveCaption() {
   // page can re-fetch and the "just recorded" view matches the "reopen from history" view (no speaker divergence).
   const [reclustered, setReclustered] = useState<{ sid: string; tick: number }>({ sid: '', tick: 0 });
   const [micActive, setMicActive] = useState(false);
+  // this class records through the browser mic -- so when the mic isn't open while it runs, nothing is being captured
+  const [usesBrowserMic, setUsesBrowserMic] = useState(false);
   const [deepseekReady, setDeepseekReady] = useState(false);
   // Pickup gain (收音增益): amplify the browser-mic signal 1×–12×, adjustable live like the meeting translator.
   // Classroom mics sit far from the lecturer, so full gain is the useful default. This resets every device
@@ -518,12 +520,13 @@ export function useLiveCaption() {
             // says "已恢复录制" and the rest of the class is lost.
             const dev = deviceRef.current ?? savedDevice();
             deviceRef.current = dev;
+            setUsesBrowserMic(dev === 'browser');
             if (dev === 'browser') {
               // reopen the mic and re-stream; if the browser blocks getUserMedia without a fresh gesture
               // (common on iOS after a reload), tell the user honestly instead of pretending it resumed.
               startMic()
                 .then(() => setNotice(t('已恢复录制')))
-                .catch(() => setNotice(t('麦克风未能自动恢复,请重新点「开始录制」继续录音。')));
+                .catch(() => setNotice(t('麦克风没能自动接上(浏览器要求点一下),请点「重新接上麦克风」继续录这节课。')));
             } else if (dev === 'browser-system') {
               // System audio needs a user gesture to reopen sharing, can't auto-resume
               setNotice(t('网络已恢复,但系统声音共享已中断,请重新点「开始录制」继续。'));
@@ -555,6 +558,7 @@ export function useLiveCaption() {
           recordingRef.current = false;
           clearLive();
           setRunning(false);
+          setUsesBrowserMic(false);
           setPaused(false);
           setPartial('');
           // Don't clear the live lines: after stopping, keep showing the live lines, then seamlessly replace them once the archived full text (histLines) loads,
@@ -690,7 +694,7 @@ export function useLiveCaption() {
         stopMic();
         startMic()
           .then(() => setNotice(t('麦克风已断开,已自动重新接上')))
-          .catch(() => setNotice(t('麦克风已断开,且无法自动恢复,请重新点「开始录制」。')))
+          .catch(() => setNotice(t('麦克风已断开,且无法自动恢复,请点「重新接上麦克风」。')))
           .finally(() => { reopening = false; });
       }
     }, 1500);
@@ -715,6 +719,7 @@ export function useLiveCaption() {
       }
       const dev = devices.find((d) => d.id === opts.device);
       deviceRef.current = opts.device ?? null;   // Remember the audio source, needed to reopen the mic on reconnect recovery
+      setUsesBrowserMic(opts.device === 'browser');
       try { if (opts.device) localStorage.setItem(DEVICE_KEY, opts.device); } catch { /* ignore */ }   // survive a full page reload
       // Model selection: sensevoice/paraformer=full-sentence; stream=streaming zipformer (words appear as you speak);
       // shanghainese=Shanghainese (wenet_ctc, Wu recognition, backend auto-translates to Mandarin captions);
@@ -803,10 +808,21 @@ export function useLiveCaption() {
     [lines, lastDir, liveSid]
   );
 
+  // Reopen the mic from a tap (iOS only grants getUserMedia on a user gesture, so after the page was reloaded
+  // in the background it can't come back by itself). Keeps recording into the same class -- no stop/start.
+  const reopenMic = useCallback(() => {
+    stopMic();
+    startMic()
+      .then(() => setNotice(t('麦克风已重新接上,继续录这节课')))
+      .catch((e) => setNotice(t('麦克风还是打不开:') + (e instanceof Error ? e.message : String(e))));
+  }, [startMic, stopMic]);
+  // Recording, through the browser mic, but the mic isn't open: nothing is being captured.
+  const micLost = running && !paused && usesBrowserMic && !micActive;
+
   return {
     connected, authFailed, running, paused, starting, micActive, deepseekReady,
     devices, defaultDevice, lines, partial, status, notice, error, lastDir, liveSid, reclustered,
     gain, setGain,
-    start, stop, setPaused: setPausedCmd, mark, rename, summarize, audioStalled,
+    start, stop, setPaused: setPausedCmd, mark, rename, summarize, audioStalled, micLost, reopenMic,
   };
 }

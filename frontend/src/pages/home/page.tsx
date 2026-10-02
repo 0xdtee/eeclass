@@ -279,6 +279,20 @@ export default function HomePage() {
     }
   }, [live.running, live.liveSid, activeSessionId, autoNew, initialSid]);
 
+  // A class started from a 「新录音」 link (?new=1) must not keep that link once it is running. Phones reload a
+  // tab left in the background, and on ?new=1 the page deliberately ignores the running class (see above):
+  // it came back blank, and tapping record again made a second class. Point the URL at the class instead,
+  // so a reload reopens it -- what it has transcribed so far, and recording continues into it.
+  useEffect(() => {
+    if (!live.running || !live.liveSid || searchParams.get('new') !== '1') return;
+    setSearchParams((prev) => {
+      const n = new URLSearchParams(prev);
+      n.set('sid', live.liveSid);
+      ['new', 'title', 'for_date'].forEach((k) => n.delete(k));
+      return n;
+    }, { replace: true });
+  }, [live.running, live.liveSid, searchParams, setSearchParams]);
+
   // Let callbacks like replace always access "the lines currently on screen" (including old lines when continuing), without stuffing viewLines into the deps
   const viewLinesRef = useRef<TranscriptLine[]>([]);
   viewLinesRef.current = viewLines;
